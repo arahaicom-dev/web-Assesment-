@@ -45,29 +45,123 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 - Semua warna diturunkan dari satu warna dasar, jadi tetap serasi dan nyaman dilihat
 - Responsif (HP/tablet), dan tabel bisa dicetak atau diekspor ke Excel/CSV
 
-## Cara menjalankan
+## Fitur versi server (Node.js + MySQL)
+- **Login guru**. Akun pertama otomatis menjadi admin, dan admin bisa menambah akun guru lain. Semua guru memakai data sekolah yang sama.
+- **Data tersimpan di MySQL** dan bisa dibuka dari laptop, HP, atau komputer sekolah mana pun. Setiap perubahan tersimpan otomatis (indikator *Tersimpan di server* ada di pojok kiri bawah).
+- **Ujian online dari HP murid masing-masing**: guru menekan *Buka Ujian* dan mendapat **token** 6 huruf. Murid membuka `/ujian.html`, memasukkan token, memilih nama, dan mengisi NIS.
+  - Nilai dihitung di server (kunci jawaban tidak pernah dikirim ke HP murid) dan langsung masuk ke daftar nilai guru.
+  - Ada pilihan timer, acak urutan soal per murid, dan sembunyikan nilai dari murid.
+  - Murid tidak bisa mengumpulkan dua kali. Jawaban tersimpan sementara di HP murid kalau halamannya tertutup.
+- Kalau aplikasi dibuka tanpa server (hosting statis biasa), aplikasi tetap jalan dalam **mode lokal** seperti sebelumnya, dengan data tersimpan di browser.
 
-Aplikasinya statis (HTML/CSS/JS), tanpa instalasi atau build. Agar pembaca PDF berjalan, buka lewat server web:
+## Pasang di hosting (cPanel dengan Node.js & MySQL)
 
-```bash
-python3 -m http.server 8000
+**Kebutuhan:** Node.js 14 atau lebih baru (disarankan 18+) dan MySQL 5.7+ atau MariaDB 10.3+.
+
+### 1. Buat database
+Di cPanel buka **MySQL® Databases**:
+1. Buat database, misalnya `namaakun_asesmen`.
+2. Buat user database beserta password-nya.
+3. Tambahkan user tersebut ke database dengan hak **ALL PRIVILEGES**.
+
+Tabel akan dibuat otomatis saat aplikasi pertama kali jalan. Kalau gagal, impor `schema.sql` lewat **phpMyAdmin**.
+
+### 2. Unggah file aplikasi
+Unggah seluruh isi repositori **kecuali** `node_modules/` ke folder di luar `public_html`, misalnya `/home/namaakun/asesmen`. Bisa lewat File Manager (unggah zip lalu *Extract*) atau `git clone` dari Terminal.
+
+### 3. Buat file `.env`
+Salin `.env.example` menjadi `.env` di folder yang sama, lalu isi:
+```
+DB_HOST=localhost
+DB_USER=namaakun_userdb
+DB_PASSWORD=password_database
+DB_NAME=namaakun_asesmen
 ```
 
-Lalu buka `http://localhost:8000`. Bisa juga dipasang di **GitHub Pages**, Netlify, atau hosting statis lain.
+### 4. Setup Node.js App
+Di cPanel buka **Setup Node.js App** → **Create Application**:
 
-Data disimpan di **browser perangkat itu sendiri** (localStorage). Gunakan *Pengaturan → Ekspor Cadangan* untuk membuat cadangan atau memindahkan data ke perangkat lain.
+| Isian | Nilai |
+|---|---|
+| Node.js version | versi terbaru yang tersedia (≥ 18 disarankan) |
+| Application mode | Production |
+| Application root | `asesmen` (folder dari langkah 2) |
+| Application URL | domain atau subdomain, misalnya `asesmen.sekolahanda.sch.id` |
+| Application startup file | `server.js` |
 
-Contoh file soal untuk dicoba ada di folder `contoh-soal/`.
+Klik **Create**, lalu **Run NPM Install**, kemudian **Restart**.
+
+> Sebaiknya pakai **subdomain sendiri** (misalnya `asesmen.domain.sch.id`), bukan sub-folder, supaya alamat `/api` tidak bentrok.
+
+### 5. Mulai pakai
+1. Buka alamat aplikasi. Muncul layar **Pemasangan pertama** untuk membuat akun admin (nama sekolah, nama Anda, username, password).
+2. Isi data kelas/murid/mapel, atau klik **Muat Data Contoh** untuk mencoba.
+3. Kalau sebelumnya memakai versi lokal, buka *Pengaturan → Data*. Ekspor cadangan dari browser lama, lalu **Pulihkan dari Cadangan** di versi server.
+4. Untuk ujian: buat asesmen yang terhubung ke paket soal, tekan **▶ Buka Ujian**, lalu bagikan token atau tautannya ke murid.
+
+### Di VPS (tanpa cPanel)
+Jalankan perintah-perintah ini:
+```bash
+git clone <repo> asesmen
+```
+```bash
+cd asesmen
+```
+```bash
+npm install --omit=dev
+```
+```bash
+cp .env.example .env
+```
+Isi `.env` dengan data database, lalu jalankan aplikasi dengan pm2:
+```bash
+npx pm2 start server.js --name asesmen
+```
+Setelah itu pasang reverse proxy Nginx ke `http://127.0.0.1:3000` dan aktifkan HTTPS (misalnya dengan certbot).
+
+## Menjalankan di komputer sendiri
+Perintahnya:
+```bash
+npm install
+```
+```bash
+cp .env.example .env
+```
+Isi `.env`, lalu:
+```bash
+npm start
+```
+Buka `http://localhost:3000`.
+
+Tanpa database, folder `public/` juga bisa dibuka sebagai situs statis (mode lokal):
+```bash
+cd public && python3 -m http.server 8000
+```
 
 ## Struktur
 
 ```
-index.html          kerangka halaman
-css/style.css       tema 3D & warna dinamis
-js/calc.js          jenis asesmen, istilah, rumus nilai rapor, predikat, deskripsi
-js/parser.js        konversi teks/PDF → soal, penilaian jawaban
-js/store.js         penyimpanan data & data contoh
-js/app.js           semua tampilan/menu
-lib/pdfjs/          pdf.js (Apache-2.0) untuk membaca PDF
-tests/run-tests.js  pengujian parser & penghitungan (node tests/run-tests.js)
+server.js            server Express (API + file statis dari public/)
+server/db.js         koneksi MySQL & pembuatan tabel otomatis
+server/api.js        login, akun guru, sinkronisasi data, ujian murid
+schema.sql           struktur tabel (opsional, untuk phpMyAdmin)
+.env.example         contoh konfigurasi database
+public/index.html    aplikasi guru
+public/ujian.html    halaman ujian murid
+public/css/style.css tema 3D & warna dinamis
+public/js/calc.js    jenis asesmen, istilah, rumus nilai rapor, predikat, deskripsi
+public/js/parser.js  konversi teks/PDF → soal, penilaian jawaban (dipakai juga oleh server)
+public/js/store.js   penyimpanan data (lokal atau server) & data contoh
+public/js/app.js     semua tampilan/menu guru
+public/js/student.js halaman ujian murid
+public/lib/pdfjs/    pdf.js (Apache-2.0) untuk membaca PDF
+public/contoh-soal/  contoh file PDF soal untuk dicoba
+tests/run-tests.js   pengujian parser & penghitungan (npm test)
 ```
+
+## Keamanan
+- Password guru disimpan dalam bentuk hash (scrypt), dan login dibatasi setelah banyak percobaan gagal.
+- File `.env`, `server/`, dan `node_modules/` tidak bisa diakses dari browser. Hanya isi folder `public/` yang disajikan.
+- Kunci jawaban tidak pernah dikirim ke perangkat murid.
+- Isi **NIS** untuk setiap murid supaya murid tidak bisa masuk dengan nama temannya.
+- Pakai HTTPS (di cPanel biasanya otomatis lewat AutoSSL).

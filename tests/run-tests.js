@@ -1,7 +1,7 @@
 /* Jalankan: node tests/run-tests.js */
 const assert = require('assert');
-const P = require('../js/parser.js');
-const C = require('../js/calc.js');
+const P = require('../public/js/parser.js');
+const C = require('../public/js/calc.js');
 
 let pass = 0, fail = 0;
 function t(name, fn) {

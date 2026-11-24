@@ -111,12 +111,14 @@
     { href: 'leger', ic: '🏆', label: 'Leger Semua Mapel' },
     { group: 'Lainnya' },
     { href: 'istilah', ic: '📖', label: 'Istilah Lama → Baru' },
-    { href: 'pengaturan', ic: '🎨', label: 'Pengaturan & Tema' }
+    { href: 'pengaturan', ic: '🎨', label: 'Pengaturan & Tema' },
+    { href: 'akun', ic: '👤', label: 'Akun Guru', server: true }
   ];
   function renderNav(route) {
-    $('#nav').innerHTML = NAV.map(n => n.group ? `<div class="nav-group">${n.group}</div>` :
+    $('#nav').innerHTML = NAV.filter(n => !n.server || S.mode === 'server').map(n => n.group ? `<div class="nav-group">${n.group}</div>` :
       `<a href="#/${n.href}" class="${route === n.href || route.startsWith(n.href + '/') ? 'active' : ''}"><span class="ic">${n.ic}</span><span>${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}</a>`).join('');
     $('#brand-sub').textContent = st().settings.schoolName || 'Penilaian & Nilai Rapor';
+    renderUserBox();
   }
 
   /* ---- Konteks kelas & mapel ---- */
@@ -171,6 +173,7 @@
       else if (r === 'leger') out = viewLeger();
       else if (r === 'istilah') out = viewGlossary();
       else if (r === 'pengaturan') out = viewSettings();
+      else if (r === 'akun' && S.mode === 'server') out = viewAccount();
       else { location.hash = '#/beranda'; return; }
     } catch (e) {
       console.error(e);
@@ -187,7 +190,10 @@
     const el = e.target.closest('[data-act]');
     if (!el) return;
     const act = el.dataset.act;
-    if (act === 'demo') { S.seedDemo(); toast('Data contoh dimuat.'); route(); return; }
+    if (act === 'demo') {
+      if (st().classes.length && !confirm('Tambahkan data contoh (2 kelas, 3 mapel) ke data yang sudah ada?')) return;
+      S.seedDemo(); toast('Data contoh dimuat.'); route(); return;
+    }
     if (current && current.actions && current.actions[act]) { e.preventDefault(); current.actions[act](el, e); }
   });
 
@@ -567,6 +573,7 @@
         </div>
         <div>
           <div class="card tilt"><div class="z1" id="stats-box">${statsHtml()}</div></div>
+          ${S.mode === 'server' && q ? examPanel(a) : ''}
           <div class="card"><h3>Info</h3>
             <p class="small" style="margin:0 0 6px"><b>TP diukur:</b> ${(a.tpIds || []).map(id => { const t = subj.tps.find(x => x.id === id); return t ? `<span class="pill pri" title="${esc(t.desc)}">${esc(t.code)}</span>` : ''; }).join(' ') || '<span class="muted">–</span>'}</p>
             <p class="small muted" style="margin:0">${info.desc}</p></div>
@@ -636,9 +643,44 @@
             S.save(); closeModal(); toast(n + ' nilai diterapkan.'); route();
           };
         },
-        review: el => reviewModal(a, el.dataset.id)
+        review: el => reviewModal(a, el.dataset.id),
+        'exam-toggle': () => {
+          if (!a.examCode) a.examCode = newExamCode();
+          a.examOpen = !a.examOpen; S.save(); keepScroll();
+          toast(a.examOpen ? 'Ujian dibuka. Bagikan token ' + a.examCode + ' ke murid.' : 'Ujian ditutup.');
+        },
+        'exam-opt': el => { a[el.dataset.k] = !a[el.dataset.k]; S.save(); keepScroll(); },
+        'exam-newcode': async () => { if (!await confirmBox('Buat token baru? Token lama tidak bisa dipakai lagi.', 'Buat Token Baru')) return; a.examCode = newExamCode(); S.save(); keepScroll(); },
+        'exam-copy': () => { const t = examLink(a); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Tautan disalin.'), () => prompt('Salin tautan ini:', t)); },
+        'refresh': async () => { await S.flush(); const ch = await S.pull(); keepScroll(); toast(ch ? 'Data diperbarui.' : 'Belum ada perubahan baru.'); }
       }
     };
+  }
+
+  /* ---- Panel ujian online murid (mode server) ---- */
+  function newExamCode() {
+    const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let c = '';
+    const r = crypto.getRandomValues(new Uint32Array(6));
+    for (let i = 0; i < 6; i++) c += abc[r[i] % abc.length];
+    return c;
+  }
+  function examLink(a) { return location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/?$/, '/') + 'ujian.html?token=' + (a.examCode || ''); }
+  function examPanel(a) {
+    const cls = S.cls(a.classId); const subs = st().submissions[a.id] || {};
+    const done = cls.students.filter(m => subs[m.id]).length;
+    const review = cls.students.filter(m => subs[m.id] && subs[m.id].result && subs[m.id].result.needsReview).length;
+    return `<div class="card tilt"><div class="z1">
+      <div class="card-head"><h3>📱 Ujian Online Murid</h3><span class="pill ${a.examOpen ? 'ok' : ''}">${a.examOpen ? '● Dibuka' : 'Ditutup'}</span></div>
+      ${a.examCode ? `<div style="text-align:center;margin:6px 0 10px"><div class="small muted">Token ujian</div><div class="score-big" style="font-size:2.6rem;letter-spacing:.15em">${esc(a.examCode)}</div></div>
+        <div class="small" style="word-break:break-all;margin-bottom:8px">Murid buka: <a href="${esc(examLink(a))}" target="_blank">${esc(examLink(a))}</a></div>` : '<p class="small muted">Buka ujian untuk membuat token. Murid mengerjakan dari HP/laptop masing-masing, cukup memasukkan token, memilih nama, dan NIS.</p>'}
+      <div class="btns" style="margin-bottom:10px"><button class="btn ${a.examOpen ? 'danger' : 'ok'} sm" data-act="exam-toggle">${a.examOpen ? '■ Tutup Ujian' : '▶ Buka Ujian'}</button>
+        ${a.examCode ? '<button class="btn soft sm" data-act="exam-copy">🔗 Salin Tautan</button><button class="btn ghost sm" data-act="exam-newcode">↻ Token Baru</button>' : ''}</div>
+      <label style="display:flex;gap:8px;align-items:center" class="small"><input type="checkbox" data-act="exam-opt" data-k="shuffle" ${a.shuffle ? 'checked' : ''}> Acak urutan soal per murid</label>
+      <label style="display:flex;gap:8px;align-items:center;margin-top:4px" class="small"><input type="checkbox" data-act="exam-opt" data-k="hideScore" ${a.hideScore ? 'checked' : ''}> Sembunyikan nilai dari murid setelah mengumpulkan</label>
+      <div class="small muted" style="margin-top:10px">Sudah mengumpulkan: <b>${done}/${cls.students.length}</b>${review ? ` · <span style="color:var(--warn)">${review} perlu koreksi uraian</span>` : ''}</div>
+      <div class="bar" style="margin:6px 0 10px"><i style="width:${cls.students.length ? done / cls.students.length * 100 : 0}%"></i></div>
+      <button class="btn ghost sm" data-act="refresh">🔄 Muat Ulang Hasil</button>
+      <p class="small muted" style="margin:8px 0 0">Murid tanpa NIS bisa masuk hanya dengan memilih nama. Isi NIS di Data Master agar lebih aman.</p></div></div>`;
   }
 
   /* ---- Koreksi jawaban online ---- */
@@ -1211,8 +1253,9 @@
           </tbody></table></div>
         </div>
         <div class="card"><h2>💾 Data</h2>
-          <p class="small muted">Semua data tersimpan di browser perangkat ini. Ekspor cadangan secara berkala atau untuk memindahkan ke perangkat lain.</p>
-          <div class="btns"><button class="btn" data-act="export">⬇ Ekspor Cadangan (.json)</button><button class="btn soft" data-act="import">⬆ Pulihkan dari Cadangan</button><button class="btn ghost" data-act="demo">Muat Data Contoh</button><button class="btn danger" data-act="reset">Hapus Semua Data</button></div>
+          <p class="small muted">${S.mode === 'server' ? 'Data tersimpan di <b>database MySQL</b> server dan bisa dibuka dari perangkat mana pun setelah login. Tetap ekspor cadangan secara berkala.' : 'Semua data tersimpan di browser perangkat ini. Ekspor cadangan secara berkala atau untuk memindahkan ke perangkat lain.'}</p>
+          <div class="btns"><button class="btn" data-act="export">⬇ Ekspor Cadangan (.json)</button>${isAdmin() ? '<button class="btn soft" data-act="import">⬆ Pulihkan dari Cadangan</button>' : ''}<button class="btn ghost" data-act="demo">Muat Data Contoh</button>${isAdmin() ? '<button class="btn danger" data-act="reset">Hapus Semua Data</button>' : ''}</div>
+          ${S.mode === 'server' && localData() && isAdmin() ? `<div class="note" style="margin-top:12px">Ditemukan data lama yang tersimpan di browser ini (${localData().classes.length} kelas, ${localData().assessments.length} asesmen). <button class="btn sm" data-act="migrate">⬆ Pindahkan ke Server</button></div>` : ''}
         </div>
       </div></div>`,
       mount(v) {
@@ -1234,25 +1277,162 @@
       },
       actions: {
         preset: el => { const p = S.PRESETS.find(x => x.id === el.dataset.id); Object.assign(t, { preset: p.id, h: p.h, s: p.s }); applyTheme(); S.save(); keepScroll(); },
-        export: () => download('asesmen-merdeka-cadangan-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(s, null, 1), 'application/json'),
+        export: () => download('asesmen-merdeka-cadangan-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(s, (k, v) => k && k[0] === '_' ? undefined : v, 1), 'application/json'),
         import: async () => {
           const f = await pickFile('.json,application/json'); if (!f) return;
           try {
             const d = JSON.parse(await f.text());
             if (!d || !Array.isArray(d.classes)) throw new Error('Format tidak dikenali');
             if (!await confirmBox('Data saat ini akan diganti dengan isi cadangan. Lanjutkan?', 'Pulihkan')) return;
-            localStorage.setItem(S.KEY, JSON.stringify(d)); location.reload();
+            await S.replaceAll(d); applyTheme(); route(); toast('Data berhasil dipulihkan.');
           } catch (e) { toast('Gagal memulihkan: ' + e.message, 'bad'); }
         },
-        reset: async () => { if (!await confirmBox('Hapus <b>semua</b> kelas, murid, asesmen, nilai, dan bank soal? Tindakan ini tidak bisa dibatalkan.', 'Hapus Semua')) return; S.reset(); applyTheme(); route(); toast('Semua data dihapus.'); }
+        migrate: async () => {
+          const d = localData();
+          if (!await confirmBox(`Data di server akan <b>diganti</b> dengan data dari browser ini (${d.classes.length} kelas, ${d.assessments.length} asesmen). Lanjutkan?`, 'Pindahkan')) return;
+          try { await S.replaceAll(d); localStorage.removeItem(S.KEY); applyTheme(); route(); toast('Data lama berhasil dipindahkan ke server.'); }
+          catch (e) { toast('Gagal: ' + e.message, 'bad'); }
+        },
+        reset: async () => { if (!await confirmBox('Hapus <b>semua</b> kelas, murid, asesmen, nilai, dan bank soal? Tindakan ini tidak bisa dibatalkan.', 'Hapus Semua')) return; try { await S.reset(); applyTheme(); route(); toast('Semua data dihapus.'); } catch (e) { toast('Gagal: ' + e.message, 'bad'); } }
       }
     };
   }
 
-  /* ================= Mulai ================= */
+  /* ================= Akun (mode server) ================= */
+  function isAdmin() { return S.mode !== 'server' || (S.user && S.user.role === 'admin'); }
+  function localData() {
+    try { const d = JSON.parse(localStorage.getItem(S.KEY) || 'null'); return d && Array.isArray(d.classes) && (d.classes.length || d.assessments.length) ? d : null; } catch (e) { return null; }
+  }
+  function renderUserBox() {
+    let box = $('#user-box');
+    if (S.mode !== 'server' || !S.user) { if (box) box.remove(); return; }
+    if (!box) { box = document.createElement('div'); box.id = 'user-box'; box.className = 'user-box'; $('#sidebar').appendChild(box); }
+    box.innerHTML = `<div class="avatar">${esc((S.user.name || '?').charAt(0).toUpperCase())}</div>
+      <div style="min-width:0;flex:1"><b class="ellipsis">${esc(S.user.name)}</b><div class="small muted"><span id="sync-dot" class="sync-dot"></span><span id="sync-txt"></span></div></div>
+      <button class="btn ghost sm" id="btn-logout" title="Keluar">⎋</button>`;
+    $('#btn-logout', box).onclick = () => S.logout();
+    paintSync(S.syncStatus());
+  }
+  function paintSync(stt) {
+    const d = $('#sync-dot'), t = $('#sync-txt'); if (!d) return;
+    d.className = 'sync-dot ' + stt;
+    t.textContent = stt === 'saving' ? 'Menyimpan…' : stt === 'error' ? 'Gagal tersimpan' : 'Tersimpan di server';
+  }
+
+  function viewAccount() {
+    setTitle('👤 Akun Guru', 'Login, password, dan pengelolaan akun');
+    renderCtx(false);
+    const me = S.user;
+    const out = {
+      html: `<div class="grid g2" style="align-items:start" id="acc-grid">
+        <div class="card"><h2>Akun Saya</h2>
+          <p><b>${esc(me.name)}</b> <span class="pill pri">${me.role === 'admin' ? 'Admin' : 'Guru'}</span><br><span class="muted small">Username: ${esc(me.username)}</span></p>
+          <h3>Ganti Password</h3>
+          <label class="field"><span>Password lama</span><input type="password" id="pw-old" autocomplete="current-password"></label>
+          <label class="field"><span>Password baru (min. 6 karakter)</span><input type="password" id="pw-new" autocomplete="new-password"></label>
+          <div class="btns"><button class="btn" data-act="pw">Simpan Password</button><button class="btn ghost" data-act="logout">⎋ Keluar</button></div>
+        </div>
+        ${me.role === 'admin' ? `<div class="card"><div class="card-head"><h2>Akun Guru Lain</h2><button class="btn sm" data-act="add-user">+ Akun</button></div>
+          <p class="small muted">Semua guru berbagi data sekolah yang sama (kelas, mapel, asesmen). Admin dapat memulihkan cadangan dan menghapus data.</p>
+          <div id="user-list" class="muted small">Memuat…</div></div>` : ''}
+      </div>`,
+      async mount(v) {
+        if (window.innerWidth < 1000) $('#acc-grid', v).style.gridTemplateColumns = '1fr';
+        const list = $('#user-list', v); if (!list) return;
+        try {
+          const r = await S.api('users');
+          list.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Username</th><th>Peran</th><th></th></tr></thead><tbody>${r.users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td><span class="pill ${u.role === 'admin' ? 'pri' : ''}">${u.role}</span></td>
+            <td class="btns"><button class="btn ghost sm" data-act="reset-pw" data-id="${u.id}" data-n="${esc(u.name)}">🔑</button>${u.id === me.id ? '' : `<button class="btn ghost sm" data-act="del-user" data-id="${u.id}" data-n="${esc(u.name)}">🗑</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+        } catch (e) { list.textContent = e.message; }
+      },
+      actions: {
+        logout: () => S.logout(),
+        pw: async () => {
+          try { await S.api('me/password', { method: 'PUT', body: { oldPassword: $('#pw-old').value, newPassword: $('#pw-new').value } }); toast('Password diganti.'); $('#pw-old').value = $('#pw-new').value = ''; }
+          catch (e) { toast(e.message, 'bad'); }
+        },
+        'add-user': () => {
+          const m = modal(`<h2>Akun Guru Baru</h2>
+            <label class="field"><span>Nama lengkap</span><input id="nu-name"></label>
+            <div class="row"><label class="field"><span>Username</span><input id="nu-user" autocomplete="off"></label><label class="field"><span>Password awal</span><input id="nu-pw" type="text" autocomplete="off"></label></div>
+            <label class="field"><span>Peran</span><select id="nu-role"><option value="guru">Guru</option><option value="admin">Admin</option></select></label>
+            <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="nu-ok">Buat Akun</button></div>`);
+          $('#nu-ok', m).onclick = async () => {
+            try { await S.api('users', { body: { name: $('#nu-name', m).value.trim(), username: $('#nu-user', m).value.trim(), password: $('#nu-pw', m).value, role: $('#nu-role', m).value } }); closeModal(); toast('Akun dibuat.'); route(); }
+            catch (e) { toast(e.message, 'bad'); }
+          };
+        },
+        'reset-pw': el => {
+          const m = modal(`<h2>Atur Password ${esc(el.dataset.n)}</h2><label class="field"><span>Password baru</span><input id="rp" type="text" autocomplete="off"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="rp-ok">Simpan</button></div>`);
+          $('#rp-ok', m).onclick = async () => { try { await S.api('users/' + el.dataset.id + '/password', { method: 'PUT', body: { password: $('#rp', m).value } }); closeModal(); toast('Password diatur ulang.'); } catch (e) { toast(e.message, 'bad'); } };
+        },
+        'del-user': async el => {
+          if (!await confirmBox(`Hapus akun <b>${esc(el.dataset.n)}</b>? Data asesmen tetap ada.`, 'Hapus')) return;
+          try { await S.api('users/' + el.dataset.id, { method: 'DELETE' }); route(); } catch (e) { toast(e.message, 'bad'); }
+        }
+      }
+    };
+    return out;
+  }
+
+  /* Layar login / pemasangan pertama */
+  function authScreen(needsSetup, msg) {
+    document.body.classList.add('auth-mode');
+    let el = $('#auth');
+    if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="card auth-card tilt"><div class="z1">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
+      <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${needsSetup ? 'Pemasangan pertama — buat akun admin' : 'Masuk sebagai guru'}</div></div></div>
+      ${msg ? `<div class="note warn" style="margin-bottom:12px">${esc(msg)}</div>` : ''}
+      <form id="auth-form">
+        ${needsSetup ? '<label class="field"><span>Nama sekolah</span><input id="au-school" required placeholder="SMP Negeri 1 ..."></label><label class="field"><span>Nama Anda</span><input id="au-name" required></label>' : ''}
+        <label class="field"><span>Username</span><input id="au-user" required autocomplete="username" autocapitalize="off"></label>
+        <label class="field"><span>Password${needsSetup ? ' (min. 6 karakter)' : ''}</span><input id="au-pw" type="password" required autocomplete="${needsSetup ? 'new-password' : 'current-password'}"></label>
+        <button class="btn lg" style="width:100%" type="submit">${needsSetup ? 'Buat Akun & Mulai' : 'Masuk'}</button>
+      </form>
+      <div class="small muted" style="margin-top:14px;text-align:center">Murid? <a href="ujian.html">Masuk ke halaman ujian →</a></div>
+    </div></div>`;
+    bindTilt(el);
+    $('#au-user', el).focus();
+    $('#auth-form', el).onsubmit = async e => {
+      e.preventDefault();
+      const btn = $('button[type=submit]', el); btn.disabled = true;
+      try {
+        if (needsSetup) await S.setup({ schoolName: $('#au-school', el).value.trim(), name: $('#au-name', el).value.trim(), username: $('#au-user', el).value.trim(), password: $('#au-pw', el).value });
+        else await S.login($('#au-user', el).value.trim(), $('#au-pw', el).value);
+        el.remove(); document.body.classList.remove('auth-mode');
+        startApp();
+      } catch (err) { btn.disabled = false; toast(err.message, 'bad'); }
+    };
+  }
+
+  let started = false;
+  function startApp() {
+    applyTheme();
+    route();
+    if (started) return;
+    started = true;
+    window.addEventListener('hashchange', route);
+    if (S.mode === 'server') {
+      S.onStatus(paintSync);
+      // Ambil data terbaru secara berkala (mis. hasil ujian murid) tanpa mengganggu yang sedang mengetik
+      const idle = () => document.visibilityState === 'visible' && !$('#modal-root').innerHTML && !(document.activeElement && /INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) && !/bank-soal\/|ujian\//.test(location.hash);
+      const tick = async () => { if (!idle()) return; try { if (await S.pull()) keepScroll(); } catch (e) { /* abaikan */ } };
+      setInterval(tick, 20000);
+      window.addEventListener('focus', tick);
+      window.addEventListener('beforeunload', e => { if (S.pending()) { S.flush(); e.preventDefault(); e.returnValue = ''; } });
+    }
+  }
+
   $('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
-  window.addEventListener('hashchange', route);
   window.App = { toast, route };
+  S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
   applyTheme();
-  route();
+  S.init().then(r => {
+    if (r.needsSetup) authScreen(true);
+    else if (r.needLogin) authScreen(false);
+    else startApp();
+  }).catch(e => {
+    $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">Periksa koneksi internet atau pengaturan database di server (.env).</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
+  });
 })();
