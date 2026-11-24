@@ -390,3 +390,11 @@ body.auth-mode .app { display: none; }
 .token-input { font-size: 1.8rem; text-align: center; letter-spacing: .3em; text-transform: uppercase; font-weight: 800; width: 100%; padding: 14px; }
 .student-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; max-height: 50vh; overflow: auto; padding: 2px; }
 .student-list button { justify-content: space-between; }
+.exam-share { border: 2px solid var(--primary-soft); }
+.exam-share.open { border-color: var(--ok); }
+.exam-share-grid { display: grid; grid-template-columns: 270px 1fr; gap: 20px; align-items: center; }
+.exam-token { text-align: center; padding: 14px; border-radius: 16px; background: linear-gradient(145deg, var(--primary-soft), var(--accent-soft)); }
+.token-big { font-size: 2.3rem !important; letter-spacing: .08em; white-space: nowrap; }
+.share-link { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+.share-link input { flex: 1; min-width: 200px; font-size: .85rem; }
+@media (max-width: 700px) { .exam-share-grid { grid-template-columns: 1fr; } }

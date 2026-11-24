@@ -435,7 +435,8 @@
           <div class="small muted">${filled}/${cls.students.length} nilai terisi</div>`}
           <div class="btns" style="margin-top:12px">
             <a class="btn sm" href="#/asesmen/${type}/${a.id}">✍️ Input Nilai</a>
-            ${q ? `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Kerjakan Online</a>` : ''}
+            ${q && S.mode === 'server' ? `<a class="btn ok sm" href="#/asesmen/${type}/${a.id}">📱 Token Ujian${a.examOpen ? ' · ' + esc(a.examCode) : ''}</a>` : ''}
+            ${q && S.mode !== 'server' ? `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Kerjakan Online</a>` : ''}
             <button class="btn ghost sm" data-act="edit" data-id="${a.id}">⚙️</button>
             <button class="btn ghost sm" data-act="del" data-id="${a.id}">🗑</button>
           </div>
@@ -562,8 +563,9 @@
     return {
       html: `
       <div class="btns no-print" style="margin-bottom:14px"><a class="btn ghost sm" href="#/asesmen/${a.type}">← Kembali ke ${info.name}</a>
-        ${q ? `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Murid Kerjakan Online (${q.questions.length} soal)</a>` : `<button class="btn soft sm" data-act="link">📄 Hubungkan Paket Soal</button>`}
+        ${q ? (S.mode === 'server' ? `<a class="btn ghost sm" href="#/ujian/${a.id}" title="Murid mengerjakan bergantian di laptop/komputer ini">💻 Kerjakan di Perangkat Ini</a>` : `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Murid Kerjakan Online (${q.questions.length} soal)</a>`) : `<button class="btn soft sm" data-act="link">📄 Hubungkan Paket Soal</button>`}
         <button class="btn ghost sm" data-act="edit">⚙️ Ubah Asesmen</button></div>
+      ${S.mode === 'server' && q ? examPanel(a) : ''}
       <div class="grid" style="grid-template-columns: minmax(0,1.6fr) minmax(280px,1fr); align-items:start" id="asm-grid">
         <div class="card">
           <div class="card-head"><h3>Daftar Nilai</h3>
@@ -573,7 +575,6 @@
         </div>
         <div>
           <div class="card tilt"><div class="z1" id="stats-box">${statsHtml()}</div></div>
-          ${S.mode === 'server' && q ? examPanel(a) : ''}
           <div class="card"><h3>Info</h3>
             <p class="small" style="margin:0 0 6px"><b>TP diukur:</b> ${(a.tpIds || []).map(id => { const t = subj.tps.find(x => x.id === id); return t ? `<span class="pill pri" title="${esc(t.desc)}">${esc(t.code)}</span>` : ''; }).join(' ') || '<span class="muted">–</span>'}</p>
             <p class="small muted" style="margin:0">${info.desc}</p></div>
@@ -651,6 +652,11 @@
         },
         'exam-opt': el => { a[el.dataset.k] = !a[el.dataset.k]; S.save(); keepScroll(); },
         'exam-newcode': async () => { if (!await confirmBox('Buat token baru? Token lama tidak bisa dipakai lagi.', 'Buat Token Baru')) return; a.examCode = newExamCode(); S.save(); keepScroll(); },
+        'exam-wa': () => {
+          const subj = S.subj(a.subjectId);
+          const txt = `Ujian ${a.title} (${subj ? subj.name : ''}) sudah dibuka.\nToken: ${a.examCode}\nKerjakan di: ${examLink(a)}\nMasuk dengan memilih nama dan mengisi NIS.`;
+          window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+        },
         'exam-copy': () => { const t = examLink(a); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Tautan disalin.'), () => prompt('Salin tautan ini:', t)); },
         'refresh': async () => { await S.flush(); const ch = await S.pull(); keepScroll(); toast(ch ? 'Data diperbarui.' : 'Belum ada perubahan baru.'); }
       }
@@ -669,18 +675,35 @@
     const cls = S.cls(a.classId); const subs = st().submissions[a.id] || {};
     const done = cls.students.filter(m => subs[m.id]).length;
     const review = cls.students.filter(m => subs[m.id] && subs[m.id].result && subs[m.id].result.needsReview).length;
-    return `<div class="card tilt"><div class="z1">
-      <div class="card-head"><h3>📱 Ujian Online Murid</h3><span class="pill ${a.examOpen ? 'ok' : ''}">${a.examOpen ? '● Dibuka' : 'Ditutup'}</span></div>
-      ${a.examCode ? `<div style="text-align:center;margin:6px 0 10px"><div class="small muted">Token ujian</div><div class="score-big" style="font-size:2.6rem;letter-spacing:.15em">${esc(a.examCode)}</div></div>
-        <div class="small" style="word-break:break-all;margin-bottom:8px">Murid buka: <a href="${esc(examLink(a))}" target="_blank">${esc(examLink(a))}</a></div>` : '<p class="small muted">Buka ujian untuk membuat token. Murid mengerjakan dari HP/laptop masing-masing, cukup memasukkan token, memilih nama, dan NIS.</p>'}
-      <div class="btns" style="margin-bottom:10px"><button class="btn ${a.examOpen ? 'danger' : 'ok'} sm" data-act="exam-toggle">${a.examOpen ? '■ Tutup Ujian' : '▶ Buka Ujian'}</button>
-        ${a.examCode ? '<button class="btn soft sm" data-act="exam-copy">🔗 Salin Tautan</button><button class="btn ghost sm" data-act="exam-newcode">↻ Token Baru</button>' : ''}</div>
-      <label style="display:flex;gap:8px;align-items:center" class="small"><input type="checkbox" data-act="exam-opt" data-k="shuffle" ${a.shuffle ? 'checked' : ''}> Acak urutan soal per murid</label>
-      <label style="display:flex;gap:8px;align-items:center;margin-top:4px" class="small"><input type="checkbox" data-act="exam-opt" data-k="hideScore" ${a.hideScore ? 'checked' : ''}> Sembunyikan nilai dari murid setelah mengumpulkan</label>
-      <div class="small muted" style="margin-top:10px">Sudah mengumpulkan: <b>${done}/${cls.students.length}</b>${review ? ` · <span style="color:var(--warn)">${review} perlu koreksi uraian</span>` : ''}</div>
-      <div class="bar" style="margin:6px 0 10px"><i style="width:${cls.students.length ? done / cls.students.length * 100 : 0}%"></i></div>
-      <button class="btn ghost sm" data-act="refresh">🔄 Muat Ulang Hasil</button>
-      <p class="small muted" style="margin:8px 0 0">Murid tanpa NIS bisa masuk hanya dengan memilih nama. Isi NIS di Data Master agar lebih aman.</p></div></div>`;
+    const link = examLink(a);
+    return `<div class="card exam-share ${a.examOpen ? 'open' : ''}" style="margin-bottom:18px">
+      <div class="card-head"><h3>📱 Ujian dari HP Murid — Token & Link</h3><span class="pill ${a.examOpen ? 'ok' : ''}">${a.examOpen ? '● Ujian dibuka' : 'Ujian belum dibuka'}</span></div>
+      <div class="exam-share-grid">
+        <div class="exam-token">
+          ${a.examOpen ? `<div class="small muted">Token ujian</div><div class="score-big token-big">${esc(a.examCode)}</div>`
+            : `<div style="font-size:42px">🔒</div><div class="small muted">Klik tombol di bawah untuk membuat token</div>`}
+          <button class="btn ${a.examOpen ? 'danger' : 'ok'} ${a.examOpen ? 'sm' : 'lg'}" data-act="exam-toggle" style="margin-top:10px">${a.examOpen ? '■ Tutup Ujian' : '▶ Buka Ujian & Buat Token'}</button>
+        </div>
+        <div>
+          ${a.examOpen ? `
+            <div class="small"><b>Bagikan ke murid</b> (mis. lewat WhatsApp):</div>
+            <div class="share-link"><input readonly value="${esc(link)}" onclick="this.select()"><button class="btn soft sm" data-act="exam-copy">🔗 Salin Link</button><button class="btn ok sm" data-act="exam-wa">💬 WhatsApp</button></div>
+            <ol class="small" style="margin:8px 0;padding-left:18px">
+              <li>Murid membuka link di atas (atau <b>${esc(location.host)}/ujian.html</b> lalu mengetik token <b>${esc(a.examCode)}</b>).</li>
+              <li>Murid memilih namanya, lalu mengisi <b>NIS</b>.</li>
+              <li>Nilai otomatis masuk ke daftar nilai di bawah.</li>
+            </ol>`
+          : `<p class="small" style="margin-top:0">Agar murid mengerjakan dari <b>HP/laptop masing-masing</b>:</p>
+            <ol class="small" style="margin:0 0 8px;padding-left:18px"><li>Klik <b>Buka Ujian & Buat Token</b>.</li><li>Bagikan link atau token yang muncul ke murid.</li><li>Tutup ujian bila waktu sudah selesai.</li></ol>`}
+          <div class="btns" style="margin:6px 0">
+            <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-act="exam-opt" data-k="shuffle" ${a.shuffle ? 'checked' : ''}> Acak urutan soal</label>
+            <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-act="exam-opt" data-k="hideScore" ${a.hideScore ? 'checked' : ''}> Sembunyikan nilai dari murid</label>
+            ${a.examOpen ? '<button class="btn ghost sm" data-act="exam-newcode">↻ Ganti Token</button>' : ''}
+          </div>
+          <div class="small muted">Sudah mengumpulkan: <b>${done}/${cls.students.length}</b>${review ? ` · <span style="color:var(--warn)">${review} perlu koreksi uraian</span>` : ''} · <a href="#" data-act="refresh">🔄 muat ulang hasil</a></div>
+          <div class="bar" style="margin-top:6px"><i style="width:${cls.students.length ? done / cls.students.length * 100 : 0}%"></i></div>
+        </div>
+      </div></div>`;
   }
 
   /* ---- Koreksi jawaban online ---- */
@@ -734,7 +757,7 @@
     // Pilih murid
     if (!sid) {
       return {
-        html: `<div class="card"><h2>Siapa yang mengerjakan?</h2><p class="muted">Pilih nama murid untuk mulai. ${q.questions.length} soal${a.duration ? ` · waktu ${a.duration} menit` : ''}.</p>
+        html: `${S.mode === 'server' ? `<div class="note" style="margin-bottom:14px">💻 Ini mode <b>mengerjakan di perangkat ini</b> (murid bergantian memakai laptop/komputer guru). Supaya murid mengerjakan dari <b>HP masing-masing</b>, pakai <b>token ujian</b>: <a href="#/asesmen/${a.type}/${a.id}">buka halaman Token & Link Ujian →</a></div>` : ''}<div class="card"><h2>Siapa yang mengerjakan?</h2><p class="muted">Pilih nama murid untuk mulai. ${q.questions.length} soal${a.duration ? ` · waktu ${a.duration} menit` : ''}.</p>
           <div class="grid auto" style="gap:10px">${cls.students.map(m => `<a class="btn ${subs[m.id] ? 'ghost' : 'soft'}" style="justify-content:space-between" href="#/ujian/${a.id}/${m.id}"><span>${esc(m.name)}</span>${subs[m.id] ? `<span class="pill ok">${fmt(subs[m.id].result.score, 0)}</span>` : ''}</a>`).join('')}</div></div>
           <div class="btns"><a class="btn ghost" href="#/asesmen/${a.type}/${a.id}">← Kembali ke daftar nilai</a></div>`
       };
