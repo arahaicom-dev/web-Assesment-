@@ -41,7 +41,7 @@ h1{font-size:1.4rem;margin:0 0 6px}ol{line-height:1.7}pre{background:#f3f4fa;pad
 }
 
 function main() {
-  log('Memulai Asesmen Merdeka. Node', process.version, '· port', PORT, '· folder', __dirname);
+  log('Memulai Asesmen Merdeka versi ' + require('./package.json').version + '. Node', process.version, '· port', PORT, '· folder', __dirname);
 
   const major = parseInt(process.versions.node.split('.')[0], 10);
   if (major < 14) {
@@ -92,7 +92,14 @@ function main() {
   });
   app.use('/api', router);
   app.use('/api', (req, res) => res.status(404).json({ error: 'Tidak ditemukan.' }));
-  app.use(express.static(path.join(__dirname, 'public'), { extensions: ['html'], maxAge: '1h' }));
+  // HTML/JS/CSS selalu dicek ulang agar update langsung terlihat; pustaka PDF boleh di-cache lama
+  app.use(express.static(path.join(__dirname, 'public'), {
+    extensions: ['html'],
+    setHeaders(res, file) {
+      if (/[\\/]lib[\\/]/.test(file)) res.set('Cache-Control', 'public, max-age=604800');
+      else res.set('Cache-Control', 'no-cache');
+    }
+  }));
 
   app.use((err, req, res, next) => { // eslint-disable-line no-unused-vars
     log('[error]', req.method, req.url, err && err.stack || err);

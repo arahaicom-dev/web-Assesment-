@@ -435,7 +435,7 @@
           <div class="small muted">${filled}/${cls.students.length} nilai terisi</div>`}
           <div class="btns" style="margin-top:12px">
             <a class="btn sm" href="#/asesmen/${type}/${a.id}">✍️ Input Nilai</a>
-            ${q && S.mode === 'server' ? `<a class="btn ok sm" href="#/asesmen/${type}/${a.id}">📱 Token Ujian${a.examOpen ? ' · ' + esc(a.examCode) : ''}</a>` : ''}
+            ${S.mode === 'server' ? `<a class="btn ${q ? 'ok' : 'soft'} sm" href="#/asesmen/${type}/${a.id}">📱 Token Ujian${q && a.examOpen ? ' · ' + esc(a.examCode) : ''}</a>` : ''}
             ${q && S.mode !== 'server' ? `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Kerjakan Online</a>` : ''}
             <button class="btn ghost sm" data-act="edit" data-id="${a.id}">⚙️</button>
             <button class="btn ghost sm" data-act="del" data-id="${a.id}">🗑</button>
@@ -565,7 +565,10 @@
       <div class="btns no-print" style="margin-bottom:14px"><a class="btn ghost sm" href="#/asesmen/${a.type}">← Kembali ke ${info.name}</a>
         ${q ? (S.mode === 'server' ? `<a class="btn ghost sm" href="#/ujian/${a.id}" title="Murid mengerjakan bergantian di laptop/komputer ini">💻 Kerjakan di Perangkat Ini</a>` : `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Murid Kerjakan Online (${q.questions.length} soal)</a>`) : `<button class="btn soft sm" data-act="link">📄 Hubungkan Paket Soal</button>`}
         <button class="btn ghost sm" data-act="edit">⚙️ Ubah Asesmen</button></div>
-      ${S.mode === 'server' && q ? examPanel(a) : ''}
+      ${S.mode === 'server' ? (q ? examPanel(a) : `<div class="card exam-share" style="margin-bottom:18px"><div class="card-head"><h3>📱 Ujian dari HP Murid — Token & Link</h3><span class="pill">Belum ada soal</span></div>
+        <p style="margin:0 0 10px">Asesmen ini <b>belum terhubung ke paket soal</b>, jadi belum bisa dikerjakan murid secara online.</p>
+        <ol class="small" style="margin:0 0 12px;padding-left:18px"><li>Unggah soal di menu <a href="#/bank-soal">Bank Soal & Unggah PDF</a> (lewati bila sudah).</li><li>Klik <b>Hubungkan Paket Soal</b> di bawah, pilih paket soalnya, lalu Simpan.</li><li>Tombol <b>Buka Ujian & Buat Token</b> serta <b>Salin Link / WhatsApp</b> akan muncul di sini.</li></ol>
+        <button class="btn" data-act="link">📄 Hubungkan Paket Soal</button></div>`) : ''}
       <div class="grid" style="grid-template-columns: minmax(0,1.6fr) minmax(280px,1fr); align-items:start" id="asm-grid">
         <div class="card">
           <div class="card-head"><h3>Daftar Nilai</h3>

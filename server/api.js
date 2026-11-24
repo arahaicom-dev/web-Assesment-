@@ -65,7 +65,7 @@ const adminOnly = (req, res, next) => req.user.role === 'admin' ? next() : bad(r
 router.get('/health', async (req, res) => {
   try {
     const r = await db.query('SELECT COUNT(*) AS n FROM users');
-    res.json({ ok: true, mode: 'server', needsSetup: r[0].n === 0 });
+    res.json({ ok: true, mode: 'server', version: require('../package.json').version, needsSetup: r[0].n === 0 });
   } catch (e) {
     if (e && e.code === 'ER_NO_SUCH_TABLE') { try { await db.migrate(); return res.json({ ok: true, mode: 'server', needsSetup: true }); } catch (e2) { e = e2; } }
     res.json({ ok: false, mode: 'server', dbError: db.explain(e) || ('Gagal terhubung ke database: ' + (e && e.message)) });
