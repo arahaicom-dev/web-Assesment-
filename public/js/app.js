@@ -180,7 +180,10 @@
       out = { html: `<div class="card"><h2>Terjadi kesalahan</h2><pre class="small">${esc(e.stack || e)}</pre></div>` };
     }
     current = out;
-    view.innerHTML = `<div class="page">${out.html}</div>`;
+    const onHosting = S.mode === 'local' && /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
+    const banner = onHosting ? `<div class="note warn no-print" style="margin-bottom:16px"><b>⚠️ Aplikasi berjalan dalam MODE LOKAL (tanpa server Node.js).</b> Data hanya tersimpan di browser ini, tidak ada login, dan murid tidak bisa ujian dari HP masing-masing (tidak ada token).
+      <br>Penyebab paling umum: file aplikasi diekstrak ke dalam <b>public_html</b>. Seharusnya di folder terpisah (mis. <b>/home/akun/asesmen</b>) dan dijalankan lewat <b>Setup Node.js App</b>. Cek: buka <a href="api/health" target="_blank">${esc(location.host)}/api/health</a>. Kalau server berjalan benar, halaman itu berisi <span class="kbd">"mode":"server"</span>.</div>` : '';
+    view.innerHTML = `<div class="page">${banner}${out.html}</div>`;
     bindTilt(view);
     if (out.mount) out.mount(view);
     window.scrollTo({ top: 0 });
