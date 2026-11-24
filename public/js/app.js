@@ -1433,6 +1433,6 @@
     else if (r.needLogin) authScreen(false);
     else startApp();
   }).catch(e => {
-    $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">Periksa koneksi internet atau pengaturan database di server (.env).</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
+    $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">Periksa pengaturan database di cPanel → Setup Node.js App → Environment variables (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD), lalu Restart. Detail juga tercatat di file log-aplikasi.txt di folder aplikasi.</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
   });
 })();

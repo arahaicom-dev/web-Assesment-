@@ -62,10 +62,15 @@ const auth = wrap(async (req, res, next) => {
 });
 const adminOnly = (req, res, next) => req.user.role === 'admin' ? next() : bad(res, 403, 'Hanya admin.');
 
-router.get('/health', wrap(async (req, res) => {
-  const r = await db.query('SELECT COUNT(*) AS n FROM users');
-  res.json({ ok: true, mode: 'server', needsSetup: r[0].n === 0 });
-}));
+router.get('/health', async (req, res) => {
+  try {
+    const r = await db.query('SELECT COUNT(*) AS n FROM users');
+    res.json({ ok: true, mode: 'server', needsSetup: r[0].n === 0 });
+  } catch (e) {
+    if (e && e.code === 'ER_NO_SUCH_TABLE') { try { await db.migrate(); return res.json({ ok: true, mode: 'server', needsSetup: true }); } catch (e2) { e = e2; } }
+    res.json({ ok: false, mode: 'server', dbError: db.explain(e) || ('Gagal terhubung ke database: ' + (e && e.message)) });
+  }
+});
 
 router.post('/setup', wrap(async (req, res) => {
   const { username, password, name, schoolName } = req.body || {};

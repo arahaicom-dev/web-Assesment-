@@ -91,4 +91,16 @@ async function tx(fn) {
   }
 }
 
-module.exports = { getPool, migrate, query, tx, SCHEMA };
+/** Pesan kesalahan database yang mudah dipahami. */
+function explain(e) {
+  const c = e && e.code;
+  if (!c) return null;
+  if (c === 'ER_ACCESS_DENIED_ERROR' || c === 'ER_DBACCESS_DENIED_ERROR') return 'Database menolak login: periksa DB_USER dan DB_PASSWORD, dan pastikan user sudah ditambahkan ke database dengan ALL PRIVILEGES.';
+  if (c === 'ER_BAD_DB_ERROR') return 'Database "' + process.env.DB_NAME + '" tidak ditemukan: periksa DB_NAME (gunakan nama lengkap dengan awalan akun, mis. akunanda_asesmen).';
+  if (c === 'ECONNREFUSED' || c === 'ENOTFOUND' || c === 'ETIMEDOUT' || c === 'EHOSTUNREACH') return 'Tidak bisa menghubungi server database di "' + (process.env.DB_HOST || 'localhost') + '": periksa DB_HOST (biasanya localhost).';
+  if (c === 'ER_TABLEACCESS_DENIED_ERROR' || c === 'ER_SPECIFIC_ACCESS_DENIED_ERROR') return 'User database tidak punya izin yang cukup: beri ALL PRIVILEGES atau impor schema.sql lewat phpMyAdmin.';
+  if (c === 'ER_NO_SUCH_TABLE') return 'Tabel belum ada: restart aplikasi atau impor schema.sql lewat phpMyAdmin.';
+  return null;
+}
+
+module.exports = { getPool, migrate, query, tx, SCHEMA, explain };

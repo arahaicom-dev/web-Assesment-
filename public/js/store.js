@@ -127,6 +127,7 @@
       } catch (e) { /* mode lokal */ }
       if (!health || health.mode !== 'server') { this.mode = 'local'; return { ok: true }; }
       this.mode = 'server';
+      if (health.dbError) throw new Error(health.dbError);
       if (health.needsSetup) return { needsSetup: true };
       if (!localStorage.getItem(TOKEN_KEY)) return { needLogin: true };
       try { await this.pull(true); return { ok: true }; }
