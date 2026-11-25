@@ -54,6 +54,19 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
   - Murid tidak bisa mengumpulkan dua kali. Jawaban tersimpan sementara di HP murid kalau halamannya tertutup.
 - Kalau aplikasi dibuka tanpa server (hosting statis biasa), aplikasi tetap jalan dalam **mode lokal** seperti sebelumnya, dengan data tersimpan di browser.
 
+## Pasang di hosting biasa (PHP + MySQL) — paling mudah, tanpa Node.js
+
+Cara ini cocok untuk hosting cPanel pada umumnya. Tidak perlu Setup Node.js App dan tidak mengganggu situs lain di `public_html`. Butuh PHP 7.2+ (dengan PDO MySQL) dan MySQL/MariaDB.
+
+1. **cPanel → MySQL® Databases**: buat database dan user, lalu tambahkan user ke database dengan **ALL PRIVILEGES**. Catat nama lengkapnya (biasanya diawali nama akun, mis. `akunanda_asesmen`).
+2. **File Manager → `public_html`**: unggah `asesmen-merdeka-php.zip`, lalu **Extract**. Akan terbentuk folder `public_html/asesmen`.
+3. Buka `https://domainanda.com/asesmen`. Isi formulir **pengaturan database**, lalu buat **akun admin**. Selesai.
+
+Catatan:
+- Pengaturan database disimpan di `asesmen/api/config.php`, dan file ini tidak bisa dibuka dari browser. Untuk mengisi ulang, hapus file itu lalu buka aplikasinya lagi.
+- Folder bisa diberi nama lain, atau isinya diletakkan langsung di `public_html` kalau ingin dipakai di domain utama.
+- Untuk memperbarui aplikasi, extract versi baru ke folder yang sama dan timpa file lama. Data tetap aman di database.
+
 ## Pasang di hosting (cPanel dengan Node.js & MySQL)
 
 **Kebutuhan:** Node.js 14 atau lebih baru (disarankan 18+) dan MySQL 5.7+ atau MariaDB 10.3+.
@@ -141,6 +154,7 @@ cd public && python3 -m http.server 8000
 ## Struktur
 
 ```
+public/api/index.php API versi PHP (hosting biasa, tanpa Node.js)
 server.js            server Express (API + file statis dari public/)
 server/db.js         koneksi MySQL & pembuatan tabel otomatis
 server/api.js        login, akun guru, sinkronisasi data, ujian murid

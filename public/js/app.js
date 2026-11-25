@@ -1404,6 +1404,35 @@
     return out;
   }
 
+  /* Layar pengaturan database (versi PHP, pemasangan pertama) */
+  function configScreen() {
+    document.body.classList.add('auth-mode');
+    let el = $('#auth');
+    if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
+    el.innerHTML = `<div class="card auth-card" style="width:min(520px,100%)">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
+      <div><h2 style="margin:0">Pasang Asesmen Merdeka</h2><div class="small muted">Langkah 1 dari 2 — hubungkan ke database MySQL</div></div></div>
+      <p class="small muted" style="margin-top:0">Isi sesuai database yang dibuat di <b>cPanel → MySQL® Databases</b>. Nama database &amp; user biasanya diawali nama akun hosting, mis. <span class="kbd">akunanda_asesmen</span>.</p>
+      <form id="cfg-form">
+        <div class="row"><label class="field" style="flex:2"><span>Host database</span><input id="c-host" value="localhost" required></label>
+        <label class="field" style="flex:1;min-width:90px"><span>Port</span><input id="c-port" value="3306" inputmode="numeric"></label></div>
+        <label class="field"><span>Nama database</span><input id="c-name" required autocomplete="off" placeholder="akunanda_asesmen"></label>
+        <label class="field"><span>User database</span><input id="c-user" required autocomplete="off" placeholder="akunanda_guru"></label>
+        <label class="field"><span>Password database</span><input id="c-pass" type="password" autocomplete="new-password"></label>
+        <button class="btn lg" style="width:100%" type="submit">Hubungkan &amp; Lanjut →</button>
+      </form></div>`;
+    $('#c-name', el).focus();
+    $('#cfg-form', el).onsubmit = async e => {
+      e.preventDefault();
+      const btn = $('button[type=submit]', el); btn.disabled = true; btn.textContent = 'Menghubungkan…';
+      try {
+        await S.installConfig({ host: $('#c-host', el).value.trim(), port: +$('#c-port', el).value || 3306, name: $('#c-name', el).value.trim(), user: $('#c-user', el).value.trim(), pass: $('#c-pass', el).value });
+        toast('Database terhubung. Sekarang buat akun admin.');
+        authScreen(true);
+      } catch (err) { btn.disabled = false; btn.textContent = 'Hubungkan & Lanjut →'; toast(err.message, 'bad'); }
+    };
+  }
+
   /* Layar login / pemasangan pertama */
   function authScreen(needsSetup, msg) {
     document.body.classList.add('auth-mode');
@@ -1458,10 +1487,11 @@
   S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
   applyTheme();
   S.init().then(r => {
-    if (r.needsSetup) authScreen(true);
+    if (r.needsConfig) configScreen();
+    else if (r.needsSetup) authScreen(true);
     else if (r.needLogin) authScreen(false);
     else startApp();
   }).catch(e => {
-    $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">Periksa pengaturan database di cPanel → Setup Node.js App → Environment variables (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD), lalu Restart. Detail juga tercatat di file log-aplikasi.txt di folder aplikasi.</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
+    $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">${S.backend === 'php' ? 'Periksa database di cPanel → MySQL® Databases. Untuk mengisi ulang pengaturan database, hapus file <b>api/config.php</b> lewat File Manager lalu muat ulang halaman ini.' : 'Periksa pengaturan database di cPanel → Setup Node.js App → Environment variables (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD), lalu Restart. Detail juga tercatat di file log-aplikasi.txt di folder aplikasi.'}</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
   });
 })();

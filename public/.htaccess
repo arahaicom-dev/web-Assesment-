@@ -1,0 +1,21 @@
+# Asesmen Merdeka — pengaturan untuk hosting PHP (Apache/LiteSpeed)
+Options -Indexes
+DirectoryIndex index.html index.php
+
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  # Teruskan header Authorization ke PHP (dibutuhkan untuk login)
+  RewriteCond %{HTTP:Authorization} .
+  RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  # Semua /api/... ditangani api/index.php
+  RewriteRule ^api/?$ api/index.php [L,QSA]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteRule ^api/(.+)$ api/index.php [L,QSA]
+</IfModule>
+
+# File aplikasi selalu dicek ulang agar update langsung terlihat
+<IfModule mod_headers.c>
+  <FilesMatch "\.(html|js|css)$">
+    Header set Cache-Control "no-cache"
+  </FilesMatch>
+</IfModule>

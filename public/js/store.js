@@ -97,7 +97,7 @@
     opts = opts || {};
     const headers = { 'Content-Type': 'application/json' };
     const tok = localStorage.getItem(TOKEN_KEY);
-    if (tok) headers.Authorization = 'Bearer ' + tok;
+    if (tok) { headers.Authorization = 'Bearer ' + tok; headers['X-Auth-Token'] = tok; }
     const res = await fetch('api/' + path, { method: opts.method || (opts.body ? 'POST' : 'GET'), headers, body: opts.body ? JSON.stringify(opts.body) : undefined, cache: 'no-store' });
     let data = null;
     try { data = await res.json(); } catch (e) { data = {}; }
@@ -127,6 +127,8 @@
       } catch (e) { /* mode lokal */ }
       if (!health || health.mode !== 'server') { this.mode = 'local'; return { ok: true }; }
       this.mode = 'server';
+      this.backend = health.backend || 'node';
+      if (health.needsConfig) return { needsConfig: true };
       if (health.dbError) throw new Error(health.dbError);
       if (health.needsSetup) return { needsSetup: true };
       if (!localStorage.getItem(TOKEN_KEY)) return { needLogin: true };
@@ -138,6 +140,7 @@
       localStorage.setItem(TOKEN_KEY, r.token); this.user = r.user;
       await this.pull(true);
     },
+    async installConfig(body) { return api('install', { body, noAuthEvent: true }); },
     async setup(body) {
       const r = await api('setup', { body, noAuthEvent: true });
       localStorage.setItem(TOKEN_KEY, r.token); this.user = r.user;
@@ -155,6 +158,9 @@
       let ui = {};
       try { ui = JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch (e) { /* */ }
       const next = normalize(Object.assign(r.state, { ui: Object.assign({ classId: null, subjectId: null }, ui) }));
+      const byName = (a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'id', { numeric: true });
+      const byCreated = (a, b) => (a.created || 0) - (b.created || 0);
+      next.classes.sort(byName); next.subjects.sort(byName); next.assessments.sort(byCreated); next.questionSets.sort(byCreated);
       const nextSnap = flatten(next);
       const changed = !sync.snap || !!diff(sync.snap, nextSnap);
       if (changed || force) { this.state = next; sync.snap = nextSnap; }
