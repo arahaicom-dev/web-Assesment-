@@ -10,6 +10,7 @@
   const WRONG = ['Tetap semangat!', 'Ayo, soal berikutnya pasti bisa!', 'Tidak apa-apa, lanjut!', 'Hampir! Coba lagi di soal berikut.'];
   const G = { code: '', info: null, token: '', me: null, q: null, timer: null, deadline: 0, poll: null, busy: false, avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)] };
   const pick = a => a[Math.floor(Math.random() * a.length)];
+  const isExam = () => G.info && G.info.mode === 'exam';
   const fmt = n => (+n || 0).toLocaleString('id-ID');
 
   /* ---------- suara sederhana (dibuat langsung, tanpa file) ---------- */
@@ -19,7 +20,7 @@
   paintMute();
   muteBtn.onclick = () => { muted = !muted; localStorage.setItem('kuis-mute', muted ? '1' : '0'); paintMute(); };
   function tone(freqs, dur, type) {
-    if (muted) return;
+    if (muted || (G.info && G.info.mode === 'exam')) return;
     try {
       actx = actx || new (window.AudioContext || window.webkitAudioContext)();
       freqs.forEach((f, i) => {
@@ -45,6 +46,7 @@
   const saveKey = () => 'kuis:' + G.code;
   function setHud() {
     if (!G.me) { hud.innerHTML = ''; return; }
+    if (isExam()) { hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b>`; return; }
     hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b><span class="kz-pts">⭐ ${fmt(G.me.score)}</span>${G.me.streak > 1 ? `<span class="kz-streak">🔥${G.me.streak}</span>` : ''}`;
   }
   function stopAll() { clearInterval(G.timer); clearInterval(G.poll); G.timer = G.poll = null; }
@@ -76,7 +78,7 @@
     const avatars = `<div class="kz-avatars">${AVATARS.map(a => `<button type="button" class="kz-av ${a === G.avatar ? 'on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>`;
     view.innerHTML = `<div class="kz-card pop" style="max-width:560px;margin:3vh auto 0">
       <div class="small muted">${esc(i.schoolName || '')}</div><h2 style="margin-top:2px">${esc(i.title)}</h2>
-      <p class="muted small">${i.count} soal · ${i.time} detik per soal · ${i.players} pemain sudah bergabung</p>
+      <p class="muted small">${i.mode === 'exam' ? `📝 Ujian · ${i.count} soal · ${i.duration ? i.duration + ' menit' : 'tanpa batas waktu'} · ${i.players} peserta` : `${i.count} soal · ${i.time} detik per soal · ${i.players} pemain sudah bergabung`}</p>
       ${msg ? `<div class="note warn" style="margin-bottom:12px">${esc(msg)}</div>` : ''}
       <div class="small" style="font-weight:700;margin-bottom:6px">Pilih avatar</div>${avatars}
       <form id="f">
@@ -112,6 +114,12 @@
 
   function resume(s) {
     G.me = s.me; setHud();
+    if (isExam()) {
+      if (s.me.finished) return examDone(s.me);
+      if (s.status === 'lobby') return lobby(s);
+      if (s.status === 'ended') return examStart();
+      return s.me.started ? examStart() : examRules();
+    }
     if (s.status === 'ended') return final(s);
     if (s.me.finished) return waitEnd();
     if (s.status === 'lobby') return lobby(s);
@@ -124,14 +132,14 @@
     const draw = st => {
       view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:720px;margin:3vh auto 0">
         <div class="kz-big-ico bounce">${esc(G.me.avatar || '🙂')}</div>
-        <h2>Halo, ${esc(G.me.nickname)}!</h2><p class="muted">Kamu sudah masuk. Tunggu guru memulai kuis…</p>
+        <h2>Halo, ${esc(G.me.nickname)}!</h2><p class="muted">Kamu sudah masuk. Tunggu guru memulai ${isExam() ? 'ujian' : 'kuis'}…</p>
         <div class="kz-dots"><i></i><i></i><i></i></div>
         <div class="kz-lobby">${(st.lobby || []).map(p => `<span class="kz-chip">${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('')}</div>
         <div class="small muted" style="margin-top:10px">${st.players} pemain bergabung</div></div>`;
     };
     draw(s);
     G.poll = setInterval(async () => {
-      try { const st = await api('state'); G.me = st.me; if (st.status === 'running') { stopAll(); countdown(); } else if (st.status === 'ended') { stopAll(); final(st); } else draw(st); }
+      try { const st = await api('state'); G.me = st.me; if (st.status === 'running') { stopAll(); isExam() ? examRules() : countdown(); } else if (st.status === 'ended') { stopAll(); isExam() ? examStart() : final(st); } else draw(st); }
       catch (e) { if (e.status === 401 || e.status === 404) { stopAll(); localStorage.removeItem(saveKey()); stepCode(e.message); } }
     }, 2000);
   }
@@ -150,6 +158,7 @@
     try { d = await api('next', {}); } catch (e) { return toast(e.message + ' — mencoba lagi…', 'bad'), setTimeout(nextQ, 2000); }
     if (d.me) { G.me = d.me; setHud(); }
     if (d.waiting) return lobby({ players: 0, lobby: [] });
+    if (isExam()) return examStart();
     if (d.ended) { const s = await api('state'); return final(s); }
     if (d.finished) return waitEnd();
     G.q = d.question; G.busy = false;
@@ -227,6 +236,163 @@
     for (let i = 0; i < 80; i++) { const c = document.createElement('i'); c.style.left = Math.random() * 100 + '%'; c.style.background = `hsl(${Math.random() * 360} 85% 60%)`; c.style.animationDelay = Math.random() * 1.5 + 's'; c.style.animationDuration = 2.5 + Math.random() * 2 + 's'; box.appendChild(c); }
     document.body.appendChild(box); setTimeout(() => box.remove(), 6000);
   }
+
+  /* ================= MODE UJIAN ================= */
+  const E = { qs: [], ans: {}, flags: {}, idx: 0, deadline: 0, saveT: null, dirty: false, lastViol: 0, active: false, submitting: false };
+  const ebKey = () => 'ujian-jawab:' + G.code + ':' + G.token;
+
+  function examRules() {
+    stopAll();
+    const i = G.info;
+    view.innerHTML = `<div class="kz-card pop exam-rules">
+      <div class="kz-big-ico">📝</div><h2>${esc(i.title)}</h2>
+      <div class="exam-facts"><div><b>${i.count}</b><small>soal</small></div><div><b>${i.duration ? i.duration : '∞'}</b><small>${i.duration ? 'menit' : 'tanpa batas'}</small></div><div><b>${i.maxViolations || '–'}</b><small>batas pelanggaran</small></div></div>
+      <h3>Peraturan ujian</h3>
+      <ol class="small" style="text-align:left;line-height:1.7">
+        <li>Waktu mulai dihitung saat kamu menekan <b>Mulai Ujian</b>${i.duration ? ` dan berakhir otomatis setelah ${i.duration} menit` : ''}.</li>
+        <li>Kamu bisa pindah soal, mengganti jawaban, dan menandai <b>Ragu-ragu</b>.</li>
+        <li>Jawaban <b>tersimpan otomatis</b>. Jika HP mati, buka lagi tautan yang sama untuk melanjutkan.</li>
+        <li><b>Jangan keluar dari halaman ini</b> (pindah aplikasi/tab). Setiap kali keluar tercatat sebagai pelanggaran${i.maxViolations ? ` dan setelah ${i.maxViolations} kali ujian <b>dikumpulkan otomatis</b>` : ''}.</li>
+        <li>Tekan <b>Selesai</b> jika sudah yakin dengan semua jawaban.</li>
+      </ol>
+      <button class="btn lg kz-go" id="go">Mulai Ujian ▶</button></div>`;
+    $('#go').onclick = () => { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); examStart(); };
+  }
+
+  async function examStart() {
+    stopAll();
+    let d;
+    try { d = await api('exam-start', {}); } catch (e) { if (e.status === 409) return lobby({ players: 0, lobby: [] }); return toast(e.message, 'bad'); }
+    if (d.finished) return examDone(d.me);
+    G.me = d.me; setHud();
+    E.qs = d.questions; E.ans = Object.assign({}, d.answers); E.flags = Object.assign({}, d.flags); E.idx = 0;
+    // pulihkan cadangan lokal yang lebih baru (mis. saat koneksi putus)
+    try { const b = JSON.parse(localStorage.getItem(ebKey()) || 'null'); if (b) { Object.assign(E.ans, b.ans || {}); Object.assign(E.flags, b.flags || {}); E.idx = b.idx || 0; E.dirty = true; } } catch (e) { /* */ }
+    E.deadline = d.me.remainingMs !== null ? Date.now() + d.me.remainingMs : 0;
+    E.active = true; E.submitting = false;
+    examRender();
+    G.timer = setInterval(examTick, 500); examTick();
+    // Cek berkala: bila guru mengakhiri ujian, tampilkan hasil
+    G.poll = setInterval(async () => {
+      if (!E.active) return;
+      try { const st = await api('state'); if (st.me && st.me.finished) { E.active = false; examDone(st.me); } else if (st.status === 'ended') { E.active = false; const r = await api('submit', { answers: E.ans, flags: E.flags }); examDone(r.me); } } catch (e) { /* */ }
+    }, 10000);
+    if (E.dirty) scheduleSave(0);
+  }
+  const answered = q => E.ans[q.id] !== undefined && String(E.ans[q.id]).trim() !== '';
+  function examTick() {
+    if (!E.deadline) return;
+    const left = E.deadline - Date.now();
+    const el = $('#ex-time'); if (el) { el.textContent = '⏱ ' + (left > 0 ? String(Math.floor(left / 60000)).padStart(2, '0') + ':' + String(Math.floor(left / 1000) % 60).padStart(2, '0') : '00:00'); el.classList.toggle('low', left < 5 * 60000); }
+    if (left <= 0 && E.active) { toast('Waktu habis! Jawaban dikumpulkan otomatis.', 'bad'); examSubmit(true); }
+  }
+  function examRender() {
+    const q = E.qs[E.idx], n = E.qs.length, a = E.ans[q.id];
+    let body;
+    if (q.type === 'pg') body = q.options.map((o, k) => `<div class="exam-opt ${a === o.label ? 'sel' : ''}" data-v="${esc(o.label)}"><span class="lab">${'ABCDEF'[k]}</span><span>${esc(o.text)}</span></div>`).join('');
+    else if (q.type === 'bs') body = [['B', 'Benar'], ['S', 'Salah']].map(([v, l]) => `<div class="exam-opt ${a === v ? 'sel' : ''}" data-v="${v}"><span class="lab">${v}</span><span>${l}</span></div>`).join('');
+    else if (q.type === 'isian') body = `<input id="ex-ans" class="ex-input" autocomplete="off" placeholder="Tulis jawaban singkat…" value="${esc(a || '')}">`;
+    else body = `<textarea id="ex-ans" class="ex-input" style="min-height:180px" placeholder="Tulis jawaban uraianmu…">${esc(a || '')}</textarea>`;
+    const done = E.qs.filter(answered).length;
+    view.innerHTML = `<div class="exam-wrap">
+      <div class="kz-card exam-bar"><b id="ex-time" class="ex-time">${E.deadline ? '⏱ --:--' : '⏱ bebas'}</b><span class="small muted">${done}/${n} dijawab</span><span class="small muted" id="ex-save">✓ Tersimpan</span><button class="btn ok sm" id="ex-finish">Selesai</button></div>
+      <div class="exam-grid">
+        <div class="kz-card">
+          <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${{ pg: 'Pilihan Ganda', bs: 'Benar/Salah', isian: 'Isian', uraian: 'Uraian' }[q.type]}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
+          ${q.image ? `<img src="${q.image}" alt="" class="kz-img">` : ''}
+          <div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>
+          ${body}
+          <div class="btns" style="justify-content:space-between;margin-top:16px">
+            <button class="btn ghost" id="ex-prev" ${E.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
+            <label class="ragu ${E.flags[q.id] ? 'on' : ''}"><input type="checkbox" id="ex-flag" ${E.flags[q.id] ? 'checked' : ''}> Ragu-ragu</label>
+            ${E.idx < n - 1 ? '<button class="btn" id="ex-next">Berikutnya →</button>' : '<button class="btn ok" id="ex-last">Selesai ✔</button>'}
+          </div>
+        </div>
+        <div class="kz-card"><div class="small" style="font-weight:700;margin-bottom:8px">Nomor soal</div>
+          <div class="qnav">${E.qs.map((x, k) => `<button class="${k === E.idx ? 'cur' : E.flags[x.id] ? 'flag' : answered(x) ? 'done' : ''}" data-i="${k}">${k + 1}</button>`).join('')}</div>
+          <div class="ex-legend small muted"><span><i class="done"></i>dijawab</span><span><i class="flag"></i>ragu-ragu</span><span><i></i>belum</span></div></div>
+      </div></div>`;
+    const go = k => { E.idx = k; backup(); examRender(); window.scrollTo(0, 0); };
+    $$('.exam-opt').forEach(el => el.onclick = () => { E.ans[q.id] = el.dataset.v; changed(); examRender(); });
+    const inp = $('#ex-ans'); if (inp) { inp.oninput = () => { E.ans[q.id] = inp.value; changed(); }; }
+    $('#ex-flag').onchange = e => { if (e.target.checked) E.flags[q.id] = true; else delete E.flags[q.id]; changed(); examRender(); };
+    if ($('#ex-prev')) $('#ex-prev').onclick = () => go(E.idx - 1);
+    if ($('#ex-next')) $('#ex-next').onclick = () => go(E.idx + 1);
+    $$('.qnav button').forEach(b => b.onclick = () => go(+b.dataset.i));
+    [$('#ex-finish'), $('#ex-last')].forEach(b => b && (b.onclick = () => examSubmit(false)));
+    examTick();
+  }
+  function backup() { try { localStorage.setItem(ebKey(), JSON.stringify({ ans: E.ans, flags: E.flags, idx: E.idx })); } catch (e) { /* */ } }
+  function changed() { E.dirty = true; backup(); const s = $('#ex-save'); if (s) s.textContent = '… menyimpan'; scheduleSave(900); }
+  function scheduleSave(ms) { clearTimeout(E.saveT); E.saveT = setTimeout(saveNow, ms); }
+  async function saveNow() {
+    if (!E.dirty || !E.active) return;
+    E.dirty = false;
+    try {
+      const r = await api('save', { answers: E.ans, flags: E.flags });
+      if (r.finished) { E.active = false; return examDone(r.me); }
+      const s = $('#ex-save'); if (s) s.textContent = '✓ Tersimpan';
+    } catch (e) { E.dirty = true; const s = $('#ex-save'); if (s) s.textContent = '⚠ Belum tersimpan (dicoba lagi)'; scheduleSave(4000); }
+  }
+  async function examSubmit(force) {
+    if (E.submitting) return;
+    if (!force) {
+      const left = E.qs.filter(q => !answered(q)).length, ragu = Object.keys(E.flags).length;
+      const ok = await confirmDlg(`${left ? `Masih ada <b>${left} soal</b> belum dijawab.<br>` : ''}${ragu ? `Ada <b>${ragu} soal</b> ditandai ragu-ragu.<br>` : ''}Kumpulkan jawaban sekarang? Setelah dikumpulkan jawaban tidak bisa diubah.`);
+      if (!ok) return;
+    }
+    E.submitting = true; E.active = false; clearTimeout(E.saveT); clearInterval(G.timer);
+    try { const r = await api('submit', { answers: E.ans, flags: E.flags }); localStorage.removeItem(ebKey()); examDone(r.me); }
+    catch (e) { E.submitting = false; E.active = true; toast(e.message + ' — tekan Selesai lagi.', 'bad'); G.timer = setInterval(examTick, 500); }
+  }
+  function confirmDlg(html) {
+    return new Promise(res => {
+      const bg = document.createElement('div'); bg.className = 'modal-bg';
+      bg.innerHTML = `<div class="modal" style="width:min(460px,100%)"><h2>Kumpulkan Jawaban?</h2><p>${html}</p><div class="foot"><button class="btn ghost" id="c-no">Periksa lagi</button><button class="btn ok" id="c-ok">Ya, kumpulkan</button></div></div>`;
+      document.body.appendChild(bg);
+      $('#c-ok', bg).onclick = () => { bg.remove(); res(true); };
+      $('#c-no', bg).onclick = () => { bg.remove(); res(false); };
+    });
+  }
+  function examDone(me) {
+    stopAll(); E.active = false; G.me = me; setHud();
+    try { localStorage.removeItem(ebKey()); } catch (e) { /* */ }
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    const r = me.result;
+    view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:520px;margin:5vh auto 0">
+      <div class="kz-big-ico">✅</div><h2>Jawaban terkirim</h2><p>${esc(me.nickname)}</p>
+      ${r ? `<div class="kz-final-score">${(+r.score).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div><div class="muted">nilai ujian</div>${r.needsReview ? '<p class="note warn" style="margin-top:12px">Soal uraian akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
+      ${me.violations ? `<p class="small" style="color:var(--bad)">Tercatat ${me.violations} kali keluar dari halaman ujian.</p>` : ''}
+      <p class="small muted">Kamu boleh menutup halaman ini.</p></div>`;
+  }
+  // Pengawasan: keluar dari halaman ujian
+  document.addEventListener('visibilitychange', async () => {
+    if (document.visibilityState === 'visible') return showWarn();
+    if (!E.active || E.unloading) return;
+    if (Date.now() - E.lastViol < 2000) return;
+    E.lastViol = Date.now();
+    saveNow();
+    try {
+      const r = await api('violation', {});
+      if (r.locked) { E.active = false; examDone(r.me); toast('Ujian dikumpulkan otomatis karena terlalu sering keluar dari halaman.', 'bad'); return; }
+      E.warn = r;
+      if (document.visibilityState === 'visible') showWarn();
+    } catch (e) { /* */ }
+  });
+  window.addEventListener('focus', showWarn);
+  function showWarn() {
+    if (!E.active || !E.warn || $('.kz-feedback.bad')) return;
+    const r = E.warn; E.warn = null;
+    const ov = document.createElement('div'); ov.className = 'kz-feedback bad';
+    ov.innerHTML = `<div class="kz-fb-ico">⚠️</div><div class="kz-fb-title">Kamu keluar dari halaman ujian!</div><div class="kz-fb-key">Pelanggaran ke-${r.violations}${r.max ? ` dari ${r.max}. Jika mencapai ${r.max}, ujian dikumpulkan otomatis.` : '. Guru dapat melihat catatan ini.'}</div><button class="btn ghost lg" style="margin-top:18px" id="ov-ok">Kembali ke Ujian</button>`;
+    document.body.appendChild(ov); $('#ov-ok', ov).onclick = () => ov.remove();
+  }
+  document.addEventListener('contextmenu', e => { if (E.active) e.preventDefault(); });
+  document.addEventListener('copy', e => { if (E.active) e.preventDefault(); });
+  // Memuat ulang/menutup halaman tidak dihitung pelanggaran
+  const markUnload = () => { E.unloading = true; clearTimeout(E.unT); E.unT = setTimeout(() => { E.unloading = false; }, 4000); };
+  window.addEventListener('beforeunload', e => { markUnload(); if (E.active) { saveNow(); e.preventDefault(); e.returnValue = ''; } });
+  window.addEventListener('pagehide', markUnload);
 
   // Tema mengikuti pengaturan perangkat (bila pernah dipakai guru)
   try { const t = JSON.parse(localStorage.getItem('asesmen-merdeka-v1') || '{}').theme; if (t) { document.documentElement.style.setProperty('--h', t.h); document.documentElement.style.setProperty('--s', t.s); } } catch (e) { /* */ }

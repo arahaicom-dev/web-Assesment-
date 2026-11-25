@@ -166,6 +166,11 @@ function schema() {
       answers LONGTEXT NULL,
       joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       finished_at DATETIME NULL,
+      exam_score DECIMAL(6,2) NULL,
+      violations INT NOT NULL DEFAULT 0,
+      started_ms BIGINT NOT NULL DEFAULT 0,
+      flags TEXT NULL,
+      extra LONGTEXT NULL,
       INDEX (game_id)
     )$e",
     "CREATE TABLE IF NOT EXISTS login_fails (
@@ -189,8 +194,12 @@ function has_table($pdo, $table) {
 function migrate($pdo = null) {
   $pdo = $pdo ? $pdo : db();
   $hadUsers = has_table($pdo, 'users');
+  $hadPlayers = has_table($pdo, 'game_players');
   $hadTenants = has_table($pdo, 'tenants');
   foreach (schema() as $sql) $pdo->exec($sql);
+  if ($hadPlayers && !has_column($pdo, 'game_players', 'violations')) {
+    $pdo->exec('ALTER TABLE game_players ADD exam_score DECIMAL(6,2) NULL, ADD violations INT NOT NULL DEFAULT 0, ADD started_ms BIGINT NOT NULL DEFAULT 0, ADD flags TEXT NULL, ADD extra LONGTEXT NULL');
+  }
   if ($hadUsers && !has_column($pdo, 'users', 'tenant_id')) {
     $pdo->exec('ALTER TABLE users ADD tenant_id INT UNSIGNED NULL AFTER id, ADD is_super TINYINT NOT NULL DEFAULT 0 AFTER role, MODIFY username VARCHAR(150) NOT NULL');
     foreach (array('docs' => 'kind, id', 'scores' => 'assessment_id, student_id', 'submissions' => 'assessment_id, student_id') as $t => $pk) {
@@ -364,7 +373,7 @@ function suggest_essay($given, $key, $points) {
   return round($ratio * $points * 2) / 2;
 }
 function default_points($t) { $d = array('pg' => 1, 'bs' => 1, 'isian' => 2, 'uraian' => 4); return isset($d[$t]) ? $d[$t] : 1; }
-function grade($questions, $answers) {
+function grade($questions, $answers, $manual = array()) {
   $earned = 0; $total = 0; $needs = false; $detail = array();
   foreach ($questions as $q) {
     $type = prop($q, 'type'); $pts = (float)prop($q, 'points', 0); if (!$pts) $pts = default_points($type);
@@ -376,9 +385,11 @@ function grade($questions, $answers) {
     elseif ($type === 'bs') $got = ($ans !== '' && $key !== null && norm_bs($ans) !== null && norm_bs($ans) === norm_bs($key)) ? $pts : 0;
     elseif ($type === 'isian') $got = match_short($ans, $key) ? $pts : 0;
     else { $auto = false; $got = suggest_essay($ans, $key, $pts); }
-    if ($type === 'uraian') { $status = 'perlu koreksi'; if (trim($ans) !== '') $needs = true; }
+    if (isset($manual[$q->id]) && $manual[$q->id] !== '' && $manual[$q->id] !== null) {
+      $got = max(0, min($pts, (float)$manual[$q->id])); $auto = false; $status = 'dikoreksi';
+    } elseif ($type === 'uraian') { $status = 'perlu koreksi'; if (trim($ans) !== '') $needs = true; }
     else $status = $got >= $pts ? 'benar' : ($got > 0 ? 'sebagian' : 'salah');
-    if (trim($ans) === '') $status = 'kosong';
+    if (trim($ans) === '' && $status !== 'dikoreksi') $status = 'kosong';
     $earned += $got;
     $detail[] = array('id' => $q->id, 'got' => $got, 'pts' => $pts, 'status' => $status, 'auto' => $auto);
   }
@@ -405,4 +416,23 @@ function game_points($ok, $elapsedMs, $limitMs, $streak, $speedBonus) {
   if ($speedBonus && $limitMs > 0) $pts += (int)round(500 * max(0, 1 - $elapsedMs / $limitMs));
   if ($streak > 1) $pts += min(500, ($streak - 1) * 100);
   return $pts;
+}
+
+/* ================= Mode Ujian ================= */
+/** Nilai lembar ujian seorang pemain; mengembalikan hasil penilaian lengkap. */
+function exam_grade_player($questionsArr, $p, $manual = null) {
+  $qs = json_decode(json_encode($questionsArr));
+  $ans = $p['answers'] ? json_decode($p['answers'], true) : array();
+  $flat = array();
+  foreach ((array)$ans as $k => $v) $flat[$k] = is_array($v) ? (string)(isset($v['a']) ? $v['a'] : '') : (string)$v;
+  if ($manual === null) { $ex = $p['extra'] ? json_decode($p['extra'], true) : array(); $manual = isset($ex['manual']) ? $ex['manual'] : array(); }
+  $r = grade($qs, $flat, $manual);
+  return array($r, $manual, $flat);
+}
+function exam_finish_player($questionsArr, $p) {
+  list($r, $manual) = exam_grade_player($questionsArr, $p);
+  $correct = 0; foreach ($r['detail'] as $d) if ($d['status'] === 'benar') $correct++;
+  q('UPDATE game_players SET exam_score = ?, correct = ?, extra = ?, finished_at = COALESCE(finished_at, NOW()), cur_open = 0 WHERE id = ?',
+    array($r['score'], $correct, jenc(array('manual' => (object)$manual, 'result' => $r)), $p['id']));
+  return $r;
 }

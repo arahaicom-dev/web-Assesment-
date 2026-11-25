@@ -79,6 +79,17 @@ Menu **🎮 Kuis Seru (Live)** di aplikasi guru:
 4. Layar guru menampilkan **papan peringkat langsung** dan progres tiap murid. Setelah **Akhiri**, tampil **podium juara**, hasil per murid, dan ketercapaian per soal.
 5. **Simpan sebagai Nilai** membuat asesmen baru (mis. Formatif) dengan nilai = benar ÷ jumlah soal × 100.
 
+### Mode Ujian
+Saat membuat Kuis Seru, pilih **📝 Ujian** (bukan 🎮 Permainan):
+- **Timer total** (15–120 menit, atau tanpa batas), dihitung sejak murid menekan *Mulai Ujian*.
+- Murid bebas pindah soal, mengganti jawaban, dan menandai **ragu-ragu**. Peta nomor soal diberi warna (dijawab / ragu / belum).
+- Soal **uraian ikut dipakai**. Guru mengoreksinya lewat tombol **📝 Koreksi**, dengan saran skor dari kata kunci.
+- Jawaban **tersimpan otomatis** ke server, dengan cadangan di HP. Murid bisa melanjutkan setelah refresh atau HP mati.
+- **Pengawasan**: keluar dari halaman ujian (pindah aplikasi/tab) tercatat sebagai pelanggaran. Bisa diatur supaya ujian **dikumpulkan otomatis** setelah 1/3/5 pelanggaran. Memuat ulang halaman tidak dihitung.
+- **Layar pemantauan guru**: status, progres, jumlah ragu, pelanggaran, sisa waktu, dan nilai tiap peserta, diperbarui setiap 2 detik. Tombol ↻ mengulang ujian satu peserta.
+- **Akhiri Ujian** mengumpulkan otomatis lembar jawaban yang belum dikirim. Setelah itu tampil hasil, rata-rata, ketercapaian KKTP, dan ketercapaian per soal.
+- **Simpan sebagai Nilai** memakai nilai ujian (poin diperoleh ÷ total poin × 100, termasuk hasil koreksi uraian).
+
 ## Pasang di hosting biasa (PHP + MySQL) — paling mudah, tanpa Node.js
 
 Cara ini cocok untuk hosting cPanel pada umumnya. Tidak perlu Setup Node.js App dan tidak mengganggu situs lain di `public_html`. Butuh PHP 7.2+ (dengan PDO MySQL) dan MySQL/MariaDB.

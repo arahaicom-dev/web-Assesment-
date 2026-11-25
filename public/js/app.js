@@ -1578,20 +1578,21 @@
     if (!gameAvailable()) return { html: `<div class="card empty"><div class="big">🎮</div><h3>Kuis Seru membutuhkan versi server PHP</h3><p>Fitur ini berjalan saat aplikasi dipasang di hosting (versi PHP + MySQL) dan Anda login.</p></div>` };
     const out = {
       html: `<div class="card hero tilt"><div class="z1"><h2 style="margin:0 0 6px">Belajar seperti bermain 🎉</h2>
-        <p style="margin:0 0 14px">Pilih paket soal, tampilkan kode di proyektor, lalu murid bergabung dari HP. Jawaban cepat dapat poin lebih, jawaban beruntun dapat bonus, dan papan peringkat bergerak langsung.</p>
-        <button class="btn ghost lg" data-act="new">+ Buat Kuis Seru</button></div></div>
+        <p style="margin:0 0 14px">Pilih paket soal, tampilkan kode di proyektor, lalu murid bergabung dari HP. Ada dua mode: <b>🎮 Permainan</b> (poin kecepatan, papan peringkat, podium) dan <b>📝 Ujian</b> (timer total, ragu-ragu, pengawasan keluar halaman, soal uraian).</p>
+        <div class="btns"><button class="btn ghost lg" data-act="new">🎮 Buat Permainan</button><button class="btn ghost lg" data-act="new-exam">📝 Buat Ujian</button></div></div></div>
         <div id="games" class="muted" style="margin-top:18px">Memuat…</div>`,
       async mount(v) {
         let d; try { d = await S.api('games'); } catch (e) { $('#games', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
         $('#games', v).innerHTML = d.games.length ? `<div class="grid auto">${d.games.map(g => `<div class="card tilt" style="margin:0"><div class="z1">
           <div class="card-head"><h3>${esc(g.title)}</h3><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>
-          <p class="small muted" style="margin:0 0 8px">${tgl(g.created_at)} · kode ${esc(g.code)} · ${g.players} pemain${g.answered ? ` · akurasi ${Math.round(g.correct / g.answered * 100)}%` : ''}${g.class_id && S.cls(g.class_id) ? ' · ' + esc(S.cls(g.class_id).name) : ''}</p>
+          <p class="small muted" style="margin:0 0 8px"><span class="pill ${g.is_exam ? 'pri' : 'ok'}">${g.is_exam ? '📝 Ujian' : '🎮 Permainan'}</span> ${tgl(g.created_at)} · kode ${esc(g.code)} · ${g.players} ${g.is_exam ? 'peserta' : 'pemain'}${!g.is_exam && g.answered ? ` · akurasi ${Math.round(g.correct / g.answered * 100)}%` : ''}${g.class_id && S.cls(g.class_id) ? ' · ' + esc(S.cls(g.class_id).name) : ''}</p>
           <div class="btns"><a class="btn sm" href="#/kuis/${g.id}">${g.status === 'ended' ? '📊 Hasil' : '▶ Buka Layar Kuis'}</a><button class="btn ghost sm" data-act="del" data-id="${g.id}">🗑</button></div></div></div>`).join('')}</div>`
           : '<div class="card empty"><div class="big">🕹️</div>Belum ada kuis. Klik <b>Buat Kuis Seru</b> untuk memulai.</div>';
         bindTilt(v);
       },
       actions: {
         new: () => newGameModal(),
+        'new-exam': () => newGameModal({ mode: 'exam' }),
         del: async el => { if (!await confirmBox('Hapus kuis ini beserta hasilnya?', 'Hapus')) return; try { await S.api('games/' + el.dataset.id, { method: 'DELETE' }); route(); } catch (e) { toast(e.message, 'bad'); } }
       }
     };
@@ -1602,27 +1603,50 @@
     const s = st(); ensureCtx(); preset = preset || {};
     if (!s.questionSets.length) { toast('Buat atau unggah paket soal dulu di Bank Soal.', 'bad'); location.hash = '#/bank-soal'; return; }
     const usable = q => q.questions.filter(x => ['pg', 'bs', 'isian'].includes(x.type) && x.answer).length;
-    const m = modal(`<h2>🎮 Buat Kuis Seru</h2>
-      <label class="field"><span>Paket soal</span><select id="g-qs">${s.questionSets.map(q => `<option value="${q.id}" ${preset.qsetId === q.id ? 'selected' : ''}>${esc(q.title)} (${usable(q)} soal bisa dipakai)</option>`).join('')}</select></label>
+    const usableExam = q => q.questions.filter(x => x.type === 'uraian' || (['pg', 'bs', 'isian'].includes(x.type) && x.answer)).length;
+    let mode = preset.mode === 'exam' ? 'exam' : 'game';
+    const m = modal(`<h2>Buat Kuis Seru</h2>
+      <div class="mode-pick"><button type="button" class="mode-card" data-mode="game"><b>🎮 Permainan</b><small>Timer per soal, poin kecepatan, papan peringkat & podium juara</small></button>
+        <button type="button" class="mode-card" data-mode="exam"><b>📝 Ujian</b><small>Timer total, bebas pindah soal, ragu-ragu, pengawasan, soal uraian</small></button></div>
+      <label class="field"><span>Paket soal</span><select id="g-qs">${s.questionSets.map(q => `<option value="${q.id}" ${preset.qsetId === q.id ? 'selected' : ''} data-g="${usable(q)}" data-e="${usableExam(q)}">${esc(q.title)}</option>`).join('')}</select></label>
       <label class="field"><span>Judul kuis</span><input id="g-title" placeholder="(sama dengan judul paket soal)" value="${esc(preset.title || '')}"></label>
       <div class="row"><label class="field"><span>Peserta</span><select id="g-cls"><option value="">Bebas — murid mengetik nama panggilan</option>${s.classes.map(c => `<option value="${c.id}" ${(preset.classId || '') === c.id ? 'selected' : ''}>Kelas ${esc(c.name)} — pilih nama (nilai bisa disimpan)</option>`).join('')}</select></label>
-      <label class="field" style="max-width:170px"><span>Waktu per soal</span><select id="g-time">${[10, 15, 20, 30, 45, 60, 90, 120].map(t => `<option value="${t}" ${(preset.time || 20) === t ? 'selected' : ''}>${t} detik</option>`).join('')}</select></label></div>
+      <label class="field only-game" style="max-width:170px"><span>Waktu per soal</span><select id="g-time">${[10, 15, 20, 30, 45, 60, 90, 120].map(t => `<option value="${t}" ${(preset.time || 20) === t ? 'selected' : ''}>${t} detik</option>`).join('')}</select></label>
+      <label class="field only-exam" style="max-width:170px"><span>Durasi ujian</span><select id="g-dur">${[[15, '15 menit'], [30, '30 menit'], [45, '45 menit'], [60, '60 menit'], [90, '90 menit'], [120, '120 menit'], [0, 'Tanpa batas']].map(([v, l]) => `<option value="${v}" ${(preset.duration == null ? 60 : preset.duration) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
       <label class="field"><span>Mapel (untuk menyimpan nilai)</span><select id="g-subj">${s.subjects.map(x => `<option value="${x.id}" ${(preset.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <div class="grid g2 small" style="gap:6px">
         <label style="display:flex;gap:8px"><input type="checkbox" id="g-sq" checked> Acak urutan soal per murid</label>
         <label style="display:flex;gap:8px"><input type="checkbox" id="g-so" checked> Acak urutan pilihan jawaban</label>
-        <label style="display:flex;gap:8px"><input type="checkbox" id="g-sa" checked> Tampilkan jawaban benar setelah menjawab</label>
-        <label style="display:flex;gap:8px"><input type="checkbox" id="g-sb" checked> Bonus poin untuk jawaban cepat</label>
+        <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-sa" checked> Tampilkan jawaban benar setelah menjawab</label>
+        <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-sb" checked> Bonus poin untuk jawaban cepat</label>
+        <label class="only-exam" style="display:flex;gap:8px"><input type="checkbox" id="g-sr" checked> Tampilkan nilai ke murid setelah selesai</label>
       </div>
-      <p class="small muted">Soal uraian tidak dipakai di Kuis Seru (tidak bisa dinilai langsung).</p>
+      <label class="field only-exam" style="margin-top:10px"><span>Pengawasan: jika murid keluar dari halaman ujian (pindah aplikasi/tab)…</span><select id="g-viol">
+        <option value="0">Catat saja sebagai pelanggaran</option><option value="3" selected>Kumpulkan otomatis setelah 3 pelanggaran</option><option value="5">Kumpulkan otomatis setelah 5 pelanggaran</option><option value="1">Kumpulkan otomatis pada pelanggaran pertama</option></select></label>
+      <p class="small muted" id="g-note"></p>
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="g-ok">Buat & Buka Layar Kuis</button></div>`);
+    const paint = () => {
+      $$('.mode-card', m).forEach(c => c.classList.toggle('on', c.dataset.mode === mode));
+      $$('.only-game', m).forEach(x => x.classList.toggle('hidden', mode !== 'game'));
+      $$('.only-exam', m).forEach(x => x.classList.toggle('hidden', mode !== 'exam'));
+      const o = $('#g-qs', m).selectedOptions[0];
+      $('#g-note', m).innerHTML = mode === 'exam'
+        ? `${o ? o.dataset.e : 0} soal dipakai (termasuk uraian; uraian dikoreksi guru). Pilih <b>kelas</b> agar murid masuk dengan nama & NIS dan nilainya bisa disimpan.`
+        : `${o ? o.dataset.g : 0} soal dipakai. Soal uraian dan soal tanpa kunci tidak dipakai di mode permainan.`;
+      $('#g-ok', m).textContent = mode === 'exam' ? 'Buat & Buka Layar Pengawas' : 'Buat & Buka Layar Kuis';
+      if (mode === 'exam' && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
+    };
+    $$('.mode-card', m).forEach(c => c.onclick = () => { mode = c.dataset.mode; paint(); });
+    $('#g-qs', m).onchange = paint;
+    paint();
     $('#g-ok', m).onclick = async () => {
       const b = $('#g-ok', m); b.disabled = true;
       try {
-        const r = await S.api('games', { body: { qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+        const r = await S.api('games', { body: { mode, qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+          duration: +$('#g-dur', m).value, showResult: $('#g-sr', m).checked, maxViolations: +$('#g-viol', m).value,
           shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
         closeModal();
-        if (r.skipped) toast(r.skipped + ' soal dilewati (uraian / belum ada kunci).', 'bad');
+        if (r.skipped) toast(r.skipped + ' soal dilewati (' + (mode === 'exam' ? 'belum ada kunci' : 'uraian / belum ada kunci') + ').', 'bad');
         location.hash = '#/kuis/' + r.id;
       } catch (e) { b.disabled = false; toast(e.message, 'bad'); }
     };
@@ -1647,14 +1671,16 @@
       },
       actions: {
         start: async () => { try { await S.api('games/' + id + '/start', { method: 'POST' }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
-        end: async () => { if (!await confirmBox('Akhiri kuis sekarang? Murid yang belum selesai tidak bisa lanjut menjawab.', 'Akhiri Kuis')) return; try { await S.api('games/' + id + '/end', { method: 'POST' }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
+        end: async () => { const ex = out.data.game.settings.mode === 'exam'; if (!await confirmBox(ex ? 'Akhiri ujian sekarang? Lembar jawaban murid yang belum menekan Selesai akan <b>dikumpulkan otomatis</b>.' : 'Akhiri kuis sekarang? Murid yang belum selesai tidak bisa lanjut menjawab.', ex ? 'Akhiri Ujian' : 'Akhiri Kuis')) return; try { await S.api('games/' + id + '/end', { method: 'POST' }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
         kick: async el => { if (!await confirmBox(`Keluarkan <b>${esc(el.dataset.n)}</b> dari kuis?`, 'Keluarkan')) return; await S.api('games/' + id + '/kick', { body: { playerId: +el.dataset.id } }); out.load(); },
         copy: () => { const t = playLink(out.data.game.code); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Tautan disalin.'), () => prompt('Salin tautan ini:', t)); },
         wa: () => { const g = out.data.game; window.open('https://wa.me/?text=' + encodeURIComponent(`Ayo ikut Kuis Seru "${g.title}"!\nKode: ${g.code}\nGabung di: ${playLink(g.code)}`), '_blank'); },
         fs: () => { document.body.classList.toggle('fs-mode'); if (document.body.classList.contains('fs-mode') && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen(); },
         save: () => saveGameScores(out.data),
         xls: () => exportTable($('#res-table'), 'Kuis_' + out.data.game.title.replace(/[^\w\s-]/g, '')),
-        again: () => { const g = out.data.game; newGameModal({ qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time }); }
+        again: () => { const g = out.data.game; newGameModal({ mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
+        reset: async el => { if (!await confirmBox(`Ulang ujian untuk <b>${esc(el.dataset.n)}</b>? Jawaban, nilai, dan catatan pelanggarannya dihapus sehingga ia bisa mengerjakan dari awal.`, 'Ulang Ujian')) return; try { await S.api('games/' + id + '/reset', { body: { playerId: +el.dataset.id } }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
+        review: el => examReviewModal(out, +el.dataset.id)
       }
     };
     return out;
@@ -1663,6 +1689,7 @@
   function renderHost(d) {
     const g = d.game, ps = d.players, total = d.questions.length, box = $('#host');
     if (!box) return;
+    if (g.settings.mode === 'exam') return renderExamHost(d, box);
     setTitle('🎮 ' + esc(g.title), `${total} soal · ${g.settings.time} detik/soal${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ' · nama bebas'}`);
     const link = playLink(g.code);
     const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>`;
@@ -1705,21 +1732,105 @@
     if (window.innerWidth < 1000) $('#res-grid').style.gridTemplateColumns = '1fr';
   }
 
+  /* ---- Layar pengawas Mode Ujian ---- */
+  const mmss = ms => { if (ms === null || ms === undefined) return '–'; const s2 = Math.ceil(ms / 1000); return String(Math.floor(s2 / 60)).padStart(2, '0') + ':' + String(s2 % 60).padStart(2, '0'); };
+  function renderExamHost(d, box) {
+    const g = d.game, ps = d.players, total = d.questions.length, set = g.settings;
+    setTitle('📝 ' + esc(g.title), `Mode Ujian · ${total} soal · ${set.duration ? set.duration + ' menit' : 'tanpa batas waktu'}${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ''}`);
+    const link = playLink(g.code);
+    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><span class="pill ${GAME_STATUS[g.status][0]}">${g.status === 'running' ? '● Ujian berlangsung' : g.status === 'lobby' ? 'Menunggu peserta' : 'Selesai'}</span></div>`;
+    const st0 = p => p.finished ? ['ok', '✔ Selesai'] : p.started_ms ? ['pri', '✍ Mengerjakan'] : ['', 'Belum mulai'];
+    const stat = (ic, num, lbl) => `<div class="card stat"><div class="blob"><span>${ic}</span></div><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
+    const done = ps.filter(p => p.finished), work = ps.filter(p => p.started_ms && !p.finished);
+    const viol = ps.reduce((a, p) => a + p.violations, 0);
+    const scored = done.filter(p => p.exam_score !== null);
+    const avg = scored.length ? Math.round(scored.reduce((a, p) => a + p.exam_score, 0) / scored.length * 10) / 10 : null;
+    const needReview = done.filter(p => p.result && p.result.needsReview).length;
+    if (g.status === 'lobby') {
+      box.innerHTML = top + `<div class="card host-join">
+        <div><div class="small muted">Peserta membuka <b>${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}kuis.html</b> lalu memasukkan kode</div>
+          <div class="host-code">${esc(g.code)}</div>
+          <div class="btns" style="margin-top:12px"><button class="btn soft sm" data-act="copy">🔗 Salin Link</button><button class="btn ok sm" data-act="wa">💬 Bagikan ke WhatsApp</button></div>
+          <ul class="small muted" style="margin:12px 0 0;padding-left:18px"><li>Durasi: ${set.duration ? set.duration + ' menit (dihitung sejak murid menekan Mulai)' : 'tanpa batas'}</li><li>Pengawasan: ${set.maxViolations ? 'dikumpulkan otomatis setelah ' + set.maxViolations + ' kali keluar halaman' : 'keluar halaman dicatat sebagai pelanggaran'}</li><li>Nilai ${set.showResult ? 'ditampilkan' : 'tidak ditampilkan'} ke murid setelah selesai</li></ul></div>
+        <div style="text-align:center"><div style="font-size:3.4rem;font-weight:900">${ps.length}</div><div class="muted">peserta siap</div>
+          <button class="btn lg" data-act="start" ${ps.length ? '' : 'disabled'} style="margin-top:14px">▶ Mulai Ujian</button></div></div>
+        <div class="card"><h3>Peserta</h3><div class="host-players">${ps.map(p => `<span class="kz-chip" title="Klik untuk mengeluarkan" style="cursor:pointer" data-act="kick" data-id="${p.id}" data-n="${esc(p.nickname)}">${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('') || '<span class="muted">Menunggu peserta bergabung…</span>'}</div></div>`;
+      return;
+    }
+    const rows = ps.map((p, i) => {
+      const [c, l] = st0(p);
+      const pct = Math.round((p.answeredCount || 0) / total * 100);
+      return `<tr><td class="num">${i + 1}</td><td><b>${esc(p.nickname)}</b></td><td><span class="pill ${c}">${l}</span></td>
+        <td style="min-width:140px"><div class="small">${p.answeredCount || 0}/${total} dijawab${p.flagCount ? ` · <span style="color:var(--warn)">${p.flagCount} ragu</span>` : ''}</div><div class="bar"><i style="width:${pct}%"></i></div></td>
+        <td class="num">${p.violations ? `<span class="pill bad">⚠ ${p.violations}</span>` : '<span class="muted">0</span>'}</td>
+        <td class="num">${p.finished ? '–' : mmss(p.remainingMs)}</td>
+        <td class="num">${p.exam_score !== null ? `<b style="font-size:1.1rem">${fmt(p.exam_score, 1)}</b>${p.result && p.result.needsReview ? '<div class="small" style="color:var(--warn)">perlu koreksi</div>' : ''}` : '–'}</td>
+        <td class="btns">${p.finished ? `<button class="btn ${p.result && p.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${p.id}">📝 Koreksi</button>` : ''}<button class="btn ghost sm" data-act="reset" data-id="${p.id}" data-n="${esc(p.nickname)}" title="Ulang ujian">↻</button></td></tr>`;
+    }).join('');
+    const table = `<div class="table-wrap"><table id="res-table"><thead><tr><th class="num">No</th><th>Nama</th><th>Status</th><th>Progres</th><th class="num">Pelanggaran</th><th class="num">Sisa Waktu</th><th class="num">Nilai</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">Belum ada peserta.</td></tr>'}</tbody></table></div>`;
+    if (g.status === 'running') {
+      box.innerHTML = top + `<div class="grid g4">${stat('👥', ps.length, 'Peserta')}${stat('✍', work.length, 'Sedang mengerjakan')}${stat('✅', done.length + '/' + ps.length, 'Sudah selesai')}${stat('⚠', viol, 'Total pelanggaran')}</div>
+        <div class="card" style="margin-top:18px"><div class="card-head"><h3>Pemantauan Peserta <span class="pill">kode ${esc(g.code)}</span></h3><button class="btn danger" data-act="end">■ Akhiri Ujian</button></div>${table}
+        <p class="small muted">Diperbarui otomatis setiap 2 detik. Peserta yang terlambat masih bisa bergabung dengan kode yang sama. Tombol ↻ mengulang ujian seorang peserta.</p></div>`;
+      return;
+    }
+    box.innerHTML = top + `<div class="grid g4">${stat('👥', ps.length, 'Peserta')}${stat('📊', avg === null ? '–' : fmt(avg, 1), 'Rata-rata nilai')}${stat('✅', scored.filter(p => p.exam_score >= st().settings.kktp).length + '/' + scored.length, 'Mencapai KKTP (' + st().settings.kktp + ')')}${stat('📝', needReview, 'Perlu koreksi uraian')}</div>
+      <div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);align-items:start;margin-top:18px" id="res-grid">
+        <div class="card" style="margin:0"><div class="card-head"><h3>Hasil Ujian</h3><div class="btns">${g.classId ? `<button class="btn ok sm" data-act="save" ${ps.some(p => p.student_id) ? '' : 'disabled'}>💾 Simpan sebagai Nilai</button>` : ''}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="again">↻ Buat Ulang</button></div></div>${table}
+          ${needReview ? '<div class="note warn" style="margin-top:10px">Ada jawaban uraian yang belum dikoreksi. Nilai sementara memakai saran skor otomatis — klik <b>📝 Koreksi</b> untuk memastikan.</div>' : ''}</div>
+        <div class="card" style="margin:0"><h3>Ketercapaian per Soal</h3>${d.questions.map(q => { const pc = q.n ? Math.round(q.ok / q.n * 100) : 0; return `<div class="q-acc" title="${esc(q.text)}"><b>No.${q.no}</b><div><div class="small ellipsis">${esc(q.text)}</div><div class="bar"><i style="width:${pc}%"></i></div></div><span class="pill ${q.type === 'uraian' ? '' : pc >= 70 ? 'ok' : pc >= 40 ? 'warn' : 'bad'}">${q.type === 'uraian' ? 'uraian' : pc + '%'}</span></div>`; }).join('')}</div></div>`;
+    if (window.innerWidth < 1000) $('#res-grid').style.gridTemplateColumns = '1fr';
+  }
+
+  function examReviewModal(out, pid) {
+    const d = out.data, p = d.players.find(x => x.id === pid);
+    if (!p || !p.result) return toast('Peserta ini belum mengumpulkan.', 'bad');
+    const det = {}; p.result.detail.forEach(x => { det[x.id] = x; });
+    const manual = Object.assign({}, p.manual || {});
+    const ansOf = q => { const v = p.answers[q.id]; return v && typeof v === 'object' ? v.a : v; };
+    const m = modal(`<h2>Koreksi — ${esc(p.nickname)}</h2>
+      <div class="btns" style="margin-bottom:12px"><span class="score-big" style="font-size:2.4rem" id="rv-score">${fmt(p.exam_score, 1)}</span><span class="muted">${p.violations ? `⚠ ${p.violations} pelanggaran · ` : ''}poin ${fmt(p.result.earned)} / ${fmt(p.result.total)}</span></div>
+      ${d.questions.map(q => {
+        const x = det[q.id] || { got: 0, pts: q.points, status: 'kosong' }; const a = ansOf(q);
+        const pill = x.status === 'benar' || x.status === 'dikoreksi' ? 'ok' : x.status === 'perlu koreksi' || x.status === 'sebagian' ? 'warn' : 'bad';
+        let ansHtml;
+        if (q.type === 'pg') ansHtml = `Jawaban: <b>${esc(a || '–')}</b>${a ? ' — ' + esc((q.options.find(o => o.label === a) || {}).text || '') : ''} · Kunci: <b>${esc(q.answer)}</b>`;
+        else if (q.type === 'bs') ansHtml = `Jawaban: <b>${a === 'B' ? 'Benar' : a === 'S' ? 'Salah' : '–'}</b> · Kunci: <b>${/^b/i.test(q.answer) ? 'Benar' : 'Salah'}</b>`;
+        else ansHtml = `<div style="white-space:pre-wrap;padding:8px;border-radius:8px;background:var(--surface-2);margin:4px 0">${esc(a || '(kosong)')}</div><div class="small muted">Kunci/pedoman: ${esc(q.answer || '–')}</div>`;
+        return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill ${pill}">${x.status}</span>
+          <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${x.pts}" data-man="${esc(q.id)}" value="${manual[q.id] !== undefined ? manual[q.id] : x.got}"> / ${x.pts}</span></div>
+          <div class="q-text small">${esc(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
+      }).join('')}
+      <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`, { wide: true, noFocus: true });
+    $('#rv-save', m).onclick = async () => {
+      const man = {};
+      $$('[data-man]', m).forEach(inp => { const q = d.questions.find(x => x.id === inp.dataset.man); const x = det[q.id]; if (q.type === 'uraian' || +inp.value !== (x ? x.got : 0)) man[q.id] = inp.value; });
+      try { const r = await S.api('games/' + d.game.id + '/grade', { body: { playerId: pid, manual: man } }); closeModal(); toast('Koreksi tersimpan. Nilai: ' + fmt(r.score, 1)); out.load(); }
+      catch (e) { toast(e.message, 'bad'); }
+    };
+  }
+
   function saveGameScores(d) {
     const s = st(); const g = d.game, total = d.questions.length;
     const cls = S.cls(g.classId);
     if (!cls) return toast('Kelas kuis ini tidak ditemukan.', 'bad');
-    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">Nilai tiap murid = benar ÷ ${total} soal × 100. Murid yang tidak ikut dibiarkan kosong.</p>
+    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">${g.settings.mode === 'exam' ? 'Nilai tiap murid = nilai ujian (poin diperoleh ÷ total poin × 100), termasuk hasil koreksi uraian.' : 'Nilai tiap murid = benar ÷ ' + total + ' soal × 100.'} Murid yang tidak ikut dibiarkan kosong.</p>
       <label class="field"><span>Jenis asesmen</span><select id="sv-type">${['formatif', 'slm', 'diagnostik', 'sts', 'sas', 'sat'].map(k => `<option value="${k}">${T[k].name} (${T[k].short})</option>`).join('')}</select></label>
       <label class="field"><span>Mapel</span><select id="sv-subj">${s.subjects.map(x => `<option value="${x.id}" ${(g.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
-      <label class="field"><span>Judul</span><input id="sv-title" value="${esc('Kuis Seru — ' + g.title)}"></label>
+      <label class="field"><span>Judul</span><input id="sv-title" value="${esc((g.settings.mode === 'exam' ? '' : 'Kuis Seru — ') + g.title)}"></label>
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="sv-ok">Simpan Nilai</button></div>`);
     $('#sv-ok', m).onclick = () => {
       const type = $('#sv-type', m).value;
       const a = { id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() };
       s.assessments.push(a);
       let n = 0;
-      d.players.forEach(p => { if (p.student_id && cls.students.some(x => x.id === p.student_id)) { S.setScore(a.id, p.student_id, Math.round(p.correct / total * 100)); n++; } });
+      const isExam = g.settings.mode === 'exam';
+      d.players.forEach(p => {
+        if (!p.student_id || !cls.students.some(x => x.id === p.student_id)) return;
+        const v = isExam ? p.exam_score : Math.round(p.correct / total * 100);
+        if (v === null || v === undefined) return;
+        S.setScore(a.id, p.student_id, Math.round(v * 100) / 100); n++;
+      });
       S.save(); closeModal(); toast(n + ' nilai disimpan ke ' + T[type].name + '.');
       s.ui.classId = cls.id; s.ui.subjectId = a.subjectId;
       location.hash = '#/asesmen/' + type + '/' + a.id;
