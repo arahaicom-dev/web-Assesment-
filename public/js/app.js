@@ -33,6 +33,16 @@
       <div class="pv-mount" data-pv="${i}"></div>
       ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
   }
+  /** Galeri 17 jenis soal (tombol). act: aksi saat diklik (mk = buat paket baru, addq = tambah ke paket). */
+  function typeGallery(act) {
+    return `<div class="qt-picker">${QT.ORDER.map(t => `<button class="qt-pick" data-act="${act}" data-t="${t}"><span class="qt-pi">${QT.TYPES[t].icon}</span><b>${TYPE_LABEL[t]}</b><small>${QT.TYPES[t].desc}</small>${QT.TYPES[t].game ? '<i title="Bisa untuk Kuis Permainan">🎮</i>' : ''}</button>`).join('')}</div>`;
+  }
+  /** Mulai paket soal baru dengan satu soal berjenis t, lalu buka editor. */
+  function startManual(t) {
+    const q = QT.blank(t, S.uid('q')); q.num = 1;
+    importDraft = { id: S.uid('qs'), title: 'Paket Soal Baru', questions: [q], created: Date.now(), source: '', warnings: [], isNew: true };
+    location.hash = '#/bank-soal/draft';
+  }
   function mountPreviews(m, qs) { $$('[data-pv]', m).forEach(el => { const q = qs[+el.dataset.pv]; QT.mount(el, QT.publicView(q, 'pv'), '', {}); }); }
 
   /* ================= Utilitas UI ================= */
@@ -979,9 +989,12 @@
     const sets = s.questionSets.filter(q => bankFilter !== 'mine' || !multiUser || q.ownerId === S.user.id);
     return {
       html: `
+      <div class="card"><div class="card-head"><h3>✏️ Buat Soal Langsung — 17 Jenis Soal</h3><span class="small muted">🎮 = bisa dipakai di Kuis Permainan · semua jenis bisa untuk Ujian</span></div>
+        <p class="small muted" style="margin-top:0">Klik jenis soal untuk mulai membuat paket soal baru. Di dalam editor Anda bisa menambah soal jenis lain sebanyak apa pun.</p>
+        ${typeGallery('mk')}</div>
       <div class="grid g2">
         <div class="card"><h3>Unggah File Soal</h3>
-          <div class="drop" id="drop"><div class="pdf3d">PDF</div><b>Klik atau seret file PDF ke sini</b><div class="small muted">Juga menerima .txt. Pilihan ganda, benar/salah, isian, dan uraian dikenali otomatis.</div></div>
+          <div class="drop" id="drop"><div class="pdf3d">PDF</div><b>Klik atau seret file PDF ke sini</b><div class="small muted">Juga menerima .txt. Pilihan ganda (biasa &amp; kompleks), benar/salah, isian, menjodohkan, dan uraian dikenali otomatis.</div></div>
           <div id="import-status" class="small" style="margin-top:10px"></div>
         </div>
         <div class="card"><h3>…atau Tempel Teks Soal</h3>
@@ -1025,6 +1038,7 @@
           if (!txt.trim()) return toast('Tempel teks soal terlebih dahulu.', 'bad');
           startDraft(P.parse(txt), 'Paket Soal Baru', 'teks tempelan', txt.split('\n'));
         },
+        mk: el => startManual(el.dataset.t),
         blank: () => { importDraft = { id: S.uid('qs'), title: 'Paket Soal Baru', questions: [], created: Date.now(), source: '', warnings: [], isNew: true }; location.hash = '#/bank-soal/draft'; },
         use: el => useQset(el.dataset.id),
         dup: el => { const c = dupQset(S.qset(el.dataset.id)); toast('Salinan dibuat — sekarang milik Anda dan bisa diedit.'); location.hash = '#/bank-soal/' + c.id; },
@@ -1218,7 +1232,7 @@
     if (!src._work) src._work = JSON.parse(JSON.stringify({ title: src.title, questions: src.questions }));
     const w = src._work;
     const pdfDoc = (isDraft && importDraft.pdfDoc) || editorPdf;
-    setTitle(isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
+    setTitle(isDraft && src.isNew ? '✏️ Buat Paket Soal Baru' : isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft && src.isNew ? 'Isi soal, tambah jenis soal lain di bawah, lalu simpan ke Bank Soal' : isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
     const total = w.questions.reduce((n, q) => n + (+q.points || 0), 0);
     const noKey = w.questions.filter(q => !QT.hasKey(q)).length;
     const qHtml = (q, i) => `
@@ -1244,7 +1258,7 @@
         ${isDraft && src.warnings && src.warnings.length ? `<div class="note warn" style="margin-top:10px"><b>Perlu diperiksa:</b><ul class="list-warn">${src.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>
       <div class="grid" style="grid-template-columns: minmax(0,1fr) ${isDraft && (src.thumbs || src.raw) ? 'minmax(260px, 380px)' : ''}; align-items:start" id="ed-grid">
-        <div>${w.questions.map(qHtml).join('')}
+        <div>${w.questions.length ? '' : `<div class="card"><h3>Pilih jenis soal pertama</h3>${typeGallery('addq')}</div>`}${w.questions.map(qHtml).join('')}
           <div class="btns"><button class="btn" data-act="addpick">＋ Tambah Soal (17 jenis)</button><button class="btn soft" data-act="addq" data-t="pg">+ Pilihan Ganda</button><button class="btn soft" data-act="addq" data-t="isian">+ Isian</button><button class="btn soft" data-act="addq" data-t="uraian">+ Uraian</button><button class="btn ghost" data-act="pts">⚖️ Atur Poin per Jenis</button></div></div>
         ${isDraft && (src.thumbs || src.raw) ? `<div class="card" style="position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto">
           <div class="tabs"><button class="on" data-act="side" data-t="pdf">PDF Asli</button><button data-act="side" data-t="raw">Teks Terbaca</button></div>
@@ -1769,6 +1783,9 @@
       html: `<div class="card hero tilt"><div class="z1"><h2 style="margin:0 0 6px">Belajar seperti bermain 🎉</h2>
         <p style="margin:0 0 14px">Pilih paket soal, tampilkan kode di proyektor, lalu murid bergabung dari HP. Ada dua mode: <b>🎮 Permainan</b> (poin kecepatan, papan peringkat, podium) dan <b>📝 Ujian</b> (timer total, ragu-ragu, pengawasan keluar halaman, soal uraian).</p>
         <div class="btns"><button class="btn ghost lg" data-act="new">🎮 Buat Permainan</button><button class="btn ghost lg" data-act="new-exam">📝 Buat Ujian</button></div></div></div>
+        <details class="card" style="margin-top:18px"><summary style="cursor:pointer;font-weight:800">🧩 17 jenis soal yang bisa dipakai — klik untuk membuat soal baru</summary>
+          <p class="small muted">Buat soalnya di sini (atau unggah PDF di Bank Soal), simpan, lalu pilih paketnya saat <b>Buat Permainan</b> / <b>Buat Ujian</b>. Jenis bertanda 🎮 bisa dipakai di mode Permainan; semua jenis bisa dipakai di mode Ujian.</p>
+          ${typeGallery('mk')}</details>
         <div id="games" class="muted" style="margin-top:18px">Memuat…</div>`,
       async mount(v) {
         let d; try { d = await S.api('games'); } catch (e) { $('#games', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
@@ -1782,6 +1799,7 @@
       actions: {
         new: () => newGameModal(),
         'new-exam': () => newGameModal({ mode: 'exam' }),
+        mk: el => startManual(el.dataset.t),
         del: async el => { if (!await confirmBox('Hapus kuis ini beserta hasilnya?', 'Hapus')) return; try { await S.api('games/' + el.dataset.id, { method: 'DELETE' }); route(); } catch (e) { toast(e.message, 'bad'); } }
       }
     };
