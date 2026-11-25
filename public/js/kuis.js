@@ -169,7 +169,7 @@
     else body = `<form id="isian" class="kz-isian"><input id="ans" autocomplete="off" placeholder="Ketik jawabanmu…"><button class="btn lg kz-go" type="submit">Kirim</button></form>`;
     view.innerHTML = `<div class="kz-q pop">
       <div class="kz-q-head"><span class="kz-pill">${d.index} / ${d.total}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
-      <div class="kz-card kz-q-card">${q.image ? `<img src="${q.image}" alt="" class="kz-img">` : ''}<div class="kz-q-text">${esc(q.text)}</div></div>
+      <div class="kz-card kz-q-card">${q.image ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}<div class="kz-q-text">${esc(q.text)}</div></div>
       ${body}</div>`;
     const total = d.time * 1000;
     G.deadline = Date.now() + d.remainingMs;
@@ -299,7 +299,7 @@
       <div class="exam-grid">
         <div class="kz-card">
           <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${{ pg: 'Pilihan Ganda', bs: 'Benar/Salah', isian: 'Isian', uraian: 'Uraian' }[q.type]}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
-          ${q.image ? `<img src="${q.image}" alt="" class="kz-img">` : ''}
+          ${q.image ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}
           <div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>
           ${body}
           <div class="btns" style="justify-content:space-between;margin-top:16px">
@@ -394,6 +394,12 @@
   window.addEventListener('beforeunload', e => { markUnload(); if (E.active) { saveNow(); e.preventDefault(); e.returnValue = ''; } });
   window.addEventListener('pagehide', markUnload);
 
+  document.addEventListener('click', e => {
+    const im = e.target.closest && e.target.closest('img.zoomable'); if (!im) return;
+    const ov = document.createElement('div'); ov.className = 'img-zoom';
+    ov.innerHTML = '<img alt=""><button class="btn ghost sm">✕ Tutup</button>'; ov.querySelector('img').src = im.src;
+    ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+  });
   // Tema mengikuti pengaturan perangkat (bila pernah dipakai guru)
   try { const t = JSON.parse(localStorage.getItem('asesmen-merdeka-v1') || '{}').theme; if (t) { document.documentElement.style.setProperty('--h', t.h); document.documentElement.style.setProperty('--s', t.s); } } catch (e) { /* */ }
 

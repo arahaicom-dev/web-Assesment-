@@ -415,3 +415,14 @@ body.auth-mode .app { display: none; }
 .pay-row .noimg { width: 84px; height: 84px; display: grid; place-items: center; border-radius: 10px; background: var(--surface-2); font-size: .7rem; color: var(--muted); }
 .plan-row { border: 1px solid var(--border); border-radius: 14px; padding: 10px 12px 0; margin-bottom: 10px; }
 .tabs button .pill { margin-left: 4px; }
+
+/* ---------- Gambar soal ---------- */
+.q-img { display: block; max-width: 100%; max-height: 55vh; height: auto; width: auto; margin: 0 auto 12px; border-radius: 12px; border: 1px solid var(--border); background: #fff; }
+img.zoomable { cursor: zoom-in; }
+.q-img-row { display: flex; gap: 10px; align-items: flex-start; margin-top: 8px; flex-wrap: wrap; }
+.q-img-row img { max-width: min(100%, 420px); max-height: 220px; height: auto; border-radius: 10px; border: 1px solid var(--border); background: #fff; }
+.img-zoom { position: fixed; inset: 0; z-index: 300; background: hsl(0 0% 0% / .85); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; padding: 14px; cursor: zoom-out; animation: fade .2s; }
+.img-zoom img { max-width: 100%; max-height: 86vh; object-fit: contain; background: #fff; border-radius: 10px; touch-action: pinch-zoom; }
+.crop-stage { position: relative; max-height: 68vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); cursor: crosshair; touch-action: none; user-select: none; }
+.crop-stage canvas { display: block; width: 100%; height: auto; }
+.crop-sel { position: absolute; border: 2px solid var(--primary); background: hsl(var(--h) 80% 60% / .18); box-shadow: 0 0 0 9999px hsl(0 0% 0% / .25); pointer-events: none; }

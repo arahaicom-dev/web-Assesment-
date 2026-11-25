@@ -200,6 +200,14 @@
     if (out.mount) out.mount(view);
     window.scrollTo({ top: 0 });
   }
+  // Perbesar gambar soal saat diketuk
+  document.addEventListener('click', e => {
+    const im = e.target.closest && e.target.closest('img.zoomable');
+    if (!im) return;
+    const ov = document.createElement('div'); ov.className = 'img-zoom';
+    ov.innerHTML = `<img src="${im.src}" alt=""><button class="btn ghost sm">✕ Tutup</button>`;
+    ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+  });
   // Aksi global berbasis data-act
   document.addEventListener('click', e => {
     const el = e.target.closest('[data-act]');
@@ -821,7 +829,7 @@
       html: `<div class="grid" style="grid-template-columns: minmax(0,1fr) 260px; align-items:start" id="exam-grid">
         <div class="card">
           <div class="q-head" style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${ex.idx + 1}</span><span class="pill">${TYPE_LABEL[cur.type]}</span><span class="pill">${cur.points} poin</span><span class="muted small" style="margin-left:auto">Soal ${ex.idx + 1} dari ${qs.length}</span></div>
-          ${cur.image ? `<img src="${cur.image}" alt="" style="max-width:100%;border-radius:12px;margin-bottom:10px">` : ''}
+          ${cur.image ? `<img src="${cur.image}" alt="gambar soal" class="zoomable q-img">` : ''}
           <div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${esc(cur.text)}</div>
           ${optHtml()}
           <div class="btns" style="justify-content:space-between;margin-top:16px">
@@ -880,11 +888,13 @@
   }
 
   /* ================= Bank soal & unggah PDF ================= */
-  let importDraft = null;
+  let importDraft = null, bankFilter = 'all';
   function viewBank() {
     setTitle('📄 Bank Soal & Unggah PDF', 'Format soal apa pun di PDF otomatis disesuaikan ke format web');
     renderCtx(false);
     const s = st();
+    const multiUser = S.mode === 'server' && !!S.user;
+    const sets = s.questionSets.filter(q => bankFilter !== 'mine' || !multiUser || q.ownerId === S.user.id);
     return {
       html: `
       <div class="grid g2">
@@ -897,15 +907,18 @@
           <div class="btns" style="margin-top:10px"><button class="btn" data-act="parse-paste">✨ Ubah ke Format Web</button><button class="btn ghost sm" data-act="blank">+ Buat Paket Kosong</button></div>
         </div>
       </div>
-      <div class="card"><div class="card-head"><h3>Paket Soal Tersimpan</h3></div>
-        ${s.questionSets.length ? `<div class="grid auto">${s.questionSets.map(q => {
+      <div class="card"><div class="card-head"><h3>Paket Soal Tersimpan</h3>
+        ${multiUser ? `<div class="tabs" style="margin:0"><button class="${bankFilter === 'all' ? 'on' : ''}" data-act="bf" data-f="all">Semua di sekolah</button><button class="${bankFilter === 'mine' ? 'on' : ''}" data-act="bf" data-f="mine">Milik saya</button></div>` : ''}</div>
+        ${multiUser ? `<p class="small muted" style="margin-top:0">${S.user.role === 'admin' ? '👑 Anda admin sekolah: bisa mengedit semua paket soal.' : '✏️ Anda bisa mengedit paket soal milik sendiri. Paket soal guru lain bisa dilihat, dipakai, atau diduplikat.'}</p>` : ''}
+        ${sets.length ? `<div class="grid auto">${sets.map(q => {
           const c = t => q.questions.filter(x => x.type === t).length;
           const used = s.assessments.filter(a => a.qsetId === q.id).length;
+          const can = canEditQset(q), imgs = q.questions.filter(x => x.image).length;
           return `<div class="card tilt" style="margin:0"><div class="z1"><h3>${esc(q.title)}</h3>
-            <p class="small muted" style="margin:0 0 8px">${q.source ? '📄 ' + esc(q.source) + ' · ' : ''}${new Date(q.created).toLocaleDateString('id-ID')}</p>
-            <div class="btns" style="margin-bottom:10px"><span class="pill pri">${q.questions.length} soal</span>${c('pg') ? `<span class="pill">PG ${c('pg')}</span>` : ''}${c('bs') ? `<span class="pill">B/S ${c('bs')}</span>` : ''}${c('isian') ? `<span class="pill">Isian ${c('isian')}</span>` : ''}${c('uraian') ? `<span class="pill">Uraian ${c('uraian')}</span>` : ''}${used ? `<span class="pill ok">Dipakai ${used}×</span>` : ''}</div>
-            <div class="btns"><a class="btn sm" href="#/bank-soal/${q.id}">✏️ Edit</a><button class="btn soft sm" data-act="use" data-id="${q.id}">➕ Jadikan Asesmen</button><button class="btn ghost sm" data-act="dup" data-id="${q.id}">⧉</button><button class="btn ghost sm" data-act="del" data-id="${q.id}">🗑</button></div></div></div>`;
-        }).join('')}</div>` : '<div class="empty"><div class="big">📭</div>Belum ada paket soal. Unggah PDF atau tempel teks soal di atas.</div>'}
+            <p class="small muted" style="margin:0 0 8px">${multiUser ? `👤 ${esc(q.ownerName || 'tanpa pemilik')}${q.ownerId === S.user.id ? ' (Anda)' : ''} · ` : ''}${q.source ? '📄 ' + esc(q.source) + ' · ' : ''}${new Date(q.created).toLocaleDateString('id-ID')}</p>
+            <div class="btns" style="margin-bottom:10px"><span class="pill pri">${q.questions.length} soal</span>${c('pg') ? `<span class="pill">PG ${c('pg')}</span>` : ''}${c('bs') ? `<span class="pill">B/S ${c('bs')}</span>` : ''}${c('isian') ? `<span class="pill">Isian ${c('isian')}</span>` : ''}${c('uraian') ? `<span class="pill">Uraian ${c('uraian')}</span>` : ''}${imgs ? `<span class="pill">🖼 ${imgs}</span>` : ''}${used ? `<span class="pill ok">Dipakai ${used}×</span>` : ''}</div>
+            <div class="btns">${can ? `<a class="btn sm" href="#/bank-soal/${q.id}">✏️ Edit</a>` : `<button class="btn ghost sm" data-act="view" data-id="${q.id}">👁 Lihat</button>`}<button class="btn soft sm" data-act="use" data-id="${q.id}">➕ Jadikan Asesmen</button><button class="btn ghost sm" data-act="dup" data-id="${q.id}" title="${can ? 'Duplikat' : 'Duplikat untuk diedit'}">⧉${can ? '' : ' Duplikat'}</button>${can ? `<button class="btn ghost sm" data-act="del" data-id="${q.id}">🗑</button>` : ''}</div></div></div>`;
+        }).join('')}</div>` : `<div class="empty"><div class="big">📭</div>${bankFilter === 'mine' && multiUser ? 'Anda belum punya paket soal sendiri.' : 'Belum ada paket soal. Unggah PDF atau tempel teks soal di atas.'}</div>`}
       </div>
       <div class="card"><h3>Format yang dikenali otomatis</h3>
         <div class="grid g3 small">
@@ -932,9 +945,12 @@
         },
         blank: () => { importDraft = { id: S.uid('qs'), title: 'Paket Soal Baru', questions: [], created: Date.now(), source: '', warnings: [], isNew: true }; location.hash = '#/bank-soal/draft'; },
         use: el => useQset(el.dataset.id),
-        dup: el => { const q = JSON.parse(JSON.stringify(S.qset(el.dataset.id))); q.id = S.uid('qs'); q.title += ' (salinan)'; q.created = Date.now(); st().questionSets.push(q); S.save(); route(); },
+        dup: el => { const c = dupQset(S.qset(el.dataset.id)); toast('Salinan dibuat — sekarang milik Anda dan bisa diedit.'); location.hash = '#/bank-soal/' + c.id; },
+        view: el => previewQset(S.qset(el.dataset.id)),
+        bf: el => { bankFilter = el.dataset.f; route(); },
         del: async el => {
           const q = S.qset(el.dataset.id);
+          if (!canEditQset(q)) return toast('Hanya pembuat atau admin sekolah yang boleh menghapus.', 'bad');
           if (!await confirmBox(`Hapus paket soal <b>${esc(q.title)}</b>? Asesmen yang memakainya tetap ada, tetapi tidak bisa dikerjakan online lagi.`, 'Hapus')) return;
           st().questionSets = st().questionSets.filter(x => x !== q); st().assessments.forEach(a => { if (a.qsetId === q.id) a.qsetId = ''; }); S.save(); route();
         }
@@ -968,15 +984,19 @@
       say('⏳ Membaca PDF…');
       const buf = await file.arrayBuffer();
       const ext = await P.extractPdf(buf, (p, n) => say(`⏳ Membaca halaman ${p}/${n}…`));
-      let lines = ext.lines;
+      let lines = ext.lines, ocr = false;
       if (ext.charCount < 30 * ext.pages) {
         say('🔎 PDF tampaknya hasil scan (gambar). Menjalankan OCR… (butuh internet, bisa memakan waktu)');
         lines = await ocrPdf(ext.doc, (p, n, pct) => say(`🔎 OCR halaman ${p}/${n}… ${pct}%`));
+        ocr = true;
       }
       const res = P.parse(lines);
-      say(`✅ Selesai: ${res.stats.total} soal dikenali.`);
+      let nImg = 0;
+      if (!ocr && ext.images.length) { say('🖼 Mengambil gambar soal dari PDF…'); try { nImg = await attachPdfImages(res, ext); } catch (e) { console.error(e); } }
+      say(`✅ Selesai: ${res.stats.total} soal dikenali${nImg ? `, ${nImg} soal bergambar` : ''}.`);
       const thumbs = await renderThumbs(ext.doc, 6);
       startDraft(res, file.name.replace(/\.pdf$/i, ''), file.name, lines, thumbs);
+      importDraft.pdfDoc = ext.doc; importDraft.imgCount = nImg;
     } catch (e) {
       console.error(e);
       say(`<span style="color:var(--bad)">❌ ${esc(e.message || e)}</span>`);
@@ -1015,6 +1035,92 @@
     await worker.terminate();
     return lines;
   }
+  /* ---- Hak edit paket soal ---- */
+  const ownerStamp = () => (S.mode === 'server' && S.user ? { ownerId: S.user.id, ownerName: S.user.name } : {});
+  function canEditQset(q) {
+    if (S.mode !== 'server' || !S.user) return true;
+    if (S.user.role === 'admin') return true;
+    return q && q.ownerId === S.user.id;
+  }
+  function previewQset(q) {
+    modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal</p>${q.questions.map((x, i) => `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span></div>
+      ${x.image ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}<div class="q-text">${esc(x.text)}</div>
+      ${x.type === 'pg' ? x.options.map(o => `<div class="exam-opt ${o.label === x.answer ? 'right' : ''}"><span class="lab">${o.label}</span><span>${esc(o.text)}</span></div>`).join('') : ''}
+      ${x.type !== 'pg' ? `<div class="small muted">Kunci: ${esc(x.type === 'bs' ? (x.answer === 'B' ? 'Benar' : x.answer === 'S' ? 'Salah' : '–') : (x.answer || '–'))}</div>` : ''}</div>`).join('')}
+      <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
+  }
+  function dupQset(q) {
+    const c = JSON.parse(JSON.stringify(q)); c.id = S.uid('qs'); c.title += ' (salinan)'; c.created = Date.now();
+    Object.assign(c, ownerStamp()); st().questionSets.push(c); S.save(); return c;
+  }
+
+  /* ---- Gambar dari PDF ---- */
+  let editorPdf = null; // PDF yang dibuka di editor untuk mengambil gambar
+  async function pageCanvas(doc, p, scale) {
+    const page = await doc.getPage(p);
+    const vp = page.getViewport({ scale });
+    const c = document.createElement('canvas'); c.width = Math.ceil(vp.width); c.height = Math.ceil(vp.height);
+    const ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+    await page.render({ canvasContext: ctx, viewport: vp }).promise;
+    return { canvas: c, vp };
+  }
+  /** Potong area (pecahan 0..1 dari lebar/tinggi halaman) menjadi gambar tajam. */
+  async function cropFraction(doc, p, fr) {
+    const { canvas } = await pageCanvas(doc, p, 2.5);
+    const sx = Math.max(0, fr.x * canvas.width), sy = Math.max(0, fr.y * canvas.height);
+    const sw = Math.min(canvas.width - sx, fr.w * canvas.width), sh = Math.min(canvas.height - sy, fr.h * canvas.height);
+    const k = Math.min(1, 1200 / sw);
+    const out = document.createElement('canvas'); out.width = Math.round(sw * k); out.height = Math.round(sh * k);
+    const ctx = out.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, out.width, out.height);
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, sx, sy, sw, sh, 0, 0, out.width, out.height);
+    return out.toDataURL('image/jpeg', 0.9);
+  }
+  /** Tempel gambar PDF ke soal pemiliknya (dipotong langsung dari halaman, utuh & tajam). */
+  async function attachPdfImages(res, ext) {
+    const map = P.assignImages(res.questions, ext.meta, ext.images, res.keyLine);
+    let n = 0;
+    const area = l => l.reduce((a, b) => a + (b.x2 - b.x1) * (b.y2 - b.y1), 0);
+    for (const k in map) {
+      const byPage = {};
+      map[k].forEach(im => (byPage[im.page] = byPage[im.page] || []).push(im));
+      const pg = +Object.keys(byPage).sort((a, b) => area(byPage[b]) - area(byPage[a]))[0];
+      const list = byPage[pg];
+      const u = { x1: Math.min(...list.map(b => b.x1)), x2: Math.max(...list.map(b => b.x2)), y1: Math.min(...list.map(b => b.y1)), y2: Math.max(...list.map(b => b.y2)) };
+      const pad = 6, padL = list.length > 1 ? 22 : pad; // beberapa gambar (mis. pilihan A–D) → sertakan hurufnya
+      const page = await ext.doc.getPage(pg); const vp = page.getViewport({ scale: 1 });
+      const r = vp.convertToViewportRectangle([u.x1 - padL, u.y1 - pad, u.x2 + pad, u.y2 + pad + (list.length > 1 ? 16 : 0)]);
+      const x = Math.min(r[0], r[2]), y = Math.min(r[1], r[3]);
+      res.questions[k].image = await cropFraction(ext.doc, pg, { x: x / vp.width, y: y / vp.height, w: Math.abs(r[2] - r[0]) / vp.width, h: Math.abs(r[3] - r[1]) / vp.height });
+      n++;
+    }
+    return n;
+  }
+  /** Alat potong manual: pilih bagian halaman PDF dengan menyeret. */
+  async function cropModal(doc, onDone) {
+    let pg = 1, sel = null;
+    const m = modal(`<h2>✂️ Ambil Gambar dari PDF</h2><p class="small muted" style="margin-top:0">Seret di atas halaman untuk memilih gambar, grafik, atau tabel, lalu klik <b>Gunakan</b>.</p>
+      <div class="btns" style="margin-bottom:8px"><button class="btn ghost sm" id="cp-prev">← Halaman</button><b id="cp-pg"></b><button class="btn ghost sm" id="cp-next">Halaman →</button></div>
+      <div class="crop-stage" id="cp-stage"><canvas id="cp-cv"></canvas><div class="crop-sel hidden" id="cp-sel"></div></div>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="cp-ok" disabled>Gunakan Potongan Ini</button></div>`, { wide: true, noFocus: true });
+    const stage = $('#cp-stage', m), cv = $('#cp-cv', m), box = $('#cp-sel', m);
+    const draw = async () => {
+      $('#cp-pg', m).textContent = `${pg} / ${doc.numPages}`; sel = null; box.classList.add('hidden'); $('#cp-ok', m).disabled = true;
+      const { canvas } = await pageCanvas(doc, pg, 1.6);
+      cv.width = canvas.width; cv.height = canvas.height; cv.getContext('2d').drawImage(canvas, 0, 0);
+    };
+    $('#cp-prev', m).onclick = () => { if (pg > 1) { pg--; draw(); } };
+    $('#cp-next', m).onclick = () => { if (pg < doc.numPages) { pg++; draw(); } };
+    let start = null;
+    const pos = e => { const r = cv.getBoundingClientRect(); return { x: Math.max(0, Math.min(1, (e.clientX - r.left) / r.width)), y: Math.max(0, Math.min(1, (e.clientY - r.top) / r.height)) }; };
+    const paint = () => { const r = cv.getBoundingClientRect(), sr = stage.getBoundingClientRect(); box.style.left = (r.left - sr.left + sel.x * r.width) + 'px'; box.style.top = (r.top - sr.top + stage.scrollTop + sel.y * r.height) + 'px'; box.style.width = sel.w * r.width + 'px'; box.style.height = sel.h * r.height + 'px'; box.classList.remove('hidden'); };
+    stage.addEventListener('pointerdown', e => { start = pos(e); stage.setPointerCapture(e.pointerId); e.preventDefault(); });
+    stage.addEventListener('pointermove', e => { if (!start) return; const p = pos(e); sel = { x: Math.min(start.x, p.x), y: Math.min(start.y, p.y), w: Math.abs(p.x - start.x), h: Math.abs(p.y - start.y) }; paint(); });
+    stage.addEventListener('pointerup', () => { start = null; $('#cp-ok', m).disabled = !(sel && sel.w > 0.02 && sel.h > 0.01); });
+    $('#cp-ok', m).onclick = async () => { const b = $('#cp-ok', m); b.disabled = true; b.textContent = 'Memotong…'; const url = await cropFraction(doc, pg, sel); closeModal(); onDone(url); };
+    draw();
+  }
+
   function startDraft(res, title, source, rawLines, thumbs) {
     importDraft = { id: S.uid('qs'), title, source, questions: res.questions, warnings: res.warnings, stats: res.stats, raw: rawLines, thumbs: thumbs || [], created: Date.now(), isNew: true };
     if (!res.questions.length) toast('Tidak ada soal bernomor yang dikenali. Periksa teks mentah atau tambah soal manual.', 'bad');
@@ -1027,9 +1133,11 @@
     const isDraft = id === 'draft';
     const src = isDraft ? importDraft : S.qset(id);
     if (!src) { location.hash = '#/bank-soal'; return { html: '' }; }
+    if (!isDraft && !canEditQset(src)) { toast('Paket soal ini milik ' + (src.ownerName || 'guru lain') + '. Duplikat dulu untuk mengedit salinan Anda sendiri.', 'bad'); location.hash = '#/bank-soal'; return { html: '' }; }
     // Bekerja pada salinan agar bisa dibatalkan
     if (!src._work) src._work = JSON.parse(JSON.stringify({ title: src.title, questions: src.questions }));
     const w = src._work;
+    const pdfDoc = (isDraft && importDraft.pdfDoc) || editorPdf;
     setTitle(isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
     const total = w.questions.reduce((n, q) => n + (+q.points || 0), 0);
     const c = t => w.questions.filter(x => x.type === t).length;
@@ -1040,9 +1148,9 @@
           <select data-qf="type">${Object.keys(TYPE_LABEL).map(k => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${TYPE_LABEL[k]}</option>`).join('')}</select>
           <label class="small">Poin <input type="number" min="0" step="0.5" data-qf="points" value="${+q.points || 0}" style="width:70px"></label>
           ${(q.type === 'pg' || q.type === 'bs') && !q.answer ? '<span class="pill bad">Kunci belum ada</span>' : ''}
-          <span style="margin-left:auto" class="btns"><button class="btn ghost sm" data-act="img" data-i="${i}" title="Tambah gambar">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
+          <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
         <textarea data-qf="text" placeholder="Teks pertanyaan">${esc(q.text)}</textarea>
-        ${q.image ? `<div style="margin-top:6px"><img src="${q.image}" style="max-height:140px;border-radius:10px"> <button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
+        ${q.image ? `<div class="q-img-row"><img src="${q.image}" class="zoomable" alt="gambar soal"><button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
         ${q.type === 'pg' ? `<div style="margin-top:8px">${q.options.map((o, j) => `<div class="opt-row"><span class="lab ${q.answer === o.label ? 'key' : ''}" data-act="key" data-i="${i}" data-l="${o.label}" title="Klik untuk jadikan kunci">${o.label}</span><input type="text" data-opt="${j}" value="${esc(o.text)}"><button class="btn ghost sm" data-act="delopt" data-i="${i}" data-j="${j}">✕</button></div>`).join('')}
           <button class="btn soft sm" data-act="addopt" data-i="${i}">+ Pilihan</button> <span class="small muted">Klik huruf untuk menandai kunci jawaban.</span></div>` : ''}
         ${q.type === 'bs' ? `<div class="btns" style="margin-top:8px"><span class="small muted">Kunci:</span><button class="btn sm ${q.answer === 'B' ? 'ok' : 'ghost'}" data-act="key" data-i="${i}" data-l="B">Benar</button><button class="btn sm ${q.answer === 'S' ? 'danger' : 'ghost'}" data-act="key" data-i="${i}" data-l="S">Salah</button></div>` : ''}
@@ -1053,9 +1161,11 @@
       html: `
       <div class="card"><div class="row">
         <label class="field" style="flex:3"><span>Judul paket soal</span><input id="qs-title" value="${esc(w.title)}"></label>
+        ${!pdfDoc && window.pdfjsLib ? '<button class="btn ghost" data-act="openpdf" style="margin-bottom:12px" title="Buka PDF soal untuk memotong gambarnya">📄 Buka PDF (ambil gambar)</button>' : ''}
         <div class="btns" style="margin-bottom:12px"><a class="btn ghost" href="#/bank-soal" data-act="cancel">Batal</a><button class="btn soft" data-act="preview">👁 Pratinjau Murid</button><button class="btn ok" data-act="save">💾 Simpan${isDraft ? ' ke Bank Soal' : ''}</button></div></div>
         <div class="btns"><span class="pill pri">${w.questions.length} soal</span><span class="pill">PG ${c('pg')}</span><span class="pill">B/S ${c('bs')}</span><span class="pill">Isian ${c('isian')}</span><span class="pill">Uraian ${c('uraian')}</span><span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<span class="pill bad">${noKey} soal tanpa kunci</span>` : '<span class="pill ok">Semua kunci lengkap</span>'}
-          ${isDraft && src.stats ? `<span class="pill ok">${src.stats.keysApplied} kunci dari bagian Kunci Jawaban</span>` : ''}</div>
+          ${isDraft && src.stats ? `<span class="pill ok">${src.stats.keysApplied} kunci dari bagian Kunci Jawaban</span>` : ''}${isDraft && src.imgCount ? `<span class="pill ok">🖼 ${src.imgCount} gambar diambil otomatis dari PDF</span>` : ''}${w.questions.some(q => q.image) ? `<span class="pill">🖼 ${w.questions.filter(q => q.image).length} soal bergambar</span>` : ''}</div>
+        ${pdfDoc ? '<p class="small muted" style="margin:8px 0 0">Gambar yang belum terambil (mis. grafik/tabel berupa garis) bisa dipotong manual dengan tombol <b>✂️ Dari PDF</b> pada soalnya.</p>' : ''}
         ${isDraft && src.warnings && src.warnings.length ? `<div class="note warn" style="margin-top:10px"><b>Perlu diperiksa:</b><ul class="list-warn">${src.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>
       <div class="grid" style="grid-template-columns: minmax(0,1fr) ${isDraft && (src.thumbs || src.raw) ? 'minmax(260px, 380px)' : ''}; align-items:start" id="ed-grid">
@@ -1097,9 +1207,15 @@
         addq: el => { const t = el.dataset.t; w.questions.push({ id: S.uid('q'), num: w.questions.length + 1, type: t, text: '', options: t === 'pg' ? ['A', 'B', 'C', 'D'].map(l => ({ label: l, text: '' })) : [], answer: null, points: P.DEFAULT_POINTS[t] }); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); },
         img: async el => {
           const f = await pickFile('image/*'); if (!f) return;
-          const url = await resizeImage(f, 900); w.questions[+el.dataset.i].image = url; keepScroll();
+          const url = await resizeImage(f, 1200); w.questions[+el.dataset.i].image = url; keepScroll();
         },
         rmimg: el => { delete w.questions[+el.dataset.i].image; keepScroll(); },
+        crop: el => { if (!pdfDoc) return; cropModal(pdfDoc, url => { w.questions[+el.dataset.i].image = url; keepScroll(); toast('Gambar ditempel ke soal no. ' + (+el.dataset.i + 1) + '.'); }); },
+        openpdf: async () => {
+          const f = await pickFile('.pdf,application/pdf'); if (!f) return;
+          try { editorPdf = await window.pdfjsLib.getDocument({ data: await f.arrayBuffer() }).promise; toast('PDF dibuka. Klik ✂️ Dari PDF pada soal untuk mengambil gambarnya.'); keepScroll(); }
+          catch (e) { toast('Gagal membuka PDF: ' + e.message, 'bad'); }
+        },
         pts: () => {
           const m = modal(`<h2>Atur Poin per Jenis Soal</h2><div class="row">${Object.keys(TYPE_LABEL).map(k => `<label class="field"><span>${TYPE_LABEL[k]}</span><input type="number" min="0" step="0.5" id="p-${k}" value="${(w.questions.find(q => q.type === k) || {}).points || P.DEFAULT_POINTS[k]}"></label>`).join('')}</div>
             <p class="small muted">Nilai akhir = (poin diperoleh ÷ total poin) × 100.</p><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="p-ok">Terapkan</button></div>`);
@@ -1107,7 +1223,7 @@
         },
         preview: () => {
           modal(`<h2>Pratinjau: ${esc(w.title)}</h2>${w.questions.map((q, i) => `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[q.type]}</span></div>
-            ${q.image ? `<img src="${q.image}" style="max-width:100%;border-radius:10px">` : ''}<div class="q-text">${esc(q.text)}</div>
+            ${q.image ? `<img src="${q.image}" class="zoomable q-img" alt="gambar soal">` : ''}<div class="q-text">${esc(q.text)}</div>
             ${q.type === 'pg' ? q.options.map(o => `<div class="exam-opt ${o.label === q.answer ? 'right' : ''}"><span class="lab">${o.label}</span><span>${esc(o.text)}</span></div>`).join('') : ''}
             ${q.type === 'bs' ? `<div class="exam-opt ${q.answer === 'B' ? 'right' : ''}"><span class="lab">B</span>Benar</div><div class="exam-opt ${q.answer === 'S' ? 'right' : ''}"><span class="lab">S</span>Salah</div>` : ''}
             ${q.type === 'isian' || q.type === 'uraian' ? `<div class="small muted">Kunci: ${esc(q.answer || '–')}</div>` : ''}</div>`).join('')}
@@ -1115,9 +1231,9 @@
         },
         save: () => {
           const title = ($('#qs-title').value || '').trim() || 'Paket Soal';
-          const questions = w.questions.map((q, i) => Object.assign({}, q, { num: i + 1 }));
+          const questions = w.questions.map((q, i) => { const o = Object.assign({}, q, { num: i + 1 }); delete o.line; return o; });
           if (isDraft) {
-            const obj = { id: src.id, title, source: src.source, questions, created: Date.now() };
+            const obj = Object.assign({ id: src.id, title, source: src.source, questions, created: Date.now() }, ownerStamp());
             st().questionSets.push(obj); importDraft = null; S.save();
             toast('Paket soal disimpan ke Bank Soal.');
             location.hash = '#/bank-soal';

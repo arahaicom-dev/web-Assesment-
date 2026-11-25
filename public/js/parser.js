@@ -318,7 +318,7 @@
         if (accept) {
           push();
           if (num !== lastNum + 1 && !(num === 1)) warnings.push('Nomor soal melompat dari ' + lastNum + ' ke ' + num + '.');
-          cur = { id: uid(), num, type: null, section, text: rest, options: [], answer: null, points: null };
+          cur = { id: uid(), num, type: null, section, text: rest, options: [], answer: null, points: null, line: i };
           lastNum = num; sectionChanged = false; subList = null; lastTarget = 'text';
           delimCount[delim] = (delimCount[delim] || 0) + 1;
           mainDelim = Object.keys(delimCount).sort((a, b) => delimCount[b] - delimCount[a])[0];
@@ -333,6 +333,16 @@
       if (!cur) {
         // Teks sebelum soal pertama (kop, identitas) diabaikan
         continue;
+      }
+
+      // Baris berisi huruf pilihan saja (pilihan berupa gambar): "A.   B.   C.   D."
+      if (/^(?:\(?[A-Ha-h]\s*[.)]\s*){2,8}$/.test(t)) {
+        const labs = (t.match(/[A-Ha-h](?=\s*[.)])/g) || []).map(x => x.toUpperCase());
+        if (labs.every((l, k) => l === LETTERS[cur.options.length + k])) {
+          labs.forEach(l => cur.options.push({ label: l, text: '(lihat gambar)' }));
+          lastTarget = 'option'; subList = null;
+          continue;
+        }
       }
 
       // Opsi
@@ -393,6 +403,7 @@
     return {
       questions,
       warnings,
+      keyLine: keyStart >= 0 ? keyStart - 1 : -1,
       stats: { total: questions.length, pg: count('pg'), bs: count('bs'), isian: count('isian'), uraian: count('uraian'), keysApplied }
     };
   }
@@ -473,10 +484,11 @@
   /**
    * Susun ulang baris teks dari item pdf.js (urut posisi, deteksi dua kolom).
    * items: [{str, x, y, w, h}], pageWidth
+   * Mengembalikan { lines: [{text, y, group}], gx, hasSpan } — group = urutan baca kolom.
    */
-  function itemsToLines(items, pageWidth) {
+  function layoutLines(items, pageWidth) {
     items = items.filter(it => it.str && it.str.trim() !== '' || it.str === ' ');
-    if (!items.length) return [];
+    if (!items.length) return { lines: [], gx: null, hasSpan: false };
     // Deteksi tata letak dua kolom
     const bins = 60, cover = new Array(bins).fill(0);
     let wide = 0;
@@ -489,16 +501,16 @@
     for (let k = Math.floor(bins * 0.38); k <= Math.ceil(bins * 0.62); k++) {
       if (cover[k] <= Math.max(1, items.length * 0.01)) { gutter = k; break; }
     }
-    let groups = [items];
+    let groups = [items], gx = null, hasSpan = false;
     if (gutter !== null && wide < items.length * 0.08) {
-      const gx = gutter / bins * pageWidth;
-      const span = items.filter(it => it.x < gx - 2 && it.x + it.w > gx + 2);
+      const g = gutter / bins * pageWidth;
+      const span = items.filter(it => it.x < g - 2 && it.x + it.w > g + 2);
       const rest = items.filter(it => span.indexOf(it) < 0);
-      const left = rest.filter(it => it.x + it.w / 2 < gx), right = rest.filter(it => it.x + it.w / 2 >= gx);
-      if (left.length > items.length * 0.2 && right.length > items.length * 0.2) groups = span.length ? [span, left, right] : [left, right];
+      const left = rest.filter(it => it.x + it.w / 2 < g), right = rest.filter(it => it.x + it.w / 2 >= g);
+      if (left.length > items.length * 0.2 && right.length > items.length * 0.2) { groups = span.length ? [span, left, right] : [left, right]; gx = g; hasSpan = span.length > 0; }
     }
     const out = [];
-    for (const g of groups) {
+    groups.forEach((g, gi) => {
       g.sort((a, b) => (b.y - a.y) || (a.x - b.x));
       const rows = [];
       for (const it of g) {
@@ -520,34 +532,101 @@
           s += it.str;
           prevEnd = it.x + it.w;
         }
-        out.push(s.replace(/\s+$/, ''));
+        out.push({ text: s.replace(/\s+$/, ''), y: r.y, group: gi });
       }
+    });
+    return { lines: out, gx, hasSpan };
+  }
+  function itemsToLines(items, pageWidth) { return layoutLines(items, pageWidth).lines.map(l => l.text); }
+
+  /** Urutan baca kolom untuk sebuah kotak gambar pada halaman. */
+  function groupOf(box, layout) {
+    if (layout.gx === null) return 0;
+    const off = layout.hasSpan ? 1 : 0;
+    if (box.x1 < layout.gx - 2 && box.x2 > layout.gx + 2) return 0; // melintang kolom
+    return ((box.x1 + box.x2) / 2 < layout.gx ? 0 : 1) + off;
+  }
+
+  /**
+   * Tentukan pemilik setiap gambar: soal yang barisnya tepat di atas gambar (urutan baca).
+   * meta: [{page, group, y}] sejajar dengan baris teks; images: [{page, group, x1,y1,x2,y2}] (koordinat PDF, y ke atas)
+   * Mengembalikan peta indeks soal → daftar gambar.
+   */
+  function assignImages(questions, meta, images, keyLine) {
+    const starts = questions.map((q, i) => ({ i, line: q.line })).filter(x => typeof x.line === 'number').sort((a, b) => a.line - b.line);
+    const out = {};
+    for (const im of images) {
+      const top = Math.max(im.y1, im.y2);
+      let L = -1;
+      for (let k = 0; k < meta.length; k++) {
+        const m = meta[k];
+        if (!m) continue;
+        const before = m.page < im.page || (m.page === im.page && (m.group < im.group || (m.group === im.group && m.y >= top - 2)));
+        if (before) L = k;
+      }
+      if (L < 0 || (keyLine >= 0 && L >= keyLine)) continue;
+      let owner = null;
+      for (const st of starts) if (st.line <= L) owner = st.i;
+      if (owner === null) continue;
+      (out[owner] = out[owner] || []).push(im);
     }
     return out;
   }
 
-  /** Ekstrak teks dari file PDF memakai pdf.js (window.pdfjsLib). */
+  /** Posisi gambar raster pada halaman (dari daftar operator pdf.js). */
+  async function pageImages(page, lib) {
+    const OPS = lib.OPS;
+    const ops = await page.getOperatorList();
+    const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
+    let ctm = [1, 0, 0, 1, 0, 0]; const stack = []; const boxes = [];
+    const imgOps = [OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintJpegXObject, OPS.paintImageXObjectRepeat].filter(x => x !== undefined);
+    for (let i = 0; i < ops.fnArray.length; i++) {
+      const fn = ops.fnArray[i], args = ops.argsArray[i];
+      if (fn === OPS.save) stack.push(ctm.slice());
+      else if (fn === OPS.restore) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+      else if (fn === OPS.transform) ctm = mul(ctm, args);
+      else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm.slice()); if (args && args[0] && args[0].length === 6) ctm = mul(ctm, args[0]); }
+      else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+      else if (imgOps.indexOf(fn) >= 0) {
+        const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        boxes.push({ x1: Math.min.apply(null, xs), x2: Math.max.apply(null, xs), y1: Math.min.apply(null, ys), y2: Math.max.apply(null, ys) });
+      }
+    }
+    return boxes;
+  }
+
+  /** Ekstrak teks (dan posisi gambar) dari file PDF memakai pdf.js (window.pdfjsLib). */
   async function extractPdf(arrayBuffer, onProgress) {
     const lib = (typeof window !== 'undefined') && window.pdfjsLib;
     if (!lib) throw new Error('Pustaka PDF belum termuat.');
     const doc = await lib.getDocument({ data: arrayBuffer }).promise;
-    const all = [];
+    const all = [], meta = [], images = [];
     let charCount = 0;
     for (let p = 1; p <= doc.numPages; p++) {
       const page = await doc.getPage(p);
       const vp = page.getViewport({ scale: 1 });
       const tc = await page.getTextContent();
       const items = tc.items.map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height }));
-      const lines = itemsToLines(items, vp.width);
-      charCount += lines.join('').replace(/\s/g, '').length;
-      all.push(...lines, '');
+      const lay = layoutLines(items, vp.width);
+      lay.lines.forEach(l => { all.push(l.text); meta.push({ page: p, group: l.group, y: l.y }); });
+      charCount += lay.lines.map(l => l.text).join('').replace(/\s/g, '').length;
+      all.push(''); meta.push(null);
+      try {
+        const area = vp.width * vp.height;
+        for (const bx of await pageImages(page, lib)) {
+          const a = (bx.x2 - bx.x1) * (bx.y2 - bx.y1);
+          if (a < 300 || a > area * 0.85 || bx.x2 - bx.x1 < 12 || bx.y2 - bx.y1 < 12) continue; // ikon kecil / latar halaman penuh
+          images.push(Object.assign({ page: p, group: groupOf(bx, lay) }, bx));
+        }
+      } catch (e) { /* abaikan: gambar tetap bisa diambil manual */ }
       if (onProgress) onProgress(p, doc.numPages);
     }
-    return { lines: all, pages: doc.numPages, charCount, doc };
+    return { lines: all, meta, images, pages: doc.numPages, charCount, doc };
   }
 
   return {
-    parse, grade, matchShort, suggestEssay, normBS, itemsToLines, extractPdf,
+    parse, grade, matchShort, suggestEssay, normBS, itemsToLines, layoutLines, assignImages, extractPdf,
     normalizeText, splitInlineOptions, DEFAULT_POINTS
   };
 });

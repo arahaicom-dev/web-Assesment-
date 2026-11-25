@@ -121,7 +121,7 @@
       </div>
       <div class="card">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${S.idx + 1}</span><span class="pill">${TYPE[q.type]}</span><span class="muted small" style="margin-left:auto">Soal ${S.idx + 1} dari ${qs.length}</span></div>
-        ${q.image ? `<img src="${q.image}" alt="" style="max-width:100%;border-radius:12px;margin-bottom:10px">` : ''}
+        ${q.image ? `<img src="${q.image}" alt="" class="q-img zoomable">` : ''}
         <div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>
         ${body}
         <div class="btns" style="justify-content:space-between;margin-top:16px">
@@ -176,6 +176,12 @@
     $('#again').onclick = () => { S.student = null; stepName(); api('exam/' + encodeURIComponent(S.token)).then(i => { S.info = i; stepName(); }).catch(() => stepToken()); };
   }
 
+  document.addEventListener('click', e => {
+    const im = e.target.closest && e.target.closest('img.zoomable'); if (!im) return;
+    const ov = document.createElement('div'); ov.className = 'img-zoom';
+    ov.innerHTML = '<img alt=""><button class="btn ghost sm">✕ Tutup</button>'; ov.querySelector('img').src = im.src;
+    ov.onclick = () => ov.remove(); document.body.appendChild(ov);
+  });
   // Tema dari pengaturan guru di perangkat ini (bila ada)
   try {
     const t = JSON.parse(localStorage.getItem('asesmen-merdeka-v1') || '{}').theme;

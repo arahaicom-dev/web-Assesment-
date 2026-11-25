@@ -54,6 +54,19 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
   - Murid tidak bisa mengumpulkan dua kali. Jawaban tersimpan sementara di HP murid kalau halamannya tertutup.
 - Kalau aplikasi dibuka tanpa server (hosting statis biasa), aplikasi tetap jalan dalam **mode lokal** seperti sebelumnya, dengan data tersimpan di browser.
 
+## Soal bergambar
+- Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
+- Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.
+- Gambar yang tidak terambil otomatis (mis. grafik atau tabel yang digambar dengan garis) bisa dipotong manual dengan **✂️ Dari PDF**: seret di atas halaman PDF. Untuk paket soal yang sudah tersimpan, buka PDF-nya lewat **📄 Buka PDF (ambil gambar)** di editor.
+- Murid bisa **mengetuk gambar untuk memperbesar** di halaman ujian dan Kuis Seru.
+- Contoh: `contoh-soal/contoh-soal-bergambar.pdf`.
+
+## Hak edit soal (versi server)
+- Setiap paket soal mencatat **pembuatnya**.
+- **Guru** hanya bisa mengedit atau menghapus paket soal miliknya. Paket soal guru lain bisa dilihat, dipakai untuk asesmen/kuis, atau **diduplikat** menjadi salinan milik sendiri.
+- **Admin sekolah** bisa mengedit dan menghapus semua paket soal di sekolahnya.
+- Aturan ini dijaga di server: perubahan yang tidak berhak ditolak.
+
 ## Mode SaaS (versi PHP): banyak sekolah berlangganan
 
 Versi PHP berjalan sebagai layanan berlangganan:

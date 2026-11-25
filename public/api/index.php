@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '4.2.0');
+define('APP_VERSION', '4.3.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -204,7 +204,10 @@ try {
   }
 
   if ($route === 'sync' && $method === 'POST') {
-    $u = auth(); $uid = (int)$u['id']; $tid = tenant_of($u); $n = 0;
+    $u = auth(); $uid = (int)$u['id']; $tid = tenant_of($u); $n = 0; $rejected = 0;
+    $isAdmin = $u['role'] === 'admin';
+    // Paket soal: guru hanya boleh mengubah/menghapus miliknya sendiri; admin sekolah boleh semuanya
+    $qsOwner = function ($id) use ($tid) { $r = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, 'questionSets', $id)); if (!$r) return false; $d = json_decode($r['data']); return $d ? prop($d, 'ownerId') : null; };
     $theme = prop($body, 'theme');
     $onlyTheme = !prop($body, 'docs') && !prop($body, 'delDocs') && !prop($body, 'scores') && !prop($body, 'delScores') && !prop($body, 'subs') && !prop($body, 'delSubs');
     if (!$onlyTheme) require_active($u);
@@ -213,6 +216,12 @@ try {
       foreach ((array)prop($body, 'docs', array()) as $d) {
         $kind = prop($d, 'kind'); $id = clean_id(prop($d, 'id')); $data = prop($d, 'data');
         if (!in_array($kind, $DOC_KINDS, true) || !$id || !is_object($data)) continue;
+        if ($kind === 'questionSets') {
+          $owner = $qsOwner($id);
+          if ($owner === false) { if (!prop($data, 'ownerId') || !$isAdmin) { $data->ownerId = $uid; $data->ownerName = $u['name']; } }
+          elseif (!$isAdmin && (int)$owner !== $uid) { $rejected++; continue; }
+          else { $data->ownerId = $owner === null ? ($isAdmin ? prop($data, 'ownerId') : $uid) : $owner; }
+        }
         q('INSERT INTO docs (tenant_id, kind, id, data, exam_code, updated_by) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data), exam_code = VALUES(exam_code), updated_by = VALUES(updated_by)',
           array($tid, $kind, $id, jenc($data), $exam_code_of($kind, $data), $uid));
         $n++;
@@ -220,6 +229,7 @@ try {
       foreach ((array)prop($body, 'delDocs', array()) as $d) {
         $kind = prop($d, 'kind'); $id = clean_id(prop($d, 'id'));
         if (!in_array($kind, $DOC_KINDS, true) || !$id) continue;
+        if ($kind === 'questionSets' && !$isAdmin) { $owner = $qsOwner($id); if ($owner !== false && (int)$owner !== $uid) { $rejected++; continue; } }
         q('DELETE FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, $id)); $n++;
       }
       foreach ((array)prop($body, 'scores', array()) as $s) {
@@ -249,7 +259,7 @@ try {
       if (is_object($theme)) { q('UPDATE users SET theme = ? WHERE id = ?', array(jenc($theme), $uid)); $n++; }
       $pdo->commit();
     } catch (Exception $e) { $pdo->rollBack(); throw $e; }
-    out(array('ok' => true, 'applied' => $n));
+    out(array('ok' => true, 'applied' => $n, 'rejected' => $rejected));
   }
 
   if ($route === 'import' && $method === 'POST') {

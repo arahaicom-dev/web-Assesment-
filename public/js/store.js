@@ -190,8 +190,12 @@
       if (!payload) { setStatus('ok'); return; }
       sync.busy = true; setStatus('saving');
       try {
-        await api('sync', { body: payload });
+        const r = await api('sync', { body: payload });
         sync.snap = next; setStatus('ok');
+        if (r && r.rejected) {
+          window.App && App.toast('Sebagian perubahan paket soal ditolak: hanya pembuatnya atau admin sekolah yang boleh mengubah.', 'bad');
+          await this.pull(true); window.App && App.route();
+        }
       } catch (e) {
         console.error(e); setStatus('error');
         if (e.status === 402) { setStatus('locked'); return; }

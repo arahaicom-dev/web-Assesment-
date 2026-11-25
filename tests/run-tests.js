@@ -72,6 +72,22 @@ t('kunci berupa angka tetap dianggap kunci sebaris', () => {
   assert.strictEqual(r.questions[1].answer, '12,5');
 });
 
+t('pilihan berupa gambar (baris huruf saja)', () => {
+  const r = P.parse('1. Bangun yang berbentuk segitiga adalah ....\nA.   B.   C.   D.\nKunci: B');
+  assert.strictEqual(r.questions[0].type, 'pg');
+  assert.strictEqual(r.questions[0].options.length, 4);
+  assert.strictEqual(r.questions[0].answer, 'B');
+});
+
+t('gambar dipetakan ke soal di atasnya, kop sekolah dilewati', () => {
+  const qs = [{ line: 2 }, { line: 5 }];
+  const meta = [{ page: 1, group: 0, y: 800 }, { page: 1, group: 0, y: 780 }, { page: 1, group: 0, y: 700 }, { page: 1, group: 0, y: 500 }, null, { page: 2, group: 0, y: 760 }];
+  const imgs = [{ page: 1, group: 0, x1: 50, x2: 100, y1: 805, y2: 840 }, { page: 1, group: 0, x1: 60, x2: 300, y1: 520, y2: 690 }, { page: 2, group: 0, x1: 60, x2: 300, y1: 600, y2: 750 }];
+  const m = P.assignImages(qs, meta, imgs, -1);
+  assert.deepStrictEqual(Object.keys(m), ['0', '1']);
+  assert.strictEqual(m[0].length, 1); assert.strictEqual(m[1].length, 1);
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur
