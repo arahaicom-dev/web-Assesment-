@@ -68,6 +68,17 @@ Versi PHP berjalan sebagai layanan berlangganan:
 - Kalau masa aktif habis, aplikasi sekolah terkunci (data tetap aman) dan token ujian sekolah itu tidak bisa dipakai sampai diperpanjang.
 - Memperbarui dari versi PHP 3.x tidak menghapus data. Data lama otomatis menjadi milik sekolah pemilik platform.
 
+## Kuis Seru (kuis live bergaya permainan, versi PHP)
+
+Menu **🎮 Kuis Seru (Live)** di aplikasi guru:
+1. Guru memilih paket soal (pilihan ganda, benar/salah, isian), waktu per soal, dan kelas. Kelas boleh dikosongkan, maka murid cukup mengetik nama panggilan.
+2. Layar guru (bisa layar penuh untuk proyektor) menampilkan **kode 6 angka** serta tombol Salin Link/WhatsApp. Murid membuka `kuis.html`, memasukkan kode, lalu memilih avatar dan nama (+ NIS bila diisi).
+3. Guru menekan **Mulai**. Setiap murid menjawab dengan timer per soal dan langsung tahu benar/salah:
+   - poin = 500 + bonus kecepatan (maks. 500) + bonus beruntun (100/soal, maks. 500),
+   - semua poin dihitung di server.
+4. Layar guru menampilkan **papan peringkat langsung** dan progres tiap murid. Setelah **Akhiri**, tampil **podium juara**, hasil per murid, dan ketercapaian per soal.
+5. **Simpan sebagai Nilai** membuat asesmen baru (mis. Formatif) dengan nilai = benar ÷ jumlah soal × 100.
+
 ## Pasang di hosting biasa (PHP + MySQL) — paling mudah, tanpa Node.js
 
 Cara ini cocok untuk hosting cPanel pada umumnya. Tidak perlu Setup Node.js App dan tidak mengganggu situs lain di `public_html`. Butuh PHP 7.2+ (dengan PDO MySQL) dan MySQL/MariaDB.
@@ -176,7 +187,8 @@ schema.sql           struktur tabel (opsional, untuk phpMyAdmin)
 .env.example         contoh konfigurasi database
 public/index.html    halaman utama (landing page)
 public/app.html      aplikasi guru
-public/ujian.html    halaman ujian murid
+public/ujian.html    halaman ujian murid (token)
+public/kuis.html     halaman pemain Kuis Seru
 public/css/style.css tema 3D & warna dinamis
 public/js/calc.js    jenis asesmen, istilah, rumus nilai rapor, predikat, deskripsi
 public/js/parser.js  konversi teks/PDF → soal, penilaian jawaban (dipakai juga oleh server)

@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '4.0.0');
+define('APP_VERSION', '4.1.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -38,7 +38,7 @@ try {
     $base = array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'saas' => true, 'version' => APP_VERSION);
     if (!$CFG) out(array_merge($base, array('needsConfig' => true)));
     try {
-      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_column(db(), 'users', 'tenant_id')) migrate();
+      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'users', 'tenant_id')) migrate();
       $n = (int)one('SELECT COUNT(*) AS n FROM users')['n'];
       out(array_merge($base, array('needsSetup' => $n === 0)));
     } catch (PDOException $e) {
@@ -413,6 +413,194 @@ try {
       q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($pw, PASSWORD_DEFAULT), (int)$seg[2]));
       q('DELETE FROM sessions WHERE user_id = ?', array((int)$seg[2]));
       out(array('ok' => true));
+    }
+  }
+
+  /* ---------- Kuis Seru: guru ---------- */
+  if ($seg && $seg[0] === 'games') {
+    $u = auth(); $tid = tenant_of($u);
+    $load_game = function ($id) use ($tid) { $g = one('SELECT * FROM games WHERE id = ? AND tenant_id = ?', array((int)$id, $tid)); if (!$g) bad(404, 'Kuis tidak ditemukan.'); return $g; };
+
+    if (count($seg) === 1 && $method === 'GET') {
+      $list = rows('SELECT g.id, g.code, g.title, g.status, g.class_id, g.created_at, g.ended_at, COUNT(p.id) AS players, COALESCE(SUM(p.correct),0) AS correct, COALESCE(SUM(p.answered),0) AS answered
+        FROM games g LEFT JOIN game_players p ON p.game_id = g.id WHERE g.tenant_id = ? GROUP BY g.id ORDER BY g.id DESC LIMIT 100', array($tid));
+      foreach ($list as &$x) { foreach (array('id', 'players', 'correct', 'answered') as $k) $x[$k] = (int)$x[$k]; }
+      out(array('games' => $list));
+    }
+
+    require_active($u);
+    if (count($seg) === 1 && $method === 'POST') {
+      $qs = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, 'questionSets', (string)prop($body, 'qsetId', '')));
+      if (!$qs) bad(400, 'Paket soal tidak ditemukan.');
+      $set = json_decode($qs['data']);
+      $questions = array(); $skipped = 0;
+      foreach ((array)prop($set, 'questions', array()) as $q) {
+        $t = prop($q, 'type');
+        if (!in_array($t, array('pg', 'bs', 'isian'), true) || prop($q, 'answer') === null || prop($q, 'answer') === '' || ($t === 'pg' && count((array)prop($q, 'options', array())) < 2)) { $skipped++; continue; }
+        $questions[] = array('id' => (string)$q->id, 'type' => $t, 'text' => (string)prop($q, 'text', ''), 'image' => prop($q, 'image'), 'options' => $t === 'pg' ? $q->options : array(), 'answer' => $q->answer);
+      }
+      if (!$questions) bad(400, 'Paket soal ini tidak punya soal yang bisa dipakai untuk kuis (butuh pilihan ganda, benar/salah, atau isian yang sudah ada kuncinya).');
+      $settings = array(
+        'time' => max(5, min(300, (int)prop($body, 'time', 20))),
+        'shuffleQ' => (bool)prop($body, 'shuffleQ', true), 'shuffleOpt' => (bool)prop($body, 'shuffleOpt', true),
+        'showAnswer' => (bool)prop($body, 'showAnswer', true), 'speedBonus' => (bool)prop($body, 'speedBonus', true),
+        'qsetId' => (string)$set->id
+      );
+      do { $code = (string)random_int(100000, 999999); } while (one("SELECT id FROM games WHERE code = ? AND status <> 'ended'", array($code)));
+      $title = str_cut(prop($body, 'title', '') ?: prop($set, 'title', 'Kuis'), 200);
+      $cls = clean_id(prop($body, 'classId')); $subj = clean_id(prop($body, 'subjectId'));
+      q('INSERT INTO games (tenant_id, code, title, data, class_id, subject_id, created_by) VALUES (?,?,?,?,?,?,?)',
+        array($tid, $code, $title, jenc(array('questions' => $questions, 'settings' => $settings)), $cls, $subj, $u['id']));
+      out(array('ok' => true, 'id' => (int)db()->lastInsertId(), 'code' => $code, 'skipped' => $skipped, 'count' => count($questions)));
+    }
+
+    $g = $load_game(isset($seg[1]) ? $seg[1] : 0);
+    $act = isset($seg[2]) ? $seg[2] : '';
+    if ($act === '' && $method === 'GET') {
+      $data = json_decode($g['data'], true);
+      $players = rows('SELECT id, nickname, avatar, student_id, score, correct, answered, streak, best_streak, answers, finished_at, joined_at FROM game_players WHERE game_id = ? ORDER BY score DESC, correct DESC, id', array($g['id']));
+      $qstat = array(); foreach ($data['questions'] as $q) $qstat[$q['id']] = array('ok' => 0, 'n' => 0);
+      foreach ($players as &$p) {
+        foreach (array('id', 'score', 'correct', 'answered', 'streak', 'best_streak') as $k) $p[$k] = (int)$p[$k];
+        $ans = $p['answers'] ? json_decode($p['answers'], true) : array();
+        foreach ($ans as $qid => $a) if (isset($qstat[$qid])) { $qstat[$qid]['n']++; if (!empty($a['ok'])) $qstat[$qid]['ok']++; }
+        $p['answers'] = $ans;
+        $p['finished'] = $p['finished_at'] !== null;
+      }
+      $qs = array();
+      foreach ($data['questions'] as $i => $q) $qs[] = array('id' => $q['id'], 'no' => $i + 1, 'type' => $q['type'], 'text' => $q['text'], 'answer' => $q['answer'], 'options' => $q['options'], 'ok' => $qstat[$q['id']]['ok'], 'n' => $qstat[$q['id']]['n']);
+      out(array('game' => array('id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'classId' => $g['class_id'], 'subjectId' => $g['subject_id'],
+        'settings' => $data['settings'], 'createdAt' => $g['created_at'], 'startedAt' => $g['started_at'], 'endedAt' => $g['ended_at']), 'questions' => $qs, 'players' => $players));
+    }
+    if ($act === 'start' && $method === 'POST') { q("UPDATE games SET status = 'running', started_at = NOW() WHERE id = ? AND status = 'lobby'", array($g['id'])); out(array('ok' => true)); }
+    if ($act === 'end' && $method === 'POST') { q("UPDATE games SET status = 'ended', ended_at = NOW() WHERE id = ? AND status <> 'ended'", array($g['id'])); out(array('ok' => true)); }
+    if ($act === 'kick' && $method === 'POST') { q('DELETE FROM game_players WHERE id = ? AND game_id = ?', array((int)prop($body, 'playerId', 0), $g['id'])); out(array('ok' => true)); }
+    if ($act === '' && $method === 'DELETE') { q('DELETE FROM game_players WHERE game_id = ?', array($g['id'])); q('DELETE FROM games WHERE id = ?', array($g['id'])); out(array('ok' => true)); }
+  }
+
+  /* ---------- Kuis Seru: pemain (murid) ---------- */
+  if ($seg && $seg[0] === 'play' && isset($seg[1])) {
+    $code = preg_replace('/\D/', '', $seg[1]);
+    $g = $code !== '' ? one("SELECT * FROM games WHERE code = ? ORDER BY (status = 'ended'), id DESC LIMIT 1", array($code)) : null;
+    if (!$g) bad(404, 'Kode kuis tidak ditemukan. Periksa lagi kodenya.');
+    $ti = tenant_info((int)$g['tenant_id']);
+    if (!$ti || !$ti['active']) bad(404, 'Kuis tidak tersedia: langganan sekolah sedang tidak aktif.');
+    $data = json_decode($g['data'], true); $qsAll = $data['questions']; $set = $data['settings'];
+    $act = isset($seg[2]) ? $seg[2] : '';
+    $tok = preg_replace('/[^a-f0-9]/', '', (string)(prop($body, 'token') ?: (isset($_GET['token']) ? $_GET['token'] : '')));
+    $me = $tok ? one('SELECT * FROM game_players WHERE token = ? AND game_id = ?', array($tok, $g['id'])) : null;
+    $rank_of = function ($p) use ($g) { return 1 + (int)one('SELECT COUNT(*) n FROM game_players WHERE game_id = ? AND (score > ? OR (score = ? AND correct > ?))', array($g['id'], $p['score'], $p['score'], $p['correct']))['n']; };
+    $count = function () use ($g) { return (int)one('SELECT COUNT(*) n FROM game_players WHERE game_id = ?', array($g['id']))['n']; };
+    $roster = function () use ($g) {
+      if (!$g['class_id']) return null;
+      $c = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'classes', $g['class_id']));
+      return $c ? (array)prop(json_decode($c['data']), 'students', array()) : array();
+    };
+    $meOut = function ($p) use ($rank_of, $qsAll) {
+      return array('id' => (int)$p['id'], 'nickname' => $p['nickname'], 'avatar' => $p['avatar'], 'score' => (int)$p['score'], 'correct' => (int)$p['correct'], 'answered' => (int)$p['answered'],
+        'streak' => (int)$p['streak'], 'bestStreak' => (int)$p['best_streak'], 'rank' => $rank_of($p), 'finished' => $p['finished_at'] !== null, 'total' => count($qsAll));
+    };
+
+    if ($act === '' && $method === 'GET') {
+      $info = array('title' => $g['title'], 'status' => $g['status'], 'count' => count($qsAll), 'time' => $set['time'], 'players' => $count(), 'needName' => !$g['class_id']);
+      $st = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'settings', 'main'));
+      $info['schoolName'] = $st ? prop(json_decode($st['data']), 'schoolName', '') : '';
+      $r = $roster();
+      if ($r !== null) {
+        $taken = array(); foreach (rows('SELECT student_id FROM game_players WHERE game_id = ? AND student_id IS NOT NULL', array($g['id'])) as $x) $taken[$x['student_id']] = true;
+        $info['students'] = array(); foreach ($r as $s) $info['students'][] = array('id' => $s->id, 'name' => prop($s, 'name', ''), 'needNis' => trim((string)prop($s, 'nis', '')) !== '', 'taken' => isset($taken[$s->id]));
+      }
+      out($info);
+    }
+
+    if ($act === 'join' && $method === 'POST') {
+      if ($g['status'] === 'ended') bad(409, 'Kuis ini sudah selesai.');
+      $avatar = str_cut(prop($body, 'avatar', ''), 8);
+      $r = $roster();
+      if ($r !== null) {
+        $sid = (string)prop($body, 'studentId', ''); $found = null;
+        foreach ($r as $s) if ($s->id === $sid) $found = $s;
+        if (!$found) bad(400, 'Pilih nama kamu dari daftar.');
+        $k = lock_key('game:' . $g['id'] . ':' . $sid);
+        if (is_locked($k)) bad(429, 'Terlalu banyak percobaan. Tunggu 10 menit.');
+        $nis = trim((string)prop($found, 'nis', ''));
+        if ($nis !== '' && strtolower($nis) !== strtolower(trim((string)prop($body, 'nis', '')))) { add_fail($k); bad(401, 'NIS tidak cocok.'); }
+        $ex = one('SELECT * FROM game_players WHERE game_id = ? AND student_id = ?', array($g['id'], $sid));
+        if ($ex) out(array('token' => $ex['token'], 'me' => $meOut($ex), 'rejoin' => true));
+        $nick = str_cut(prop($found, 'name', 'Murid'), 60);
+      } else {
+        $nick = str_cut(preg_replace('/\s+/', ' ', (string)prop($body, 'nickname', '')), 30);
+        if (str_len($nick) < 2) bad(400, 'Tulis nama panggilan minimal 2 huruf.');
+        if (one('SELECT id FROM game_players WHERE game_id = ? AND LOWER(nickname) = ?', array($g['id'], lower($nick)))) bad(409, 'Nama itu sudah dipakai teman. Coba nama lain.');
+        $sid = null;
+      }
+      if ($count() >= 300) bad(429, 'Kuis sudah penuh.');
+      $order = range(0, count($qsAll) - 1);
+      if ($set['shuffleQ']) shuffle($order);
+      $token = bin2hex(random_bytes(16));
+      q('INSERT INTO game_players (game_id, token, nickname, avatar, student_id, qorder, answers) VALUES (?,?,?,?,?,?,?)', array($g['id'], $token, $nick, $avatar, $sid, jenc($order), '{}'));
+      $p = one('SELECT * FROM game_players WHERE token = ?', array($token));
+      out(array('token' => $token, 'me' => $meOut($p)));
+    }
+
+    if (!$me) bad(401, 'Kamu belum bergabung di kuis ini.');
+
+    if ($act === 'state') {
+      $out = array('status' => $g['status'], 'players' => $count(), 'me' => $meOut($me));
+      if ($g['status'] === 'lobby') $out['lobby'] = rows('SELECT nickname, avatar FROM game_players WHERE game_id = ? ORDER BY id DESC LIMIT 60', array($g['id']));
+      if ($g['status'] === 'ended') $out['top'] = rows('SELECT nickname, avatar, score, correct FROM game_players WHERE game_id = ? ORDER BY score DESC, correct DESC, id LIMIT 3', array($g['id']));
+      out($out);
+    }
+
+    if ($act === 'next' && $method === 'POST') {
+      if ($g['status'] === 'lobby') out(array('waiting' => true));
+      if ($g['status'] === 'ended') out(array('ended' => true, 'me' => $meOut($me)));
+      $order = json_decode($me['qorder'], true);
+      $idx = (int)$me['cur'];
+      if (!(int)$me['cur_open']) {
+        $idx = $idx + 1;
+        if ($idx >= count($order)) {
+          if ($me['finished_at'] === null) q('UPDATE game_players SET finished_at = NOW() WHERE id = ?', array($me['id']));
+          $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
+          out(array('finished' => true, 'me' => $meOut($me)));
+        }
+        q('UPDATE game_players SET cur = ?, cur_started = ?, cur_open = 1 WHERE id = ?', array($idx, now_ms(), $me['id']));
+        $me['cur_started'] = now_ms();
+      }
+      $q = $qsAll[$order[$idx]];
+      $opts = array();
+      if ($q['type'] === 'pg') { $opts = array_map(function ($o) { return array('label' => $o['label'], 'text' => $o['text']); }, $q['options']); if ($set['shuffleOpt']) { mt_srand(crc32($me['token'] . $q['id'])); shuffle($opts); mt_srand(); } }
+      $elapsed = now_ms() - (int)$me['cur_started'];
+      out(array('question' => array('id' => $q['id'], 'type' => $q['type'], 'text' => $q['text'], 'image' => $q['image'], 'options' => $opts),
+        'index' => $idx + 1, 'total' => count($order), 'time' => $set['time'], 'remainingMs' => max(0, $set['time'] * 1000 - $elapsed), 'me' => $meOut($me)));
+    }
+
+    if ($act === 'answer' && $method === 'POST') {
+      if ($g['status'] !== 'running') bad(409, $g['status'] === 'ended' ? 'Kuis sudah diakhiri guru.' : 'Kuis belum dimulai.');
+      if (!(int)$me['cur_open']) bad(409, 'Soal ini sudah dijawab.');
+      $order = json_decode($me['qorder'], true);
+      $q = $qsAll[$order[(int)$me['cur']]];
+      if ((string)prop($body, 'qid', '') !== $q['id']) bad(409, 'Soal tidak sesuai, muat ulang halaman.');
+      $limit = $set['time'] * 1000;
+      $elapsed = now_ms() - (int)$me['cur_started'];
+      $ans = str_cut((string)prop($body, 'answer', ''), 300);
+      $late = $elapsed > $limit + 1500;
+      $ok = !$late && game_check((object)$q, $ans);
+      $streak = $ok ? (int)$me['streak'] + 1 : 0;
+      $pts = game_points($ok, min($elapsed, $limit), $limit, $streak, $set['speedBonus']);
+      $answers = $me['answers'] ? json_decode($me['answers'], true) : array();
+      if (!is_array($answers)) $answers = array();
+      $answers[$q['id']] = array('a' => $ans, 'ok' => $ok, 'pts' => $pts, 'ms' => min($elapsed, $limit + 1500));
+      q('UPDATE game_players SET cur_open = 0, score = score + ?, correct = correct + ?, answered = answered + 1, streak = ?, best_streak = GREATEST(best_streak, ?), answers = ? WHERE id = ? AND cur_open = 1',
+        array($pts, $ok ? 1 : 0, $streak, $streak, jenc((object)$answers), $me['id']));
+      $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
+      $key = null;
+      if ($set['showAnswer']) {
+        $key = $q['answer'];
+        if ($q['type'] === 'pg') foreach ($q['options'] as $o) if ($o['label'] === $q['answer']) $key = $o['label'] . '. ' . $o['text'];
+        if ($q['type'] === 'bs') $key = norm_bs($q['answer']) === 'B' ? 'Benar' : 'Salah';
+      }
+      out(array('correct' => $ok, 'late' => $late, 'points' => $pts, 'streak' => $streak, 'correctLabel' => ($set['showAnswer'] && $q['type'] === 'pg') ? $q['answer'] : null, 'correctText' => $key, 'me' => $meOut($me), 'players' => $count()));
     }
   }
 

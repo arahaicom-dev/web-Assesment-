@@ -132,6 +132,42 @@ function schema() {
       k VARCHAR(64) NOT NULL PRIMARY KEY,
       v LONGTEXT NOT NULL
     )$e",
+    "CREATE TABLE IF NOT EXISTS games (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      tenant_id INT UNSIGNED NOT NULL,
+      code VARCHAR(10) NOT NULL,
+      title VARCHAR(200) NOT NULL,
+      data LONGTEXT NOT NULL,
+      class_id VARCHAR(64) NULL,
+      subject_id VARCHAR(64) NULL,
+      status VARCHAR(12) NOT NULL DEFAULT 'lobby',
+      created_by INT UNSIGNED NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      started_at DATETIME NULL,
+      ended_at DATETIME NULL,
+      INDEX (code), INDEX (tenant_id)
+    )$e",
+    "CREATE TABLE IF NOT EXISTS game_players (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
+      game_id INT UNSIGNED NOT NULL,
+      token CHAR(32) NOT NULL UNIQUE,
+      nickname VARCHAR(60) NOT NULL,
+      avatar VARCHAR(16) NOT NULL DEFAULT '',
+      student_id VARCHAR(64) NULL,
+      score INT NOT NULL DEFAULT 0,
+      correct INT NOT NULL DEFAULT 0,
+      answered INT NOT NULL DEFAULT 0,
+      streak INT NOT NULL DEFAULT 0,
+      best_streak INT NOT NULL DEFAULT 0,
+      cur INT NOT NULL DEFAULT -1,
+      cur_started BIGINT NOT NULL DEFAULT 0,
+      cur_open TINYINT NOT NULL DEFAULT 0,
+      qorder TEXT NULL,
+      answers LONGTEXT NULL,
+      joined_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      finished_at DATETIME NULL,
+      INDEX (game_id)
+    )$e",
     "CREATE TABLE IF NOT EXISTS login_fails (
       k VARCHAR(190) NOT NULL PRIMARY KEY,
       n INT NOT NULL DEFAULT 0,
@@ -349,3 +385,24 @@ function grade($questions, $answers) {
   return array('score' => $total ? round($earned / $total * 10000) / 100 : 0, 'earned' => $earned, 'total' => $total, 'detail' => $detail, 'needsReview' => $needs);
 }
 
+
+/* ================= Kuis Seru (permainan live) ================= */
+function now_ms() { return (int)round(microtime(true) * 1000); }
+/** Nilai satu jawaban kuis: benar/salah. */
+function game_check($q, $ans) {
+  $type = prop($q, 'type'); $key = prop($q, 'answer');
+  $ans = trim((string)$ans);
+  if ($ans === '' || $key === null || $key === '') return false;
+  if ($type === 'pg') return strtoupper($ans) === strtoupper((string)$key);
+  if ($type === 'bs') return norm_bs($ans) !== null && norm_bs($ans) === norm_bs($key);
+  if ($type === 'isian') return match_short($ans, $key);
+  return false;
+}
+/** Poin: 500 dasar + bonus kecepatan s.d. 500 + bonus beruntun 100/soal (maks. 500). */
+function game_points($ok, $elapsedMs, $limitMs, $streak, $speedBonus) {
+  if (!$ok) return 0;
+  $pts = 500;
+  if ($speedBonus && $limitMs > 0) $pts += (int)round(500 * max(0, 1 - $elapsedMs / $limitMs));
+  if ($streak > 1) $pts += min(500, ($streak - 1) * 100);
+  return $pts;
+}

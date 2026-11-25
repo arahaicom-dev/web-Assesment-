@@ -104,6 +104,8 @@
     { href: 'data', ic: '🗂️', label: 'Kelas, Murid & Mapel' },
     { group: 'Asesmen' },
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
+    { group: 'Kuis Interaktif' },
+    { href: 'kuis', ic: '🎮', label: 'Kuis Seru (Live)', tag: 'Baru' },
     { group: 'Soal' },
     { href: 'bank-soal', ic: '📄', label: 'Bank Soal & Unggah PDF' },
     { group: 'Nilai Akhir' },
@@ -178,12 +180,14 @@
       else if (r === 'pengaturan') out = viewSettings();
       else if (r === 'akun' && S.mode === 'server') out = viewAccount();
       else if (r === 'langganan' && S.saas) out = viewBilling();
+      else if (r === 'kuis') out = parts[1] ? viewGameHost(parts[1]) : viewGames();
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
       else { location.hash = '#/beranda'; return; }
     } catch (e) {
       console.error(e);
       out = { html: `<div class="card"><h2>Terjadi kesalahan</h2><pre class="small">${esc(e.stack || e)}</pre></div>` };
     }
+    if (gamePoll && !/^kuis\/\d+/.test(hash)) { clearInterval(gamePoll); gamePoll = null; document.body.classList.remove('fs-mode'); }
     current = out;
     const onHosting = S.mode === 'local' && /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
     let banner = onHosting ? `<div class="note warn no-print" style="margin-bottom:16px"><b>⚠️ Aplikasi berjalan dalam MODE LOKAL (server tidak terdeteksi).</b> Data hanya tersimpan di browser ini, tidak ada login, dan murid tidak bisa ujian dari HP masing-masing (tidak ada token).
@@ -252,6 +256,8 @@
         <a class="card tile tilt" href="#/rekap"><div class="ico3d z2">🧮</div><div class="z1"><h3>Total Nilai Rapor</h3><div class="old">Rekap semua komponen</div>
           <p class="small muted" style="margin:8px 0 6px">Nilai Akhir = ${s.settings.weightsAkhir.slm}% rata-rata SLM + ${s.settings.weightsAkhir.sts}% STS + ${s.settings.weightsAkhir.akhir}% ${s.settings.semester === 'genap' ? 'SAT' : 'SAS'}${s.settings.includeFormatif ? ' + ' + s.settings.weightsAkhir.formatif + '% Formatif' : ''}.</p>
           <span class="pill ok">Otomatis</span></div></a>
+        <a class="card tile tilt" href="#/kuis"><div class="ico3d z2">🎮</div><div class="z1"><h3>Kuis Seru (Live) <span class="pill ok">Baru</span></h3><div class="old">Kuis interaktif bergaya permainan</div>
+          <p class="small muted" style="margin:8px 0 6px">Murid bergabung dari HP dengan kode, berlomba menjawab cepat, papan peringkat langsung, dan podium juara.</p></div></a>
         <a class="card tile tilt" href="#/bank-soal"><div class="ico3d z2">📄</div><div class="z1"><h3>Unggah Soal PDF</h3><div class="old">Format apa pun → format web</div>
           <p class="small muted" style="margin:8px 0 6px">Soal dari PDF otomatis dikenali (pilihan ganda, benar/salah, isian, uraian) lengkap dengan kunci, lalu bisa dikerjakan murid secara online.</p>
           <span class="pill">${s.questionSets.length} paket soal</span></div></a>
@@ -1558,6 +1564,166 @@
       }
     };
     return out;
+  }
+
+  /* ================= Kuis Seru (permainan live) ================= */
+  let gamePoll = null;
+  const gameAvailable = () => S.mode === 'server' && S.backend === 'php';
+  const playLink = code => location.origin + location.pathname.replace(/[^/]*$/, '') + 'kuis.html?kode=' + code;
+  const GAME_STATUS = { lobby: ['warn', 'Menunggu pemain'], running: ['ok', '● Berlangsung'], ended: ['', 'Selesai'] };
+
+  function viewGames() {
+    setTitle('🎮 Kuis Seru (Live)', 'Kuis interaktif bergaya permainan — murid bergabung dari HP dengan kode');
+    renderCtx(false);
+    if (!gameAvailable()) return { html: `<div class="card empty"><div class="big">🎮</div><h3>Kuis Seru membutuhkan versi server PHP</h3><p>Fitur ini berjalan saat aplikasi dipasang di hosting (versi PHP + MySQL) dan Anda login.</p></div>` };
+    const out = {
+      html: `<div class="card hero tilt"><div class="z1"><h2 style="margin:0 0 6px">Belajar seperti bermain 🎉</h2>
+        <p style="margin:0 0 14px">Pilih paket soal, tampilkan kode di proyektor, lalu murid bergabung dari HP. Jawaban cepat dapat poin lebih, jawaban beruntun dapat bonus, dan papan peringkat bergerak langsung.</p>
+        <button class="btn ghost lg" data-act="new">+ Buat Kuis Seru</button></div></div>
+        <div id="games" class="muted" style="margin-top:18px">Memuat…</div>`,
+      async mount(v) {
+        let d; try { d = await S.api('games'); } catch (e) { $('#games', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+        $('#games', v).innerHTML = d.games.length ? `<div class="grid auto">${d.games.map(g => `<div class="card tilt" style="margin:0"><div class="z1">
+          <div class="card-head"><h3>${esc(g.title)}</h3><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>
+          <p class="small muted" style="margin:0 0 8px">${tgl(g.created_at)} · kode ${esc(g.code)} · ${g.players} pemain${g.answered ? ` · akurasi ${Math.round(g.correct / g.answered * 100)}%` : ''}${g.class_id && S.cls(g.class_id) ? ' · ' + esc(S.cls(g.class_id).name) : ''}</p>
+          <div class="btns"><a class="btn sm" href="#/kuis/${g.id}">${g.status === 'ended' ? '📊 Hasil' : '▶ Buka Layar Kuis'}</a><button class="btn ghost sm" data-act="del" data-id="${g.id}">🗑</button></div></div></div>`).join('')}</div>`
+          : '<div class="card empty"><div class="big">🕹️</div>Belum ada kuis. Klik <b>Buat Kuis Seru</b> untuk memulai.</div>';
+        bindTilt(v);
+      },
+      actions: {
+        new: () => newGameModal(),
+        del: async el => { if (!await confirmBox('Hapus kuis ini beserta hasilnya?', 'Hapus')) return; try { await S.api('games/' + el.dataset.id, { method: 'DELETE' }); route(); } catch (e) { toast(e.message, 'bad'); } }
+      }
+    };
+    return out;
+  }
+
+  function newGameModal(preset) {
+    const s = st(); ensureCtx(); preset = preset || {};
+    if (!s.questionSets.length) { toast('Buat atau unggah paket soal dulu di Bank Soal.', 'bad'); location.hash = '#/bank-soal'; return; }
+    const usable = q => q.questions.filter(x => ['pg', 'bs', 'isian'].includes(x.type) && x.answer).length;
+    const m = modal(`<h2>🎮 Buat Kuis Seru</h2>
+      <label class="field"><span>Paket soal</span><select id="g-qs">${s.questionSets.map(q => `<option value="${q.id}" ${preset.qsetId === q.id ? 'selected' : ''}>${esc(q.title)} (${usable(q)} soal bisa dipakai)</option>`).join('')}</select></label>
+      <label class="field"><span>Judul kuis</span><input id="g-title" placeholder="(sama dengan judul paket soal)" value="${esc(preset.title || '')}"></label>
+      <div class="row"><label class="field"><span>Peserta</span><select id="g-cls"><option value="">Bebas — murid mengetik nama panggilan</option>${s.classes.map(c => `<option value="${c.id}" ${(preset.classId || '') === c.id ? 'selected' : ''}>Kelas ${esc(c.name)} — pilih nama (nilai bisa disimpan)</option>`).join('')}</select></label>
+      <label class="field" style="max-width:170px"><span>Waktu per soal</span><select id="g-time">${[10, 15, 20, 30, 45, 60, 90, 120].map(t => `<option value="${t}" ${(preset.time || 20) === t ? 'selected' : ''}>${t} detik</option>`).join('')}</select></label></div>
+      <label class="field"><span>Mapel (untuk menyimpan nilai)</span><select id="g-subj">${s.subjects.map(x => `<option value="${x.id}" ${(preset.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+      <div class="grid g2 small" style="gap:6px">
+        <label style="display:flex;gap:8px"><input type="checkbox" id="g-sq" checked> Acak urutan soal per murid</label>
+        <label style="display:flex;gap:8px"><input type="checkbox" id="g-so" checked> Acak urutan pilihan jawaban</label>
+        <label style="display:flex;gap:8px"><input type="checkbox" id="g-sa" checked> Tampilkan jawaban benar setelah menjawab</label>
+        <label style="display:flex;gap:8px"><input type="checkbox" id="g-sb" checked> Bonus poin untuk jawaban cepat</label>
+      </div>
+      <p class="small muted">Soal uraian tidak dipakai di Kuis Seru (tidak bisa dinilai langsung).</p>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="g-ok">Buat & Buka Layar Kuis</button></div>`);
+    $('#g-ok', m).onclick = async () => {
+      const b = $('#g-ok', m); b.disabled = true;
+      try {
+        const r = await S.api('games', { body: { qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+          shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
+        closeModal();
+        if (r.skipped) toast(r.skipped + ' soal dilewati (uraian / belum ada kunci).', 'bad');
+        location.hash = '#/kuis/' + r.id;
+      } catch (e) { b.disabled = false; toast(e.message, 'bad'); }
+    };
+  }
+
+  function viewGameHost(id) {
+    renderCtx(false);
+    setTitle('🎮 Kuis Seru', 'Layar guru — tampilkan di proyektor');
+    if (!gameAvailable()) { location.hash = '#/kuis'; return { html: '' }; }
+    const out = {
+      html: '<div id="host" class="muted">Memuat…</div>',
+      data: null,
+      async load() {
+        if ($('#modal-root').innerHTML) return;
+        let d; try { d = await S.api('games/' + id); } catch (e) { $('#host').innerHTML = `<div class="card">${esc(e.message)}</div>`; clearInterval(gamePoll); gamePoll = null; return; }
+        out.data = d; renderHost(d);
+      },
+      mount() {
+        out.load();
+        clearInterval(gamePoll);
+        gamePoll = setInterval(() => { if (!/^#\/kuis\/\d+/.test(location.hash)) { clearInterval(gamePoll); gamePoll = null; return; } if (out.data && out.data.game.status === 'ended') return; out.load(); }, 2000);
+      },
+      actions: {
+        start: async () => { try { await S.api('games/' + id + '/start', { method: 'POST' }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
+        end: async () => { if (!await confirmBox('Akhiri kuis sekarang? Murid yang belum selesai tidak bisa lanjut menjawab.', 'Akhiri Kuis')) return; try { await S.api('games/' + id + '/end', { method: 'POST' }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
+        kick: async el => { if (!await confirmBox(`Keluarkan <b>${esc(el.dataset.n)}</b> dari kuis?`, 'Keluarkan')) return; await S.api('games/' + id + '/kick', { body: { playerId: +el.dataset.id } }); out.load(); },
+        copy: () => { const t = playLink(out.data.game.code); (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(() => toast('Tautan disalin.'), () => prompt('Salin tautan ini:', t)); },
+        wa: () => { const g = out.data.game; window.open('https://wa.me/?text=' + encodeURIComponent(`Ayo ikut Kuis Seru "${g.title}"!\nKode: ${g.code}\nGabung di: ${playLink(g.code)}`), '_blank'); },
+        fs: () => { document.body.classList.toggle('fs-mode'); if (document.body.classList.contains('fs-mode') && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen(); },
+        save: () => saveGameScores(out.data),
+        xls: () => exportTable($('#res-table'), 'Kuis_' + out.data.game.title.replace(/[^\w\s-]/g, '')),
+        again: () => { const g = out.data.game; newGameModal({ qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time }); }
+      }
+    };
+    return out;
+  }
+
+  function renderHost(d) {
+    const g = d.game, ps = d.players, total = d.questions.length, box = $('#host');
+    if (!box) return;
+    setTitle('🎮 ' + esc(g.title), `${total} soal · ${g.settings.time} detik/soal${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ' · nama bebas'}`);
+    const link = playLink(g.code);
+    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>`;
+    const finished = ps.filter(p => p.finished).length;
+    const acc = p => p.answered ? Math.round(p.correct / p.answered * 100) : 0;
+    if (g.status === 'lobby') {
+      box.innerHTML = top + `<div class="card host-join">
+        <div><div class="small muted">Buka di HP: <b>${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}kuis.html</b> lalu masukkan kode</div>
+          <div class="host-code">${esc(g.code)}</div>
+          <div class="btns" style="margin-top:12px"><button class="btn soft sm" data-act="copy">🔗 Salin Link</button><button class="btn ok sm" data-act="wa">💬 Bagikan ke WhatsApp</button></div></div>
+        <div style="text-align:center"><div style="font-size:3.4rem;font-weight:900">${ps.length}</div><div class="muted">pemain bergabung</div>
+          <button class="btn lg" data-act="start" ${ps.length ? '' : 'disabled'} style="margin-top:14px">▶ Mulai Kuis</button></div></div>
+        <div class="card"><h3>Pemain di ruang tunggu</h3><div class="host-players">${ps.map(p => `<span class="kz-chip" title="Klik untuk mengeluarkan" style="cursor:pointer" data-act="kick" data-id="${p.id}" data-n="${esc(p.nickname)}">${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('') || '<span class="muted">Menunggu murid bergabung…</span>'}</div></div>`;
+      return;
+    }
+    if (g.status === 'running') {
+      const avg = ps.length ? Math.round(ps.reduce((a, p) => a + acc(p), 0) / ps.length) : 0;
+      box.innerHTML = top + `<div class="grid g4">
+          <div class="card stat"><div class="blob"><span>🔑</span></div><div class="num">${esc(g.code)}</div><div class="lbl">Kode (masih bisa bergabung)</div></div>
+          <div class="card stat"><div class="blob"><span>👥</span></div><div class="num">${ps.length}</div><div class="lbl">Pemain</div></div>
+          <div class="card stat"><div class="blob"><span>🏁</span></div><div class="num">${finished}/${ps.length}</div><div class="lbl">Sudah selesai</div></div>
+          <div class="card stat"><div class="blob"><span>🎯</span></div><div class="num">${avg}%</div><div class="lbl">Rata-rata akurasi</div></div></div>
+        <div class="card host-board" style="margin-top:18px"><div class="card-head"><h3>🏆 Papan Peringkat</h3>${finished === ps.length && ps.length ? '<span class="pill ok">Semua sudah selesai</span>' : ''}<button class="btn danger" data-act="end">■ Akhiri Kuis & Umumkan Juara</button></div>
+          ${ps.map((p, i) => { const ans = Object.values(p.answers || {}); return `<div class="row-b"><span class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><span class="kz-av sm">${esc(p.avatar || '🙂')}</span><span class="nm">${esc(p.nickname)}${p.streak > 1 ? ` <span class="kz-streak">🔥${p.streak}</span>` : ''}</span>
+            <div class="prog">${Array.from({ length: total }, (_, k) => `<i class="${ans[k] ? (ans[k].ok ? 'ok' : 'no') : ''}"></i>`).join('')}</div><span class="sc">${p.score.toLocaleString('id-ID')}</span><span class="acc">${acc(p)}%</span></div>`; }).join('') || '<p class="muted">Belum ada pemain.</p>'}</div>`;
+      return;
+    }
+    // Selesai: podium & laporan
+    const podium = [1, 0, 2].filter(k => ps[k]).map(k => `<div class="kz-pod p${k + 1}"><div class="kz-av lg">${esc(ps[k].avatar || '🙂')}</div><div class="kz-pod-name">${esc(ps[k].nickname)}</div><div class="kz-pod-box"><b>${k + 1}</b><small>${ps[k].score.toLocaleString('id-ID')}</small></div></div>`).join('');
+    const linked = ps.filter(p => p.student_id).length;
+    box.innerHTML = top + `<div class="card" style="text-align:center"><h2>🏆 Juara Kuis</h2><div class="kz-podium">${podium || '<p class="muted">Tidak ada pemain.</p>'}</div></div>
+      <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);align-items:start" id="res-grid">
+        <div class="card"><div class="card-head"><h3>Hasil Pemain</h3><div class="btns">${g.classId ? `<button class="btn ok sm" data-act="save" ${linked ? '' : 'disabled'}>💾 Simpan sebagai Nilai</button>` : ''}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="again">↻ Main Lagi</button></div></div>
+          <div class="table-wrap"><table id="res-table"><thead><tr><th class="num">Rank</th><th>Nama</th><th class="num">Poin</th><th class="num">Benar</th><th class="num">Nilai (0–100)</th><th class="num">Beruntun</th></tr></thead><tbody>
+          ${ps.map((p, i) => `<tr><td class="num">${i + 1}</td><td>${esc(p.avatar || '')} ${esc(p.nickname)}</td><td class="num"><b>${p.score.toLocaleString('id-ID')}</b></td><td class="num">${p.correct}/${total}</td><td class="num">${Math.round(p.correct / total * 100)}</td><td class="num">🔥${p.best_streak}</td></tr>`).join('')}
+          </tbody></table></div>
+          ${g.classId ? '<p class="small muted">Nilai = jumlah benar ÷ jumlah soal × 100 (poin permainan tidak dipakai sebagai nilai).</p>' : '<p class="small muted">Kuis ini memakai nama bebas, jadi hasilnya tidak bisa disimpan ke daftar nilai. Pilih kelas saat membuat kuis agar bisa disimpan.</p>'}</div>
+        <div class="card"><h3>Ketercapaian per Soal</h3>${d.questions.map(q => { const pc = q.n ? Math.round(q.ok / q.n * 100) : 0; return `<div class="q-acc" title="${esc(q.text)}"><b>No.${q.no}</b><div><div class="small ellipsis">${esc(q.text)}</div><div class="bar"><i style="width:${pc}%"></i></div></div><span class="pill ${pc >= 70 ? 'ok' : pc >= 40 ? 'warn' : 'bad'}">${pc}%</span></div>`; }).join('')}
+          <p class="small muted">Soal dengan persentase rendah perlu dibahas ulang.</p></div></div>`;
+    if (window.innerWidth < 1000) $('#res-grid').style.gridTemplateColumns = '1fr';
+  }
+
+  function saveGameScores(d) {
+    const s = st(); const g = d.game, total = d.questions.length;
+    const cls = S.cls(g.classId);
+    if (!cls) return toast('Kelas kuis ini tidak ditemukan.', 'bad');
+    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">Nilai tiap murid = benar ÷ ${total} soal × 100. Murid yang tidak ikut dibiarkan kosong.</p>
+      <label class="field"><span>Jenis asesmen</span><select id="sv-type">${['formatif', 'slm', 'diagnostik', 'sts', 'sas', 'sat'].map(k => `<option value="${k}">${T[k].name} (${T[k].short})</option>`).join('')}</select></label>
+      <label class="field"><span>Mapel</span><select id="sv-subj">${s.subjects.map(x => `<option value="${x.id}" ${(g.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+      <label class="field"><span>Judul</span><input id="sv-title" value="${esc('Kuis Seru — ' + g.title)}"></label>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="sv-ok">Simpan Nilai</button></div>`);
+    $('#sv-ok', m).onclick = () => {
+      const type = $('#sv-type', m).value;
+      const a = { id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() };
+      s.assessments.push(a);
+      let n = 0;
+      d.players.forEach(p => { if (p.student_id && cls.students.some(x => x.id === p.student_id)) { S.setScore(a.id, p.student_id, Math.round(p.correct / total * 100)); n++; } });
+      S.save(); closeModal(); toast(n + ' nilai disimpan ke ' + T[type].name + '.');
+      s.ui.classId = cls.id; s.ui.subjectId = a.subjectId;
+      location.hash = '#/asesmen/' + type + '/' + a.id;
+    };
   }
 
   /* ================= Panel Pemilik Platform ================= */
