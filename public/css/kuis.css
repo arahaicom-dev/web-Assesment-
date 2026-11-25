@@ -158,3 +158,8 @@
 [data-mode="light"] .kz-top { background: hsl(0 0% 100% / .8); }
 [data-mode="light"] .kz-card { box-shadow: 0 4px 0 hsl(var(--h) 40% 88%), 0 18px 40px hsl(var(--h) 55% 35% / .16); }
 [data-mode="light"] .kz-chip { background: #fff; }
+
+/* jenis soal tambahan di kuis */
+.kz-type { text-align: center; margin: 4px 0 8px; font-weight: 800; font-size: .9rem; opacity: .9; }
+.kz-qt { margin-top: 10px; }
+.kz-feedback.info { background: radial-gradient(circle at 50% 40%, hsl(var(--h) 70% 55% / .96), hsl(var(--h) 60% 32% / .97)); }

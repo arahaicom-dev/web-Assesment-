@@ -4,7 +4,9 @@
   const $ = (s, el) => (el || document).querySelector(s);
   const $$ = (s, el) => Array.from((el || document).querySelectorAll(s));
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const TYPE = { pg: 'Pilihan Ganda', bs: 'Benar/Salah', isian: 'Isian Singkat', uraian: 'Uraian' };
+  const QT = window.QT;
+  const TYPE = {}; QT.ORDER.forEach(k => { TYPE[k] = QT.TYPES[k].icon + ' ' + QT.TYPES[k].label; });
+  function isAns(v) { if (v === undefined || v === null || !String(v).trim()) return false; try { const j = JSON.parse(v); if (Array.isArray(j)) return j.some(x => x !== null && x !== ''); if (j && typeof j === 'object') return Object.keys(j).length > 0; } catch (e) { /* teks */ } return true; }
   const view = $('#view');
   const S = { token: '', info: null, student: null, nis: '', questions: [], answers: {}, idx: 0, startedAt: 0, duration: 0, timer: null };
 
@@ -90,7 +92,7 @@
       if (S.startedAt) return renderQ();
       view.innerHTML = `<div class="card tilt" style="max-width:600px;margin:20px auto;text-align:center"><div style="font-size:52px">📝</div>
         <h2>${esc(S.info.assessment.title)}</h2><p>Halo <b>${esc(st.name)}</b>! Ada <b>${S.questions.length} soal</b>.</p>
-        <p class="muted small">${['pg', 'bs', 'isian', 'uraian'].map(t => { const n = S.questions.filter(q => q.type === t).length; return n ? n + ' ' + TYPE[t] : ''; }).filter(Boolean).join(' · ')}${S.duration ? ' · Waktu ' + S.duration + ' menit' : ''}</p>
+        <p class="muted small">${QT.ORDER.map(t => { const n = S.questions.filter(q => q.type === t).length; return n ? n + ' ' + TYPE[t] : ''; }).filter(Boolean).join(' · ')}${S.duration ? ' · Waktu ' + S.duration + ' menit' : ''}</p>
         <p class="small muted">Jawaban tersimpan otomatis di perangkat ini. Jangan lupa tekan <b>Kumpulkan</b> di akhir.</p>
         <button class="btn lg" id="go">Mulai Mengerjakan ▶</button></div>`;
       $('#go').onclick = () => { S.startedAt = Date.now(); persist(); renderQ(); };
@@ -102,28 +104,24 @@
   }
 
   /* 4. Mengerjakan */
-  function answered(q) { const a = S.answers[q.id]; return a !== undefined && a !== null && String(a).trim() !== ''; }
+  function answered(q) { return isAns(S.answers[q.id]); }
+  async function uploadMedia(dataUrl) { const r = await api('exam/' + encodeURIComponent(S.token) + '/media', { studentId: S.student.id, nis: S.nis, data: dataUrl }); return 'media:' + r.id; }
   function renderQ() {
     clearInterval(S.timer);
     const qs = S.questions, q = qs[S.idx], ans = S.answers[q.id];
     const done = qs.filter(answered).length;
-    let body;
-    if (q.type === 'pg') body = q.options.map(o => `<div class="exam-opt ${ans === o.label ? 'sel' : ''}" data-v="${esc(o.label)}"><span class="lab">${esc(o.label)}</span><span>${esc(o.text)}</span></div>`).join('');
-    else if (q.type === 'bs') body = [['B', 'Benar'], ['S', 'Salah']].map(([v, l]) => `<div class="exam-opt ${ans === v ? 'sel' : ''}" data-v="${v}"><span class="lab">${v}</span><span>${l}</span></div>`).join('');
-    else if (q.type === 'isian') body = `<input id="ans" style="width:100%;font-size:1.05rem;padding:12px" placeholder="Tulis jawaban singkat..." value="${esc(ans || '')}">`;
-    else body = `<textarea id="ans" style="min-height:180px" placeholder="Tulis jawabanmu di sini...">${esc(ans || '')}</textarea>`;
     view.innerHTML = `
       <div class="card" style="margin-bottom:14px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
         <b style="flex:1">${esc(S.student.name)}</b>
         ${S.duration ? '<span class="pill warn" style="font-size:1rem">⏱ <span id="timer">--:--</span></span>' : ''}
-        <span class="small muted">Terjawab ${done}/${qs.length}</span>
+        <span class="small muted" id="done-n">Terjawab ${done}/${qs.length}</span>
         <div class="bar" style="flex-basis:100%"><i style="width:${done / qs.length * 100}%"></i></div>
       </div>
       <div class="card">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${S.idx + 1}</span><span class="pill">${TYPE[q.type]}</span><span class="muted small" style="margin-left:auto">Soal ${S.idx + 1} dari ${qs.length}</span></div>
-        ${q.image ? `<img src="${q.image}" alt="" class="q-img zoomable">` : ''}
-        <div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>
-        ${body}
+        ${q.image && ['titik', 'label', 'gambar'].indexOf(q.type) < 0 ? `<img src="${q.image}" alt="" class="q-img zoomable">` : ''}
+        ${q.type === 'seret' || q.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>`}
+        <div id="qt-host"></div>
         <div class="btns" style="justify-content:space-between;margin-top:16px">
           <button class="btn ghost" id="prev" ${S.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
           ${S.idx < qs.length - 1 ? '<button class="btn" id="next">Berikutnya →</button>' : '<button class="btn ok" id="sub">✔ Kumpulkan</button>'}
@@ -132,8 +130,14 @@
       <div class="card"><div class="qnav">${qs.map((x, i) => `<button class="${i === S.idx ? 'cur' : answered(x) ? 'done' : ''}" data-i="${i}">${i + 1}</button>`).join('')}</div>
         <button class="btn ok" style="width:100%;margin-top:14px" id="sub2">✔ Kumpulkan Jawaban</button></div>`;
     const go = i => { S.idx = i; persist(); renderQ(); window.scrollTo(0, 0); };
-    $$('.exam-opt').forEach(el => el.onclick = () => { S.answers[q.id] = el.dataset.v; persist(); renderQ(); });
-    const inp = $('#ans'); if (inp) { inp.oninput = () => { S.answers[q.id] = inp.value; persist(); }; inp.focus(); }
+    QT.mount($('#qt-host'), q, ans, {
+      media: uploadMedia,
+      onChange: v => {
+        S.answers[q.id] = v; persist();
+        const b = $$('.qnav button')[S.idx]; if (b) b.classList.toggle('done', answered(q));
+        const dn = $('#done-n'); if (dn) dn.textContent = 'Terjawab ' + qs.filter(answered).length + '/' + qs.length;
+      }
+    });
     if ($('#prev')) $('#prev').onclick = () => go(S.idx - 1);
     if ($('#next')) $('#next').onclick = () => go(S.idx + 1);
     $$('.qnav button').forEach(b => b.onclick = () => go(+b.dataset.i));
@@ -152,7 +156,7 @@
   let sending = false;
   async function submit(force) {
     if (sending) return;
-    const left = S.questions.filter(q => !answered(q)).length;
+    const left = S.questions.filter(q => q.type !== 'slide' && !answered(q)).length;
     if (!force && !await confirmBox(left ? `Masih ada <b>${left} soal</b> yang belum dijawab. Tetap kumpulkan?` : 'Kumpulkan jawaban sekarang? Jawaban tidak bisa diubah lagi.')) return;
     sending = true; clearInterval(S.timer);
     try {
@@ -171,7 +175,7 @@
     view.innerHTML = `<div class="card tilt" style="max-width:560px;margin:20px auto;text-align:center"><div style="font-size:56px">🎉</div>
       <h2>${already ? 'Kamu sudah mengumpulkan' : 'Jawaban terkirim!'}</h2>
       <p>${esc(S.student ? S.student.name : '')}</p>
-      ${sc !== null ? `<div class="score-big">${sc.toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div>${res.needsReview ? '<p class="note warn">Soal uraian akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
+      ${sc !== null ? `<div class="score-big">${sc.toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div>${res.needsReview ? '<p class="note warn">Soal uraian/gambar/rekaman akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
       <button class="btn ghost" id="again" style="margin-top:12px">Selesai</button></div>`;
     $('#again').onclick = () => { S.student = null; stepName(); api('exam/' + encodeURIComponent(S.token)).then(i => { S.info = i; stepName(); }).catch(() => stepToken()); };
   }

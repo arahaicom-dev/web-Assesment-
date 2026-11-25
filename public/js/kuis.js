@@ -85,6 +85,14 @@
     return d;
   }
   const saveKey = () => 'kuis:' + G.code;
+  const QT = window.QT;
+  const typeLabel = t => QT && QT.TYPES[t] ? QT.TYPES[t].icon + ' ' + QT.TYPES[t].label : t;
+  /** Sudah dijawab? (sama dengan SoalParser.isAnswered) */
+  function isAns(v) { if (v === undefined || v === null || !String(v).trim()) return false; try { const j = JSON.parse(v); if (Array.isArray(j)) return j.some(x => x !== null && x !== ''); if (j && typeof j === 'object') return Object.keys(j).length > 0; } catch (e) { /* teks biasa */ } return true; }
+  /** Unggah gambar/rekaman suara jawaban -> "media:ID" */
+  async function uploadMedia(dataUrl) { const r = await api('media', { data: dataUrl }); return 'media:' + r.id; }
+  const hideText = t => t === 'seret' || t === 'dropdown';
+  const ownImg = t => t === 'titik' || t === 'label' || t === 'gambar';
   function setHud() {
     if (!G.me) { hud.innerHTML = ''; return; }
     if (isExam()) { hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b>`; return; }
@@ -210,11 +218,15 @@
     let body;
     if (q.type === 'pg') body = `<div class="kz-opts n${q.options.length}">${q.options.map((o, k) => `<button class="kz-opt c${k % 6}" data-v="${esc(o.label)}"><span class="kz-opt-l">${'ABCDEF'[k]}</span><span>${esc(o.text)}</span></button>`).join('')}</div>`;
     else if (q.type === 'bs') body = `<div class="kz-opts n2"><button class="kz-opt c3" data-v="B"><span class="kz-opt-l">✓</span><span>Benar</span></button><button class="kz-opt c0" data-v="S"><span class="kz-opt-l">✗</span><span>Salah</span></button></div>`;
-    else body = `<form id="isian" class="kz-isian"><input id="ans" autocomplete="off" placeholder="Ketik jawabanmu…"><button class="btn lg kz-go" type="submit">Kirim</button></form>`;
+    else if (q.type === 'isian') body = `<form id="isian" class="kz-isian"><input id="ans" autocomplete="off" placeholder="Ketik jawabanmu…"><button class="btn lg kz-go" type="submit">Kirim</button></form>`;
+    else body = `<div class="kz-card kz-qt" id="qt-host"></div><div style="text-align:center;margin-top:12px"><button class="btn lg kz-go" id="qt-send">${q.type === 'slide' ? 'Lanjut ▶' : 'Kirim ✔'}</button></div>`;
     view.innerHTML = `<div class="kz-q pop">
       <div class="kz-q-head"><span class="kz-pill">${d.index} / ${d.total}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
-      <div class="kz-card kz-q-card">${q.image ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}<div class="kz-q-text">${esc(q.text)}</div></div>
+      ${q.type === 'pg' || q.type === 'bs' || q.type === 'isian' ? '' : `<div class="kz-type">${typeLabel(q.type)}</div>`}
+      <div class="kz-card kz-q-card">${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}${hideText(q.type) ? '<div class="kz-q-text small">Lengkapi kalimat berikut.</div>' : `<div class="kz-q-text">${esc(q.text)}</div>`}</div>
       ${body}</div>`;
+    const host = $('#qt-host');
+    if (host) { const h = QT.mount(host, q, '', {}); $('#qt-send').onclick = () => send(h.get() || ''); }
     const total = d.time * 1000;
     G.deadline = Date.now() + d.remainingMs;
     const tick = () => {
@@ -236,13 +248,20 @@
     try { r = await api('answer', { qid: G.q.id, answer }); }
     catch (e) { if (e.status === 409) return nextQ(); toast(e.message, 'bad'); G.busy = false; return; }
     G.me = r.me; setHud();
+    if (r.info) {
+      const fi = document.createElement('div'); fi.className = 'kz-feedback info';
+      fi.innerHTML = `<div class="kz-fb-ico">${G.q.type === 'polling' ? '📊' : '📖'}</div><div class="kz-fb-title">${G.q.type === 'polling' ? 'Pilihanmu tercatat!' : 'Lanjut!'}</div><div class="kz-fb-rank">⭐ ${fmt(r.me.score)}</div>`;
+      document.body.appendChild(fi);
+      setTimeout(() => { fi.classList.add('out'); setTimeout(() => fi.remove(), 300); nextQ(); }, 1100);
+      return;
+    }
     if (r.correctLabel) $$('.kz-opt').forEach(b => { if (b.dataset.v === r.correctLabel) b.classList.add('right'); });
     (r.correct ? sfx.ok : sfx.bad)();
     const fb = document.createElement('div');
     fb.className = 'kz-feedback ' + (r.correct ? 'ok' : 'bad');
     fb.innerHTML = `<div class="kz-fb-ico">${r.correct ? '🎉' : (r.late ? '⏰' : '💪')}</div>
-      <div class="kz-fb-title">${r.correct ? pick(RIGHT) : (r.late || answer === '' ? 'Waktu habis!' : pick(WRONG))}</div>
-      ${r.correct ? `<div class="kz-fb-pts">+${fmt(r.points)}</div>` : ''}
+      <div class="kz-fb-title">${r.correct ? pick(RIGHT) : (r.late || answer === '' ? 'Waktu habis!' : r.partial ? 'Hampir!' : pick(WRONG))}</div>
+      ${r.correct ? `<div class="kz-fb-pts">+${fmt(r.points)}</div>` : r.partial ? `<div class="kz-fb-pts">+${fmt(r.points)}</div><div class="kz-fb-streak">Benar sebagian (${Math.round(r.partial * 100)}%)</div>` : ''}
       ${r.streak > 1 ? `<div class="kz-fb-streak">🔥 Beruntun ${r.streak}!</div>` : ''}
       ${!r.correct && r.correctText ? `<div class="kz-fb-key">Jawaban benar: <b>${esc(r.correctText)}</b></div>` : ''}
       <div class="kz-fb-rank">Peringkat #${r.me.rank} dari ${r.players} · ⭐ ${fmt(r.me.score)}</div>`;
@@ -325,7 +344,7 @@
     }, 10000);
     if (E.dirty) scheduleSave(0);
   }
-  const answered = q => E.ans[q.id] !== undefined && String(E.ans[q.id]).trim() !== '';
+  const answered = q => isAns(E.ans[q.id]);
   function examTick() {
     if (!E.deadline) return;
     const left = E.deadline - Date.now();
@@ -334,20 +353,15 @@
   }
   function examRender() {
     const q = E.qs[E.idx], n = E.qs.length, a = E.ans[q.id];
-    let body;
-    if (q.type === 'pg') body = q.options.map((o, k) => `<div class="exam-opt ${a === o.label ? 'sel' : ''}" data-v="${esc(o.label)}"><span class="lab">${'ABCDEF'[k]}</span><span>${esc(o.text)}</span></div>`).join('');
-    else if (q.type === 'bs') body = [['B', 'Benar'], ['S', 'Salah']].map(([v, l]) => `<div class="exam-opt ${a === v ? 'sel' : ''}" data-v="${v}"><span class="lab">${v}</span><span>${l}</span></div>`).join('');
-    else if (q.type === 'isian') body = `<input id="ex-ans" class="ex-input" autocomplete="off" placeholder="Tulis jawaban singkat…" value="${esc(a || '')}">`;
-    else body = `<textarea id="ex-ans" class="ex-input" style="min-height:180px" placeholder="Tulis jawaban uraianmu…">${esc(a || '')}</textarea>`;
     const done = E.qs.filter(answered).length;
     view.innerHTML = `<div class="exam-wrap">
-      <div class="kz-card exam-bar"><b id="ex-time" class="ex-time">${E.deadline ? '⏱ --:--' : '⏱ bebas'}</b><span class="small muted">${done}/${n} dijawab</span><span class="small muted" id="ex-save">✓ Tersimpan</span><button class="btn ok sm" id="ex-finish">Selesai</button></div>
+      <div class="kz-card exam-bar"><b id="ex-time" class="ex-time">${E.deadline ? '⏱ --:--' : '⏱ bebas'}</b><span class="small muted" id="ex-done">${done}/${n} dijawab</span><span class="small muted" id="ex-save">✓ Tersimpan</span><button class="btn ok sm" id="ex-finish">Selesai</button></div>
       <div class="exam-grid">
         <div class="kz-card">
-          <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${{ pg: 'Pilihan Ganda', bs: 'Benar/Salah', isian: 'Isian', uraian: 'Uraian' }[q.type]}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
-          ${q.image ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}
-          <div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>
-          ${body}
+          <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${typeLabel(q.type)}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
+          ${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}
+          ${hideText(q.type) ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>`}
+          <div id="qt-host"></div>
           <div class="btns" style="justify-content:space-between;margin-top:16px">
             <button class="btn ghost" id="ex-prev" ${E.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
             <label class="ragu ${E.flags[q.id] ? 'on' : ''}"><input type="checkbox" id="ex-flag" ${E.flags[q.id] ? 'checked' : ''}> Ragu-ragu</label>
@@ -359,8 +373,14 @@
           <div class="ex-legend small muted"><span><i class="done"></i>dijawab</span><span><i class="flag"></i>ragu-ragu</span><span><i></i>belum</span></div></div>
       </div></div>`;
     const go = k => { E.idx = k; backup(); examRender(); window.scrollTo(0, 0); };
-    $$('.exam-opt').forEach(el => el.onclick = () => { E.ans[q.id] = el.dataset.v; changed(); examRender(); });
-    const inp = $('#ex-ans'); if (inp) { inp.oninput = () => { E.ans[q.id] = inp.value; changed(); }; }
+    QT.mount($('#qt-host'), q, a, {
+      media: uploadMedia,
+      onChange: v => {
+        E.ans[q.id] = v; changed();
+        const b = $$('.qnav button')[E.idx]; if (b && !E.flags[q.id]) b.classList.toggle('done', answered(q));
+        const dn = $('#ex-done'); if (dn) dn.textContent = E.qs.filter(answered).length + '/' + n + ' dijawab';
+      }
+    });
     $('#ex-flag').onchange = e => { if (e.target.checked) E.flags[q.id] = true; else delete E.flags[q.id]; changed(); examRender(); };
     if ($('#ex-prev')) $('#ex-prev').onclick = () => go(E.idx - 1);
     if ($('#ex-next')) $('#ex-next').onclick = () => go(E.idx + 1);
@@ -383,7 +403,7 @@
   async function examSubmit(force) {
     if (E.submitting) return;
     if (!force) {
-      const left = E.qs.filter(q => !answered(q)).length, ragu = Object.keys(E.flags).length;
+      const left = E.qs.filter(q => q.type !== 'slide' && !answered(q)).length, ragu = Object.keys(E.flags).length;
       const ok = await confirmDlg(`${left ? `Masih ada <b>${left} soal</b> belum dijawab.<br>` : ''}${ragu ? `Ada <b>${ragu} soal</b> ditandai ragu-ragu.<br>` : ''}Kumpulkan jawaban sekarang? Setelah dikumpulkan jawaban tidak bisa diubah.`);
       if (!ok) return;
     }
@@ -408,7 +428,7 @@
     const r = me.result;
     view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:520px;margin:5vh auto 0">
       <div class="kz-big-ico">✅</div><h2>Jawaban terkirim</h2><p>${esc(me.nickname)}</p>
-      ${r ? `<div class="kz-final-score">${(+r.score).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div><div class="muted">nilai ujian</div>${r.needsReview ? '<p class="note warn" style="margin-top:12px">Soal uraian akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
+      ${r ? `<div class="kz-final-score">${(+r.score).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div><div class="muted">nilai ujian</div>${r.needsReview ? '<p class="note warn" style="margin-top:12px">Soal uraian/gambar/rekaman akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
       ${me.violations ? `<p class="small" style="color:var(--bad)">Tercatat ${me.violations} kali keluar dari halaman ujian.</p>` : ''}
       <p class="small muted">Kamu boleh menutup halaman ini.</p></div>`;
   }

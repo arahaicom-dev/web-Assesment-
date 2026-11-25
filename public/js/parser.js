@@ -16,13 +16,16 @@
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
 
-  const DEFAULT_POINTS = { pg: 1, bs: 1, isian: 2, uraian: 4 };
+  const DEFAULT_POINTS = { pg: 1, pgk: 2, bs: 1, isian: 2, angka: 2, uraian: 4, jodoh: 4, urut: 3, kelompok: 4, seret: 3, dropdown: 3, titik: 2, label: 4, gambar: 5, suara: 5, polling: 0, slide: 0 };
+  const MANUAL_TYPES = ['uraian', 'gambar', 'suara'];
+  const UNGRADED_TYPES = ['polling', 'slide'];
   const LETTERS = 'ABCDEFGH';
 
   const SECTION_KEYWORDS = [
     { type: 'bs', re: /benar\s*(atau|\/|-|dan)\s*salah|true\s*(or|\/)\s*false|\(\s*B\s*\/\s*S\s*\)/i },
     { type: 'pg', re: /pilihan\s*ganda|pilihlah|berilah\s+tanda\s+silang|tanda\s+silang|multiple\s*choice|jawaban\s+yang\s+(paling\s+)?(benar|tepat)\s*!?\s*$/i },
-    { type: 'isian', re: /\bisian\b|isilah|lengkapilah|titik[\s-]*titik|jawaban\s+singkat|menjodohkan|jodohkan/i },
+    { type: 'jodoh', re: /menjodohkan|jodohkan|pasangkan(lah)?\b/i },
+    { type: 'isian', re: /\bisian\b|isilah|lengkapilah|titik[\s-]*titik|jawaban\s+singkat/i },
     { type: 'uraian', re: /\buraian\b|\besa[iy]\b|\bessay\b|jawablah\s+(pertanyaan|soal)|jawablah\s+dengan\s+(benar|tepat|jelas|singkat)/i }
   ];
 
@@ -116,6 +119,15 @@
   }
   function isBlankAnswer(v) { return !String(v || '').replace(/[\s._\-…]/g, ''); }
 
+  const MULTI_HINT = /(jawaban(nya)?\s+)?lebih\s+dari\s+satu|pilih(lah)?\s+(dua|tiga|2|3)\s+jawaban|jawaban\s+benar\s+(ada\s+)?(dua|tiga|2|3)/i;
+  /** "A, C" / "A dan C" / "AC" → "A,C"; satu huruf → null */
+  function multiKey(v) {
+    const t = String(v || '').trim();
+    if (!/^\(?[A-Ha-h]\)?(\s*(,|;|\/|&|dan|\+)?\s*\(?[A-Ha-h]\)?)+\s*\.?$/i.test(t)) return null;
+    const L = t.toUpperCase().replace(/DAN/g, ' ').match(/[A-H]/g) || [];
+    const u = L.filter((x, i) => L.indexOf(x) === i).sort();
+    return u.length >= 2 ? u.join(',') : null;
+  }
   function finalizeQuestion(q) {
     q.text = q.text.replace(/\s{2,}/g, ' ').trim();
     q.options.forEach(o => { o.text = o.text.replace(/\s{2,}/g, ' ').trim(); });
@@ -134,6 +146,7 @@
     markAnswerInOptions(q);
 
     const sec = q.section;
+    if (sec === 'jodoh') { q.type = 'jodoh-item'; return q; }
     const optsBS = q.options.length === 2 && q.options.every(o => normBS(o.text));
     if (optsBS) {
       q.type = 'bs';
@@ -156,9 +169,36 @@
       else q.type = 'uraian';
     }
     if (q.type === 'bs' && q.answer) q.answer = normBS(q.answer) || q.answer;
+    if (q.type === 'pg' && (multiKey(q.answer) || MULTI_HINT.test(q.text))) { q.type = 'pgk'; if (q.answer) q.answer = multiKey(q.answer) || String(q.answer).trim().charAt(0).toUpperCase(); }
     if (q.type === 'pg' && q.answer) q.answer = String(q.answer).trim().charAt(0).toUpperCase();
     if (!q.points) q.points = DEFAULT_POINTS[q.type];
     return q;
+  }
+
+  /** Butir-butir bagian "Jodohkan" (kiri bernomor, kanan berhuruf) → satu soal menjodohkan. */
+  function mergeJodoh(questions, warnings) {
+    for (let i = 0; i < questions.length; i++) {
+      if (questions[i].type !== 'jodoh-item') continue;
+      let j = i; while (j < questions.length && questions[j].type === 'jodoh-item') j++;
+      const group = questions.slice(i, j), rights = {}, lefts = [];
+      group.forEach(g => {
+        let left = g.text;
+        const m = g.text.match(/^(.*?)\s+\(?([a-hA-H])\s*[.)]\s+(.+)$/);
+        if (m) { left = m[1].trim(); rights[m[2].toUpperCase()] = m[3].trim(); }
+        g.options.forEach(o => { rights[o.label.toUpperCase()] = o.text; });
+        lefts.push({ text: left.replace(/[.\s]+$/, ''), key: (g.answer || '').trim().charAt(0).toUpperCase() });
+      });
+      const letters = Object.keys(rights).sort();
+      let guessed = false;
+      const pairs = lefts.map((l, k) => {
+        let r = l.key && rights[l.key];
+        if (!r) { r = rights[letters[k]] || ''; guessed = true; }
+        return { l: l.text, r };
+      }).filter(p => p.l && p.r);
+      if (guessed) warnings.push('Soal menjodohkan no. ' + group[0].num + ': kunci tidak lengkap, pasangan disusun berurutan — mohon periksa.');
+      const q = { id: group[0].id, num: group[0].num, type: 'jodoh', section: 'jodoh', text: group[0].secTitle || 'Jodohkan pasangan yang tepat!', options: [], answer: null, pairs, points: Math.max(DEFAULT_POINTS.jodoh, pairs.length), line: group[0].line };
+      questions.splice(i, j - i, q);
+    }
   }
 
   /** Parse bagian kunci jawaban. */
@@ -216,7 +256,8 @@
       if (!target) continue;
       used.add(target.id);
       const v = k.value.trim();
-      if (target.type === 'pg') {
+      if ((target.type === 'pg' || target.type === 'pgk') && multiKey(v)) { target.type = 'pgk'; target.answer = multiKey(v); applied++; }
+      else if (target.type === 'pg' || target.type === 'pgk') {
         const lm = v.match(/^\(?([A-Ha-h])\)?(?:[.)\s]|$)/);
         if (lm) { target.answer = lm[1].toUpperCase(); applied++; }
         else {
@@ -249,7 +290,7 @@
     let mainDelim = null;    // pemisah nomor soal yang dominan
     let delimCount = {};
     let subList = null;      // {delim, last}
-    let keyStart = -1, keyFirst = null;
+    let keyStart = -1, keyFirst = null, sectionTitle = '';
     const sectionOrder = [];
     let lastTarget = 'text'; // ke mana baris lanjutan ditempel: 'text' | 'option'
 
@@ -274,7 +315,7 @@
       // Bagian / instruksi
       const st = sectionTypeOf(t);
       if (st && !(cur && cur.options.length && /^[A-H]\s*[.)]/.test(t) && LETTERS[cur.options.length] === t[0] && !/^[A-H]\s*[.)]\s*(pilih|isi|jawab|beri|lengkap|uraian|esai|benar)/i.test(t))) {
-        push(); cur = null; section = st; sectionChanged = true; subList = null; sectionOrder.push(st);
+        push(); cur = null; section = st; sectionChanged = true; subList = null; sectionOrder.push(st); sectionTitle = t.replace(/^(?:[IVX]{1,4}|[A-H])\s*[.)]\s*/, '');
         continue;
       }
 
@@ -318,7 +359,7 @@
         if (accept) {
           push();
           if (num !== lastNum + 1 && !(num === 1)) warnings.push('Nomor soal melompat dari ' + lastNum + ' ke ' + num + '.');
-          cur = { id: uid(), num, type: null, section, text: rest, options: [], answer: null, points: null, line: i };
+          cur = { id: uid(), num, type: null, section, secTitle: sectionTitle, text: rest, options: [], answer: null, points: null, line: i };
           lastNum = num; sectionChanged = false; subList = null; lastTarget = 'text';
           delimCount[delim] = (delimCount[delim] || 0) + 1;
           mainDelim = Object.keys(delimCount).sort((a, b) => delimCount[b] - delimCount[a])[0];
@@ -392,19 +433,23 @@
       keysApplied = applyKeys(questions, keys, warnings);
     }
 
+    mergeJodoh(questions, warnings);
+
     questions.forEach(q => {
+      if (q.type === 'pgk' && !q.answer) warnings.push('Soal no. ' + q.num + ' (pilihan ganda kompleks) belum memiliki kunci jawaban.');
       if (q.type === 'pg' && !q.answer) warnings.push('Soal no. ' + q.num + ' (pilihan ganda) belum memiliki kunci jawaban.');
       if (q.type === 'pg' && q.answer && !q.options.some(o => o.label === q.answer)) warnings.push('Kunci soal no. ' + q.num + ' (' + q.answer + ') tidak ada di pilihan.');
       if (!q.text) warnings.push('Soal no. ' + q.num + ' tidak memiliki teks pertanyaan.');
-      delete q.section;
+      delete q.section; delete q.secTitle;
     });
 
     const count = t => questions.filter(q => q.type === t).length;
+    const byType = {}; questions.forEach(q => { byType[q.type] = (byType[q.type] || 0) + 1; });
     return {
       questions,
       warnings,
       keyLine: keyStart >= 0 ? keyStart - 1 : -1,
-      stats: { total: questions.length, pg: count('pg'), bs: count('bs'), isian: count('isian'), uraian: count('uraian'), keysApplied }
+      stats: { total: questions.length, pg: count('pg'), bs: count('bs'), isian: count('isian'), uraian: count('uraian'), keysApplied, byType }
     };
   }
 
@@ -455,28 +500,80 @@
    * Nilai satu lembar jawaban.
    * @returns {{score:number, earned:number, total:number, detail:Array, needsReview:boolean}}
    */
+  /* ---------- penilaian per jenis soal ---------- */
+  const parseJ = v => { if (Array.isArray(v) || (v && typeof v === 'object')) return v; try { return JSON.parse(v); } catch (e) { return null; } };
+  const blanksOf = text => { const out = []; String(text || '').replace(/\[\[(.+?)\]\]/g, (m, x) => { out.push(x); return m; }); return out; };
+  const labelSet = v => String(v || '').toUpperCase().split(/[^A-H]+/).filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).sort();
+  function numOf(v) { const m = String(v == null ? '' : v).trim().replace(/\s/g, '').replace(',', '.').match(/^-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : NaN; }
+  /** Apakah jawaban sudah diisi (untuk penanda "dijawab"). */
+  function isAnswered(q, ans) {
+    if (ans === undefined || ans === null) return false;
+    const s0 = String(ans).trim(); if (!s0) return false;
+    const j = parseJ(ans);
+    if (Array.isArray(j)) return j.some(x => x !== null && x !== '' && x !== undefined);
+    if (j && typeof j === 'object') return Object.keys(j).length > 0;
+    return true;
+  }
+  /**
+   * Nilai satu jawaban → pecahan 0..1, null (dinilai manual), atau undefined (tidak dinilai: polling/slide).
+   */
+  function gradeOne(q, ans) {
+    const t = q.type;
+    if (UNGRADED_TYPES.indexOf(t) >= 0) return undefined;
+    if (MANUAL_TYPES.indexOf(t) >= 0) return null;
+    if (!isAnswered(q, ans)) return 0;
+    if (t === 'pg') return q.answer && String(ans).trim().toUpperCase() === String(q.answer).trim().toUpperCase() ? 1 : 0;
+    if (t === 'bs') return q.answer && normBS(ans) && normBS(ans) === normBS(q.answer) ? 1 : 0;
+    if (t === 'isian') return matchShort(ans, q.answer) ? 1 : 0;
+    if (t === 'angka') { const a = numOf(ans), k = numOf(q.answer), tol = Math.abs(+q.tol || 0); return isFinite(a) && isFinite(k) && Math.abs(a - k) <= tol + 1e-9 ? 1 : 0; }
+    if (t === 'pgk') {
+      const K = labelSet(q.answer), A = labelSet(ans); if (!K.length) return 0;
+      const hit = A.filter(x => K.indexOf(x) >= 0).length, wrong = A.length - hit;
+      return Math.max(0, (hit - wrong) / K.length);
+    }
+    const j = parseJ(ans);
+    if (t === 'jodoh') { const n = (q.pairs || []).length; if (!n || !Array.isArray(j)) return 0; let c = 0; for (let i = 0; i < n; i++) if (j[i] !== null && j[i] !== undefined && +j[i] === i) c++; return c / n; }
+    if (t === 'urut') { const n = (q.items || []).length; if (!n || !Array.isArray(j)) return 0; let c = 0; for (let i = 0; i < n; i++) if (+j[i] === i) c++; return c / n; }
+    if (t === 'kelompok') {
+      let n = 0, c = 0; if (!j || typeof j !== 'object') return 0;
+      (q.cats || []).forEach((cat, ci) => (cat.items || []).forEach((it, ii) => { n++; if (+j[ci + '-' + ii] === ci) c++; }));
+      return n ? c / n : 0;
+    }
+    if (t === 'seret') { const bl = blanksOf(q.text); if (!bl.length || !Array.isArray(j)) return 0; let c = 0; bl.forEach((b, i) => { if (j[i] && matchShort(j[i], b)) c++; }); return c / bl.length; }
+    if (t === 'dropdown') { const bl = blanksOf(q.text); if (!bl.length || !Array.isArray(j)) return 0; let c = 0; bl.forEach((b, i) => { const ok = String(b.split('|')[0] || '').trim().toLowerCase(); if (j[i] !== null && j[i] !== undefined && String(j[i]).trim().toLowerCase() === ok) c++; }); return c / bl.length; }
+    if (t === 'titik') {
+      const sp = q.spot; if (!sp) return 0; const m = String(ans).split(',').map(Number); if (m.length < 2 || !isFinite(m[0])) return 0;
+      const ar = +sp.ar || 1, dx = m[0] - sp.x, dy = (m[1] - sp.y) * ar; return Math.sqrt(dx * dx + dy * dy) <= (+sp.r || 0.08) ? 1 : 0;
+    }
+    if (t === 'label') { const mk = q.marks || []; if (!mk.length || !Array.isArray(j)) return 0; let c = 0; mk.forEach((m, i) => { if (j[i] && normAnswer(j[i]) === normAnswer(m.label)) c++; }); return c / mk.length; }
+    return 0;
+  }
+
+  /**
+   * Nilai satu lembar jawaban.
+   * @returns {{score:number, earned:number, total:number, detail:Array, needsReview:boolean}}
+   */
   function grade(questions, answers, manual) {
     manual = manual || {};
     let earned = 0, total = 0, needsReview = false;
     const detail = questions.map(q => {
+      const ans = answers ? answers[q.id] : undefined;
+      const f = gradeOne(q, ans);
+      if (f === undefined) return { id: q.id, got: 0, pts: 0, status: 'tidak dinilai', auto: true };
       const pts = +q.points || DEFAULT_POINTS[q.type] || 1;
       total += pts;
-      const ans = answers ? answers[q.id] : undefined;
-      let got = 0, status = 'salah', auto = true;
-      if (q.type === 'pg') { got = ans && q.answer && String(ans).toUpperCase() === String(q.answer).toUpperCase() ? pts : 0; }
-      else if (q.type === 'bs') { got = ans && q.answer && normBS(ans) === normBS(q.answer) ? pts : 0; }
-      else if (q.type === 'isian') { got = matchShort(ans, q.answer) ? pts : 0; }
-      else { auto = false; got = suggestEssay(ans, q.answer, pts); }
+      let got, status, auto = f !== null;
+      if (f === null) got = q.type === 'uraian' ? suggestEssay(ans, q.answer, pts) : 0;
+      else got = Math.round(f * pts * 100) / 100;
       if (manual[q.id] !== undefined && manual[q.id] !== null && manual[q.id] !== '') {
-        got = Math.max(0, Math.min(pts, +manual[q.id])); auto = false;
-        status = 'dikoreksi';
-      } else if (q.type === 'uraian') { status = 'perlu koreksi'; needsReview = needsReview || !!(ans && String(ans).trim()); }
-      if (status !== 'dikoreksi' && status !== 'perlu koreksi') status = got >= pts ? 'benar' : (got > 0 ? 'sebagian' : 'salah');
-      if (!ans || !String(ans).trim()) { if (status !== 'dikoreksi') status = 'kosong'; }
+        got = Math.max(0, Math.min(pts, +manual[q.id])); auto = false; status = 'dikoreksi';
+      } else if (f === null) { status = 'perlu koreksi'; needsReview = needsReview || isAnswered(q, ans); }
+      else status = got >= pts ? 'benar' : (got > 0 ? 'sebagian' : 'salah');
+      if (!isAnswered(q, ans) && status !== 'dikoreksi') status = 'kosong';
       earned += got;
       return { id: q.id, got, pts, status, auto };
     });
-    return { score: total ? Math.round(earned / total * 10000) / 100 : 0, earned, total, detail, needsReview };
+    return { score: total ? Math.round(earned / total * 10000) / 100 : 0, earned: Math.round(earned * 100) / 100, total, detail, needsReview };
   }
 
   /* ---------------- Ekstraksi PDF (browser) ---------------- */
@@ -626,7 +723,7 @@
   }
 
   return {
-    parse, grade, matchShort, suggestEssay, normBS, itemsToLines, layoutLines, assignImages, extractPdf,
+    parse, grade, gradeOne, isAnswered, blanksOf, parseJ, matchShort, suggestEssay, normBS, normAnswer, MANUAL_TYPES, UNGRADED_TYPES, itemsToLines, layoutLines, assignImages, extractPdf,
     normalizeText, splitInlineOptions, DEFAULT_POINTS
   };
 });

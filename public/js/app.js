@@ -8,7 +8,32 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const st = () => S.state;
   const fmt = (n, d) => C.isNum(n) ? n.toLocaleString('id-ID', { maximumFractionDigits: d == null ? 2 : d }) : '–';
-  const TYPE_LABEL = { pg: 'Pilihan Ganda', bs: 'Benar/Salah', isian: 'Isian Singkat', uraian: 'Uraian' };
+  const QT = window.QT;
+  const TYPE_LABEL = {}; QT.ORDER.forEach(k => { TYPE_LABEL[k] = QT.TYPES[k].label; });
+  const isManual = t => P.MANUAL_TYPES.indexOf(t) >= 0;
+  const typeSummary = qs => QT.ORDER.map(t => { const n = qs.filter(x => x.type === t).length; return n ? n + ' ' + TYPE_LABEL[t] : ''; }).filter(Boolean).join(' · ');
+  /** Muat gambar/rekaman jawaban yang disimpan di server (jenis Menggambar / Rekam Suara). */
+  function loadMedia(root) {
+    $$('.qt-media[data-media]', root).forEach(async el => {
+      try {
+        const r = await S.api('media/' + encodeURIComponent(el.dataset.media));
+        el.innerHTML = el.dataset.kind === 'audio' ? `<audio controls src="${r.data}"></audio>` : `<img src="${r.data}" class="zoomable" style="max-width:100%;border-radius:10px;border:1px solid var(--border);background:#fff">`;
+      } catch (e) { el.textContent = 'Gagal memuat: ' + e.message; }
+    });
+  }
+  /** Kartu jawaban murid + kunci untuk halaman koreksi. */
+  function reviewAnsHTML(q, ans) {
+    const skipKey = ['uraian', 'gambar', 'suara', 'polling', 'slide'].indexOf(q.type) >= 0 && !q.answer;
+    return `<div class="rv-ans"><div class="small muted">Jawaban murid:</div><div class="rv-box">${QT.answerHTML(q, ans)}</div>${skipKey || q.type === 'polling' || q.type === 'slide' ? '' : `<div class="small muted">${isManual(q.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(q))}</b></div>`}</div>`;
+  }
+  /** Pratinjau satu soal seperti tampilan murid (bisa dicoba) + kunci. */
+  function previewCard(x, i) {
+    return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${QT.TYPES[x.type].icon} ${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span></div>
+      ${x.image && x.type !== 'titik' && x.type !== 'label' ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}${x.type === 'seret' || x.type === 'dropdown' ? '' : `<div class="q-text">${esc(x.text)}</div>`}
+      <div class="pv-mount" data-pv="${i}"></div>
+      ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
+  }
+  function mountPreviews(m, qs) { $$('[data-pv]', m).forEach(el => { const q = qs[+el.dataset.pv]; QT.mount(el, QT.publicView(q, 'pv'), '', {}); }); }
 
   /* ================= Utilitas UI ================= */
   function toast(msg, kind) {
@@ -810,10 +835,8 @@
         ${q.questions.map((qq, i) => {
           const d = res.detail[i]; const ans = sub.answers[qq.id];
           const pill = d.status === 'benar' ? 'ok' : d.status === 'salah' || d.status === 'kosong' ? 'bad' : 'warn';
-          let ansHtml = '';
-          if (qq.type === 'pg') ansHtml = `Jawaban: <b>${esc(ans || '–')}</b>${ans ? ' — ' + esc((qq.options.find(o => o.label === ans) || {}).text || '') : ''} · Kunci: <b>${esc(qq.answer || '?')}</b>`;
-          else if (qq.type === 'bs') ansHtml = `Jawaban: <b>${ans === 'B' ? 'Benar' : ans === 'S' ? 'Salah' : '–'}</b> · Kunci: <b>${qq.answer === 'B' ? 'Benar' : qq.answer === 'S' ? 'Salah' : '?'}</b>`;
-          else ansHtml = `<div style="white-space:pre-wrap;padding:8px;border-radius:8px;background:var(--surface-2);margin:4px 0">${esc(ans || '(kosong)')}</div><div class="small muted">Kunci/pedoman: ${esc(qq.answer || '–')}</div>`;
+          const ansHtml = reviewAnsHTML(qq, ans);
+          if (d.status === 'tidak dinilai') return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(qq.text)}</div>${qq.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
           return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill ${pill}">${d.status}</span>
             <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${d.pts}" data-man="${qq.id}" value="${d.got}"> / ${d.pts}</span></div>
             <div class="q-text small">${esc(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
@@ -821,6 +844,7 @@
         <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`;
     };
     const m = modal(render(), { wide: true, noFocus: true });
+    loadMedia(m);
     $$('[data-man]', m).forEach(inp => inp.addEventListener('change', () => { manual[inp.dataset.man] = inp.value; }));
     $('#rv-save', m).onclick = () => {
       $$('[data-man]', m).forEach(inp => { manual[inp.dataset.man] = inp.value; });
@@ -863,23 +887,17 @@
         html: `<div class="card tilt" style="max-width:640px;margin:0 auto;text-align:center"><div class="z1">
           <div class="big" style="font-size:54px">📝</div><h2>${esc(a.title)}</h2>
           <p>Halo <b>${esc(stu.name)}</b>! Kamu akan mengerjakan <b>${q.questions.length} soal</b> ${esc(subj.name)}.</p>
-          <p class="muted small">${['pg', 'bs', 'isian', 'uraian'].map(t => { const n = q.questions.filter(x => x.type === t).length; return n ? n + ' ' + TYPE_LABEL[t] : ''; }).filter(Boolean).join(' · ')}${a.duration ? ` · Waktu: ${a.duration} menit` : ''}</p>
+          <p class="muted small">${typeSummary(q.questions)}${a.duration ? ` · Waktu: ${a.duration} menit` : ''}</p>
           <div class="btns" style="justify-content:center"><a class="btn ghost" href="#/ujian/${a.id}">Bukan saya</a><button class="btn lg" data-act="start">Mulai Mengerjakan ▶</button></div></div></div>`,
         actions: { start: () => { ex.started = true; ex.start = Date.now(); route(); } }
       };
     }
     const qs = q.questions; const cur = qs[ex.idx];
     let timer = null;
-    const optHtml = () => {
-      const ans = ex.answers[cur.id];
-      if (cur.type === 'pg') return cur.options.map(o => `<div class="exam-opt ${ans === o.label ? 'sel' : ''}" data-act="pick" data-v="${o.label}"><span class="lab">${o.label}</span><span>${esc(o.text)}</span></div>`).join('');
-      if (cur.type === 'bs') return [['B', 'Benar'], ['S', 'Salah']].map(([v, l]) => `<div class="exam-opt ${ans === v ? 'sel' : ''}" data-act="pick" data-v="${v}"><span class="lab">${v}</span><span>${l}</span></div>`).join('');
-      if (cur.type === 'isian') return `<input id="ans-in" style="width:100%;font-size:1.05rem;padding:12px" placeholder="Tulis jawaban singkat..." value="${esc(ans || '')}">`;
-      return `<textarea id="ans-in" style="min-height:180px;font-size:1rem" placeholder="Tulis jawaban uraianmu di sini...">${esc(ans || '')}</textarea>`;
-    };
-    const answered = qs.filter(x => ex.answers[x.id] && String(ex.answers[x.id]).trim()).length;
+    const isAns = x => P.isAnswered(x, ex.answers[x.id]);
+    const answered = qs.filter(isAns).length;
     const submit = async (force) => {
-      const left = qs.length - qs.filter(x => ex.answers[x.id] && String(ex.answers[x.id]).trim()).length;
+      const left = qs.filter(x => x.type !== 'slide' && !isAns(x)).length;
       if (!force && !await confirmBox(left ? `Masih ada <b>${left} soal</b> yang belum dijawab. Tetap kumpulkan?` : 'Kumpulkan jawaban sekarang?', 'Kumpulkan')) return;
       clearInterval(timer);
       const result = P.grade(qs, ex.answers);
@@ -891,10 +909,10 @@
     return {
       html: `<div class="grid" style="grid-template-columns: minmax(0,1fr) 260px; align-items:start" id="exam-grid">
         <div class="card">
-          <div class="q-head" style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${ex.idx + 1}</span><span class="pill">${TYPE_LABEL[cur.type]}</span><span class="pill">${cur.points} poin</span><span class="muted small" style="margin-left:auto">Soal ${ex.idx + 1} dari ${qs.length}</span></div>
-          ${cur.image ? `<img src="${cur.image}" alt="gambar soal" class="zoomable q-img">` : ''}
-          <div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${esc(cur.text)}</div>
-          ${optHtml()}
+          <div class="q-head" style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${ex.idx + 1}</span><span class="pill">${QT.TYPES[cur.type].icon} ${TYPE_LABEL[cur.type]}</span>${+cur.points ? `<span class="pill">${cur.points} poin</span>` : ''}<span class="muted small" style="margin-left:auto">Soal ${ex.idx + 1} dari ${qs.length}</span></div>
+          ${cur.image && cur.type !== 'titik' && cur.type !== 'label' && cur.type !== 'gambar' ? `<img src="${cur.image}" alt="gambar soal" class="zoomable q-img">` : ''}
+          ${cur.type === 'seret' || cur.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${esc(cur.text)}</div>`}
+          <div id="qt-host"></div>
           <div class="btns" style="justify-content:space-between;margin-top:16px">
             <button class="btn ghost" data-act="prev" ${ex.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
             ${ex.idx < qs.length - 1 ? '<button class="btn" data-act="next">Berikutnya →</button>' : '<button class="btn ok" data-act="submit">✔ Kumpulkan</button>'}
@@ -903,13 +921,15 @@
         <div class="card"><h3>${esc(stu.name)}</h3>
           ${a.duration ? `<div class="pill warn" style="font-size:1rem;margin-bottom:10px">⏱ <span id="timer">--:--</span></div>` : ''}
           <div class="small muted" style="margin-bottom:6px">Terjawab ${answered}/${qs.length}</div><div class="bar" style="margin-bottom:12px"><i style="width:${answered / qs.length * 100}%"></i></div>
-          <div class="qnav">${qs.map((x, i) => `<button class="${i === ex.idx ? 'cur' : ex.answers[x.id] && String(ex.answers[x.id]).trim() ? 'done' : ''}" data-act="go" data-i="${i}">${i + 1}</button>`).join('')}</div>
+          <div class="qnav">${qs.map((x, i) => `<button class="${i === ex.idx ? 'cur' : isAns(x) ? 'done' : ''}" data-act="go" data-i="${i}">${i + 1}</button>`).join('')}</div>
           <button class="btn ok" style="width:100%;margin-top:14px" data-act="submit">✔ Kumpulkan</button></div>
         </div>`,
       mount(v) {
         if (window.innerWidth < 860) $('#exam-grid', v).style.gridTemplateColumns = '1fr';
-        const inp = $('#ans-in', v);
-        if (inp) { inp.addEventListener('input', () => { ex.answers[cur.id] = inp.value; }); inp.focus(); }
+        ex.views = ex.views || {};
+        const pv = ex.views[cur.id] = ex.views[cur.id] || QT.publicView(cur, key + cur.id);
+        QT.mount($('#qt-host', v), pv, ex.answers[cur.id], { onChange: val => { ex.answers[cur.id] = val; const b = $$('.qnav button', v)[ex.idx]; if (b) b.classList.toggle('done', P.isAnswered(cur, val)); } });
+        const inp = $('#qt-host .qt-in', v); if (inp) inp.focus();
         if (a.duration) {
           const tick = () => {
             const left = a.duration * 60 - Math.floor((Date.now() - ex.start) / 1000);
@@ -922,7 +942,6 @@
         }
       },
       actions: {
-        pick: el => { ex.answers[cur.id] = el.dataset.v; clearInterval(timer); route(); },
         next: () => { clearInterval(timer); ex.idx = Math.min(qs.length - 1, ex.idx + 1); route(); },
         prev: () => { clearInterval(timer); ex.idx = Math.max(0, ex.idx - 1); route(); },
         go: el => { clearInterval(timer); ex.idx = +el.dataset.i; route(); },
@@ -1106,11 +1125,9 @@
     return q && q.ownerId === S.user.id;
   }
   function previewQset(q) {
-    modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal</p>${q.questions.map((x, i) => `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span></div>
-      ${x.image ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}<div class="q-text">${esc(x.text)}</div>
-      ${x.type === 'pg' ? x.options.map(o => `<div class="exam-opt ${o.label === x.answer ? 'right' : ''}"><span class="lab">${o.label}</span><span>${esc(o.text)}</span></div>`).join('') : ''}
-      ${x.type !== 'pg' ? `<div class="small muted">Kunci: ${esc(x.type === 'bs' ? (x.answer === 'B' ? 'Benar' : x.answer === 'S' ? 'Salah' : '–') : (x.answer || '–'))}</div>` : ''}</div>`).join('')}
+    const m = modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal · ${typeSummary(q.questions)}</p>${q.questions.map(previewCard).join('')}
       <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
+    mountPreviews(m, q.questions);
   }
   function dupQset(q) {
     const c = JSON.parse(JSON.stringify(q)); c.id = S.uid('qs'); c.title += ' (salinan)'; c.created = Date.now();
@@ -1203,22 +1220,17 @@
     const pdfDoc = (isDraft && importDraft.pdfDoc) || editorPdf;
     setTitle(isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
     const total = w.questions.reduce((n, q) => n + (+q.points || 0), 0);
-    const c = t => w.questions.filter(x => x.type === t).length;
-    const noKey = w.questions.filter(q => (q.type === 'pg' || q.type === 'bs') && !q.answer).length;
+    const noKey = w.questions.filter(q => !QT.hasKey(q)).length;
     const qHtml = (q, i) => `
       <div class="q-card" data-qi="${i}">
         <div class="q-head"><span class="qn">${i + 1}</span>
-          <select data-qf="type">${Object.keys(TYPE_LABEL).map(k => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${TYPE_LABEL[k]}</option>`).join('')}</select>
-          <label class="small">Poin <input type="number" min="0" step="0.5" data-qf="points" value="${+q.points || 0}" style="width:70px"></label>
-          ${(q.type === 'pg' || q.type === 'bs') && !q.answer ? '<span class="pill bad">Kunci belum ada</span>' : ''}
+          <select data-qt="type">${QT.ORDER.map(k => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${QT.TYPES[k].icon} ${TYPE_LABEL[k]}</option>`).join('')}</select>
+          ${q.type === 'slide' || q.type === 'polling' ? '<span class="pill">tidak dinilai</span>' : `<label class="small">Poin <input type="number" min="0" step="0.5" data-qt="points" value="${+q.points || 0}" style="width:70px"></label>`}
+          ${QT.hasKey(q) ? '' : '<span class="pill bad">Kunci belum lengkap</span>'}
           <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
-        <textarea data-qf="text" placeholder="Teks pertanyaan">${esc(q.text)}</textarea>
-        ${q.image ? `<div class="q-img-row"><img src="${q.image}" class="zoomable" alt="gambar soal"><button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
-        ${q.type === 'pg' ? `<div style="margin-top:8px">${q.options.map((o, j) => `<div class="opt-row"><span class="lab ${q.answer === o.label ? 'key' : ''}" data-act="key" data-i="${i}" data-l="${o.label}" title="Klik untuk jadikan kunci">${o.label}</span><input type="text" data-opt="${j}" value="${esc(o.text)}"><button class="btn ghost sm" data-act="delopt" data-i="${i}" data-j="${j}">✕</button></div>`).join('')}
-          <button class="btn soft sm" data-act="addopt" data-i="${i}">+ Pilihan</button> <span class="small muted">Klik huruf untuk menandai kunci jawaban.</span></div>` : ''}
-        ${q.type === 'bs' ? `<div class="btns" style="margin-top:8px"><span class="small muted">Kunci:</span><button class="btn sm ${q.answer === 'B' ? 'ok' : 'ghost'}" data-act="key" data-i="${i}" data-l="B">Benar</button><button class="btn sm ${q.answer === 'S' ? 'danger' : 'ghost'}" data-act="key" data-i="${i}" data-l="S">Salah</button></div>` : ''}
-        ${q.type === 'isian' ? `<label class="field" style="margin:8px 0 0"><span>Kunci jawaban (alternatif pisahkan dengan / )</span><input data-qf="answer" value="${esc(q.answer || '')}"></label>` : ''}
-        ${q.type === 'uraian' ? `<label class="field" style="margin:8px 0 0"><span>Kunci / pedoman penskoran (kata kunci dipakai untuk saran skor)</span><textarea data-qf="answer" style="min-height:50px">${esc(q.answer || '')}</textarea></label>` : ''}
+        <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
+        ${q.image ? `<div class="q-img-row">${q.type === 'titik' || q.type === 'label' ? '' : `<img src="${q.image}" class="zoomable" alt="gambar soal">`}<button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
+        <div class="qt-ed">${QT.editor(q)}</div>
       </div>`;
     return {
       html: `
@@ -1226,14 +1238,14 @@
         <label class="field" style="flex:3"><span>Judul paket soal</span><input id="qs-title" value="${esc(w.title)}"></label>
         ${!pdfDoc && window.pdfjsLib ? '<button class="btn ghost" data-act="openpdf" style="margin-bottom:12px" title="Buka PDF soal untuk memotong gambarnya">📄 Buka PDF (ambil gambar)</button>' : ''}
         <div class="btns" style="margin-bottom:12px"><a class="btn ghost" href="#/bank-soal" data-act="cancel">Batal</a><button class="btn soft" data-act="preview">👁 Pratinjau Murid</button><button class="btn ok" data-act="save">💾 Simpan${isDraft ? ' ke Bank Soal' : ''}</button></div></div>
-        <div class="btns"><span class="pill pri">${w.questions.length} soal</span><span class="pill">PG ${c('pg')}</span><span class="pill">B/S ${c('bs')}</span><span class="pill">Isian ${c('isian')}</span><span class="pill">Uraian ${c('uraian')}</span><span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<span class="pill bad">${noKey} soal tanpa kunci</span>` : '<span class="pill ok">Semua kunci lengkap</span>'}
+        <div class="btns"><span class="pill pri">${w.questions.length} soal</span>${QT.ORDER.filter(t => w.questions.some(x => x.type === t)).map(t => `<span class="pill">${QT.TYPES[t].icon} ${TYPE_LABEL[t]} ${w.questions.filter(x => x.type === t).length}</span>`).join('')}<span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<span class="pill bad">${noKey} soal kuncinya belum lengkap</span>` : '<span class="pill ok">Semua kunci lengkap</span>'}
           ${isDraft && src.stats ? `<span class="pill ok">${src.stats.keysApplied} kunci dari bagian Kunci Jawaban</span>` : ''}${isDraft && src.imgCount ? `<span class="pill ok">🖼 ${src.imgCount} gambar diambil otomatis dari PDF</span>` : ''}${w.questions.some(q => q.image) ? `<span class="pill">🖼 ${w.questions.filter(q => q.image).length} soal bergambar</span>` : ''}</div>
         ${pdfDoc ? '<p class="small muted" style="margin:8px 0 0">Gambar yang belum terambil (mis. grafik/tabel berupa garis) bisa dipotong manual dengan tombol <b>✂️ Dari PDF</b> pada soalnya.</p>' : ''}
         ${isDraft && src.warnings && src.warnings.length ? `<div class="note warn" style="margin-top:10px"><b>Perlu diperiksa:</b><ul class="list-warn">${src.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>
       <div class="grid" style="grid-template-columns: minmax(0,1fr) ${isDraft && (src.thumbs || src.raw) ? 'minmax(260px, 380px)' : ''}; align-items:start" id="ed-grid">
         <div>${w.questions.map(qHtml).join('')}
-          <div class="btns"><button class="btn soft" data-act="addq" data-t="pg">+ Pilihan Ganda</button><button class="btn soft" data-act="addq" data-t="bs">+ Benar/Salah</button><button class="btn soft" data-act="addq" data-t="isian">+ Isian</button><button class="btn soft" data-act="addq" data-t="uraian">+ Uraian</button><button class="btn ghost" data-act="pts">⚖️ Atur Poin per Jenis</button></div></div>
+          <div class="btns"><button class="btn" data-act="addpick">＋ Tambah Soal (17 jenis)</button><button class="btn soft" data-act="addq" data-t="pg">+ Pilihan Ganda</button><button class="btn soft" data-act="addq" data-t="isian">+ Isian</button><button class="btn soft" data-act="addq" data-t="uraian">+ Uraian</button><button class="btn ghost" data-act="pts">⚖️ Atur Poin per Jenis</button></div></div>
         ${isDraft && (src.thumbs || src.raw) ? `<div class="card" style="position:sticky;top:12px;max-height:calc(100vh - 30px);overflow:auto">
           <div class="tabs"><button class="on" data-act="side" data-t="pdf">PDF Asli</button><button data-act="side" data-t="raw">Teks Terbaca</button></div>
           <div id="side-pdf">${(src.thumbs || []).map(t => `<img src="${t}" style="width:100%;border-radius:10px;border:1px solid var(--border);margin-bottom:8px">`).join('') || '<p class="small muted">Tidak ada pratinjau.</p>'}</div>
@@ -1244,30 +1256,28 @@
         $('#qs-title', v).addEventListener('input', e => { w.title = e.target.value; });
         $$('.q-card', v).forEach(card => {
           const q = w.questions[+card.dataset.qi];
-          $$('[data-qf]', card).forEach(inp => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
-            const f = inp.dataset.qf;
+          $$('[data-qt]', card).forEach(inp => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
+            const f = inp.dataset.qt;
             if (f === 'points') q.points = +inp.value || 0;
-            else if (f === 'type') {
-              const old = q.type; q.type = inp.value;
-              if (q.type === 'pg' && q.options.length < 2) q.options = (q.options.length ? q.options : []).concat(['A', 'B', 'C', 'D'].slice(q.options.length).map(l => ({ label: l, text: '' })));
-              if (q.type !== old && (old === 'pg' || old === 'bs' || q.type === 'bs')) q.answer = null;
-              q.points = P.DEFAULT_POINTS[q.type];
-              keepScroll();
-            } else q[f] = inp.value;
+            else if (f === 'type') { QT.convert(q, inp.value); keepScroll(); }
+            else q[f] = inp.value;
           }));
-          $$('[data-opt]', card).forEach(inp => inp.addEventListener('input', () => { q.options[+inp.dataset.opt].text = inp.value; }));
+          QT.bindEditor($('.qt-ed', card), q, keepScroll);
         });
       },
       actions: {
         side: el => { $$('.tabs button', el.parentNode).forEach(b => b.classList.toggle('on', b === el)); $('#side-pdf').classList.toggle('hidden', el.dataset.t !== 'pdf'); $('#side-raw').classList.toggle('hidden', el.dataset.t !== 'raw'); },
         cancel: () => { delete src._work; location.hash = '#/bank-soal'; },
-        key: el => { const q = w.questions[+el.dataset.i]; q.answer = q.answer === el.dataset.l ? null : el.dataset.l; keepScroll(); },
-        addopt: el => { const q = w.questions[+el.dataset.i]; q.options.push({ label: 'ABCDEFGH'[q.options.length] || '?', text: '' }); keepScroll(); },
-        delopt: el => { const q = w.questions[+el.dataset.i]; const rem = q.options.splice(+el.dataset.j, 1)[0]; q.options.forEach((o, k) => { const old = o.label; o.label = 'ABCDEFGH'[k]; if (q.answer === old) q.answer = o.label; }); if (rem && q.answer === rem.label) q.answer = null; keepScroll(); },
         delq: el => { w.questions.splice(+el.dataset.i, 1); keepScroll(); },
         up: el => { const i = +el.dataset.i; if (i > 0) { const t = w.questions[i]; w.questions[i] = w.questions[i - 1]; w.questions[i - 1] = t; keepScroll(); } },
         down: el => { const i = +el.dataset.i; if (i < w.questions.length - 1) { const t = w.questions[i]; w.questions[i] = w.questions[i + 1]; w.questions[i + 1] = t; keepScroll(); } },
-        addq: el => { const t = el.dataset.t; w.questions.push({ id: S.uid('q'), num: w.questions.length + 1, type: t, text: '', options: t === 'pg' ? ['A', 'B', 'C', 'D'].map(l => ({ label: l, text: '' })) : [], answer: null, points: P.DEFAULT_POINTS[t] }); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); },
+        addq: el => { const q = QT.blank(el.dataset.t, S.uid('q')); q.num = w.questions.length + 1; w.questions.push(q); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); },
+        addpick: () => {
+          const m = modal(`<h2>Pilih Jenis Soal</h2><p class="small muted" style="margin-top:0">Semua jenis bisa dipakai di Ujian. Yang bertanda 🎮 juga bisa dipakai di Kuis Seru mode Permainan.</p>
+            <div class="qt-picker">${QT.ORDER.map(t => `<button class="qt-pick" data-t="${t}"><span class="qt-pi">${QT.TYPES[t].icon}</span><b>${TYPE_LABEL[t]}</b><small>${QT.TYPES[t].desc}</small>${QT.TYPES[t].game ? '<i>🎮</i>' : ''}</button>`).join('')}</div>
+            <div class="foot"><button class="btn ghost" data-close>Batal</button></div>`, { wide: true, noFocus: true });
+          $$('.qt-pick', m).forEach(b => b.onclick = () => { closeModal(); const q = QT.blank(b.dataset.t, S.uid('q')); q.num = w.questions.length + 1; w.questions.push(q); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); });
+        },
         img: async el => {
           const f = await pickFile('image/*'); if (!f) return;
           const url = await resizeImage(f, 1200); w.questions[+el.dataset.i].image = url; keepScroll();
@@ -1280,17 +1290,14 @@
           catch (e) { toast('Gagal membuka PDF: ' + e.message, 'bad'); }
         },
         pts: () => {
-          const m = modal(`<h2>Atur Poin per Jenis Soal</h2><div class="row">${Object.keys(TYPE_LABEL).map(k => `<label class="field"><span>${TYPE_LABEL[k]}</span><input type="number" min="0" step="0.5" id="p-${k}" value="${(w.questions.find(q => q.type === k) || {}).points || P.DEFAULT_POINTS[k]}"></label>`).join('')}</div>
+          const m = modal(`<h2>Atur Poin per Jenis Soal</h2><div class="row">${QT.ORDER.filter(k => k !== 'slide' && k !== 'polling' && w.questions.some(q => q.type === k)).map(k => `<label class="field"><span>${TYPE_LABEL[k]}</span><input type="number" min="0" step="0.5" id="p-${k}" value="${(w.questions.find(q => q.type === k) || {}).points || P.DEFAULT_POINTS[k]}"></label>`).join('')}</div>
             <p class="small muted">Nilai akhir = (poin diperoleh ÷ total poin) × 100.</p><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="p-ok">Terapkan</button></div>`);
-          $('#p-ok', m).onclick = () => { w.questions.forEach(q => { q.points = +$('#p-' + q.type, m).value || 0; }); closeModal(); keepScroll(); };
+          $('#p-ok', m).onclick = () => { w.questions.forEach(q => { const inp = $('#p-' + q.type, m); if (inp) q.points = +inp.value || 0; }); closeModal(); keepScroll(); };
         },
         preview: () => {
-          modal(`<h2>Pratinjau: ${esc(w.title)}</h2>${w.questions.map((q, i) => `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[q.type]}</span></div>
-            ${q.image ? `<img src="${q.image}" class="zoomable q-img" alt="gambar soal">` : ''}<div class="q-text">${esc(q.text)}</div>
-            ${q.type === 'pg' ? q.options.map(o => `<div class="exam-opt ${o.label === q.answer ? 'right' : ''}"><span class="lab">${o.label}</span><span>${esc(o.text)}</span></div>`).join('') : ''}
-            ${q.type === 'bs' ? `<div class="exam-opt ${q.answer === 'B' ? 'right' : ''}"><span class="lab">B</span>Benar</div><div class="exam-opt ${q.answer === 'S' ? 'right' : ''}"><span class="lab">S</span>Salah</div>` : ''}
-            ${q.type === 'isian' || q.type === 'uraian' ? `<div class="small muted">Kunci: ${esc(q.answer || '–')}</div>` : ''}</div>`).join('')}
+          const m = modal(`<h2>Pratinjau: ${esc(w.title)}</h2><p class="small muted" style="margin-top:0">Tampilan seperti di HP murid — boleh dicoba. Pilihan diacak saat murid mengerjakan.</p>${w.questions.map(previewCard).join('')}
             <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
+          mountPreviews(m, w.questions);
         },
         save: () => {
           const title = ($('#qs-title').value || '').trim() || 'Paket Soal';
@@ -1784,8 +1791,8 @@
   function newGameModal(preset) {
     const s = st(); ensureCtx(); preset = preset || {};
     if (!s.questionSets.length) { toast('Buat atau unggah paket soal dulu di Bank Soal.', 'bad'); location.hash = '#/bank-soal'; return; }
-    const usable = q => q.questions.filter(x => ['pg', 'bs', 'isian'].includes(x.type) && x.answer).length;
-    const usableExam = q => q.questions.filter(x => x.type === 'uraian' || (['pg', 'bs', 'isian'].includes(x.type) && x.answer)).length;
+    const usable = q => q.questions.filter(x => QT.TYPES[x.type] && QT.TYPES[x.type].game && QT.hasKey(x)).length;
+    const usableExam = q => q.questions.filter(x => QT.TYPES[x.type] && QT.hasKey(x)).length;
     let mode = preset.mode === 'exam' ? 'exam' : 'game';
     const m = modal(`<h2>Buat Kuis Seru</h2>
       <div class="mode-pick"><button type="button" class="mode-card" data-mode="game"><b>🎮 Permainan</b><small>Timer per soal, poin kecepatan, papan peringkat & podium juara</small></button>
@@ -1832,8 +1839,8 @@
       $$('.only-exam', m).forEach(x => x.classList.toggle('hidden', mode !== 'exam'));
       const o = $('#g-qs', m).selectedOptions[0];
       $('#g-note', m).innerHTML = mode === 'exam'
-        ? `${o ? o.dataset.e : 0} soal dipakai (termasuk uraian; uraian dikoreksi guru). Pilih <b>kelas</b> agar murid masuk dengan nama & NIS dan nilainya bisa disimpan.`
-        : `${o ? o.dataset.g : 0} soal dipakai. Soal uraian dan soal tanpa kunci tidak dipakai di mode permainan.`;
+        ? `${o ? o.dataset.e : 0} soal dipakai — semua 17 jenis soal bisa dipakai (uraian, menggambar & rekam suara dikoreksi guru). Pilih <b>kelas</b> agar murid masuk dengan nama & NIS dan nilainya bisa disimpan.`
+        : `${o ? o.dataset.g : 0} soal dipakai. Uraian, menggambar, rekam suara, dan soal yang kuncinya belum lengkap tidak dipakai di mode permainan (pakai mode Ujian).`;
       $('#g-ok', m).textContent = mode === 'exam' ? 'Buat & Buka Layar Pengawas' : 'Buat & Buka Layar Kuis';
       if (mode === 'exam' && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
     };
@@ -1987,7 +1994,7 @@
       <div class="grid" style="grid-template-columns:minmax(0,1.7fr) minmax(260px,1fr);align-items:start;margin-top:18px" id="res-grid">
         <div class="card" style="margin:0"><div class="card-head"><h3>Hasil Ujian</h3><div class="btns">${g.classId ? `<button class="btn ok sm" data-act="save" ${ps.some(p => p.student_id) ? '' : 'disabled'}>💾 Simpan sebagai Nilai</button>` : ''}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="again">↻ Buat Ulang</button></div></div>${table}
           ${needReview ? '<div class="note warn" style="margin-top:10px">Ada jawaban uraian yang belum dikoreksi. Nilai sementara memakai saran skor otomatis — klik <b>📝 Koreksi</b> untuk memastikan.</div>' : ''}</div>
-        <div class="card" style="margin:0"><h3>Ketercapaian per Soal</h3>${d.questions.map(q => { const pc = q.n ? Math.round(q.ok / q.n * 100) : 0; return `<div class="q-acc" title="${esc(q.text)}"><b>No.${q.no}</b><div><div class="small ellipsis">${esc(q.text)}</div><div class="bar"><i style="width:${pc}%"></i></div></div><span class="pill ${q.type === 'uraian' ? '' : pc >= 70 ? 'ok' : pc >= 40 ? 'warn' : 'bad'}">${q.type === 'uraian' ? 'uraian' : pc + '%'}</span></div>`; }).join('')}</div></div>`;
+        <div class="card" style="margin:0"><h3>Ketercapaian per Soal</h3>${d.questions.map(q => { const pc = q.n ? Math.round(q.ok / q.n * 100) : 0; return `<div class="q-acc" title="${esc(q.text)}"><b>No.${q.no}</b><div><div class="small ellipsis">${esc(q.text)}</div><div class="bar"><i style="width:${pc}%"></i></div></div><span class="pill ${isManual(q.type) || q.type === 'slide' || q.type === 'polling' ? '' : pc >= 70 ? 'ok' : pc >= 40 ? 'warn' : 'bad'}">${isManual(q.type) || q.type === 'slide' || q.type === 'polling' ? TYPE_LABEL[q.type].toLowerCase() : pc + '%'}</span></div>`; }).join('')}</div></div>`;
     if (window.innerWidth < 1000) $('#res-grid').style.gridTemplateColumns = '1fr';
   }
 
@@ -2002,18 +2009,17 @@
       ${d.questions.map(q => {
         const x = det[q.id] || { got: 0, pts: q.points, status: 'kosong' }; const a = ansOf(q);
         const pill = x.status === 'benar' || x.status === 'dikoreksi' ? 'ok' : x.status === 'perlu koreksi' || x.status === 'sebagian' ? 'warn' : 'bad';
-        let ansHtml;
-        if (q.type === 'pg') ansHtml = `Jawaban: <b>${esc(a || '–')}</b>${a ? ' — ' + esc((q.options.find(o => o.label === a) || {}).text || '') : ''} · Kunci: <b>${esc(q.answer)}</b>`;
-        else if (q.type === 'bs') ansHtml = `Jawaban: <b>${a === 'B' ? 'Benar' : a === 'S' ? 'Salah' : '–'}</b> · Kunci: <b>${/^b/i.test(q.answer) ? 'Benar' : 'Salah'}</b>`;
-        else ansHtml = `<div style="white-space:pre-wrap;padding:8px;border-radius:8px;background:var(--surface-2);margin:4px 0">${esc(a || '(kosong)')}</div><div class="small muted">Kunci/pedoman: ${esc(q.answer || '–')}</div>`;
+        const ansHtml = reviewAnsHTML(q, a);
+        if (q.type === 'slide' || q.type === 'polling') return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(q.text)}</div>${q.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
         return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill ${pill}">${x.status}</span>
           <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${x.pts}" data-man="${esc(q.id)}" value="${manual[q.id] !== undefined ? manual[q.id] : x.got}"> / ${x.pts}</span></div>
           <div class="q-text small">${esc(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
       }).join('')}
       <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`, { wide: true, noFocus: true });
+    loadMedia(m);
     $('#rv-save', m).onclick = async () => {
       const man = {};
-      $$('[data-man]', m).forEach(inp => { const q = d.questions.find(x => x.id === inp.dataset.man); const x = det[q.id]; if (q.type === 'uraian' || +inp.value !== (x ? x.got : 0)) man[q.id] = inp.value; });
+      $$('[data-man]', m).forEach(inp => { const q = d.questions.find(x => x.id === inp.dataset.man); const x = det[q.id]; if (isManual(q.type) || +inp.value !== (x ? x.got : 0)) man[q.id] = inp.value; });
       try { const r = await S.api('games/' + d.game.id + '/grade', { body: { playerId: pid, manual: man } }); closeModal(); toast('Koreksi tersimpan. Nilai: ' + fmt(r.score, 1)); out.load(); }
       catch (e) { toast(e.message, 'bad'); }
     };
@@ -2034,10 +2040,10 @@
   }
 
   function saveGameScores(d) {
-    const s = st(); const g = d.game, total = d.questions.length;
+    const s = st(); const g = d.game, graded = d.questions.filter(q => q.type !== 'slide' && q.type !== 'polling'), total = graded.length;
     const cls = S.cls(g.classId);
     if (!cls) return toast('Kelas kuis ini tidak ditemukan.', 'bad');
-    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">${g.settings.mode === 'exam' ? 'Nilai tiap murid = nilai ujian (poin diperoleh ÷ total poin × 100), termasuk hasil koreksi uraian.' : 'Nilai tiap murid = benar ÷ ' + total + ' soal × 100.'} Murid yang tidak ikut dibiarkan kosong.</p>
+    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">${g.settings.mode === 'exam' ? 'Nilai tiap murid = nilai ujian (poin diperoleh ÷ total poin × 100), termasuk hasil koreksi uraian.' : 'Nilai tiap murid = jumlah benar ÷ ' + total + ' soal × 100 (jawaban benar sebagian dihitung sebagian).'} Murid yang tidak ikut dibiarkan kosong.</p>
       <label class="field"><span>Jenis asesmen</span><select id="sv-type">${['formatif', 'slm', 'diagnostik', 'sts', 'sas', 'sat'].map(k => `<option value="${k}">${T[k].name} (${T[k].short})</option>`).join('')}</select></label>
       <label class="field"><span>Mapel</span><select id="sv-subj">${s.subjects.map(x => `<option value="${x.id}" ${(g.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <label class="field"><span>Judul</span><input id="sv-title" value="${esc((g.settings.mode === 'exam' ? '' : 'Kuis Seru — ') + g.title)}"></label>
@@ -2050,7 +2056,7 @@
       const isExam = g.settings.mode === 'exam';
       d.players.forEach(p => {
         if (!p.student_id || !cls.students.some(x => x.id === p.student_id)) return;
-        const v = isExam ? p.exam_score : Math.round(p.correct / total * 100);
+        const v = isExam ? p.exam_score : total ? Math.round(graded.reduce((t, q) => { const a = (p.answers || {})[q.id]; return t + (a ? (a.f !== undefined ? +a.f : a.ok ? 1 : 0) : 0); }, 0) / total * 100) : 0;
         if (v === null || v === undefined) return;
         S.setScore(a.id, p.student_id, Math.round(v * 100) / 100); n++;
       });

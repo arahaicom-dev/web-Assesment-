@@ -93,6 +93,35 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 - **Layar guru/proyektor**: tombol **🎵 Musik** memutar musik dari laptop guru, misalnya saat menunggu murid bergabung.
 - Musik mulai setelah murid menekan tombol (aturan browser) dan berhenti otomatis saat kuis/ujian selesai.
 
+## 17 jenis soal (v5.5)
+
+Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tambah Soal (17 jenis)**.
+
+| Jenis | Cara murid menjawab (dioptimalkan untuk HP) | Penilaian | Kuis Permainan |
+|---|---|---|---|
+| Pilihan Ganda | ketuk satu pilihan | otomatis | ✓ |
+| Pilihan Ganda Kompleks | ketuk semua yang benar | otomatis, nilai sebagian | ✓ |
+| Benar / Salah | ketuk Benar/Salah | otomatis | ✓ |
+| Isian Singkat | ketik jawaban (alternatif `a/b`, toleran salah ketik) | otomatis | ✓ |
+| Jawaban Angka | ketik angka, bisa ada toleransi ± | otomatis | ✓ |
+| Menjodohkan | ketuk kiri lalu pasangan kanan | otomatis, per pasangan | ✓ |
+| Mengurutkan | susun dengan ▲ ▼ | otomatis, per posisi | ✓ |
+| Mengelompokkan | ketuk item lalu ketuk kategorinya | otomatis, per item | ✓ |
+| Seret ke Kalimat | ketuk kata lalu bagian kosong — tulis `[[jawaban]]` di soal | otomatis, per bagian | ✓ |
+| Pilihan dalam Kalimat | pilih kata di kotak — tulis `[[benar\|salah\|salah]]` | otomatis, per kotak | ✓ |
+| Titik pada Gambar | ketuk bagian gambar (guru menandai area benar) | otomatis | ✓ |
+| Label Gambar | pilih label untuk tiap penanda bernomor | otomatis, per label | ✓ |
+| Uraian | ketik jawaban panjang | saran skor + koreksi guru | – |
+| Menggambar | gambar/tulis tangan di kanvas | koreksi guru | – |
+| Rekam Suara | rekam jawaban lisan (maks. 30–120 detik) | koreksi guru | – |
+| Polling / Survei | pilih salah satu | tidak dinilai | ✓ |
+| Slide Materi | membaca materi | tidak dinilai | ✓ |
+
+- Semua jenis dipakai di **Mode Ujian** (Kuis Seru), **ujian token** (ujian.html), dan **ujian di perangkat guru**.
+- Dari PDF otomatis dikenali: pilihan ganda kompleks (kunci `A, C` atau tulisan "jawaban lebih dari satu") dan bagian **Jodohkan** (butir `1. Kiri   a. Kanan` digabung jadi satu soal menjodohkan).
+- Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
+- Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.

@@ -4,6 +4,7 @@ const express = require('express');
 const crypto = require('crypto');
 const db = require('./db');
 const P = require('../public/js/parser.js');
+const QT = require('../public/js/qtypes.js');
 
 const router = express.Router();
 const DOC_KINDS = ['settings', 'classes', 'subjects', 'assessments', 'questionSets'];
@@ -288,7 +289,7 @@ router.post('/exam/:code/start', wrap(async (req, res) => {
     const d = parseJSON(sub[0].data, {});
     return res.json({ submitted: true, result: ex.a.hideScore ? null : { score: d.result && d.result.score, needsReview: d.result && d.result.needsReview } });
   }
-  let questions = ex.qset.questions.map(q => ({ id: q.id, type: q.type, text: q.text, image: q.image || null, points: q.points, options: q.type === 'pg' ? q.options.map(o => ({ label: o.label, text: o.text })) : [] }));
+  let questions = ex.qset.questions.filter(q => QT.TYPES[q.type]).map(q => QT.publicView(q, ex.a.id + studentId + q.id));
   if (ex.a.shuffle) questions = shuffle(questions, ex.a.id + studentId);
   res.json({ submitted: false, student: { id: chk.st.id, name: chk.st.name }, questions, duration: +ex.a.duration || 0, serverTime: Date.now() });
 }));
@@ -301,7 +302,7 @@ router.post('/exam/:code/submit', wrap(async (req, res) => {
   if (chk.err) return bad(res, 401, chk.err);
   const clean = {};
   const ids = new Set(ex.qset.questions.map(q => q.id));
-  for (const k in (answers || {})) if (ids.has(k)) clean[k] = String(answers[k] == null ? '' : answers[k]).slice(0, 5000);
+  for (const k in (answers || {})) if (ids.has(k)) { const v = String(answers[k] == null ? '' : answers[k]); clean[k] = /^data:(image|audio)\//.test(v) && v.length < 4000000 ? v : v.slice(0, 5000); }
   const result = P.grade(ex.qset.questions, clean);
   const kktp = +ex.settings.kktp || 75;
   const cap = ex.settings.remedialCap !== false ? kktp : 100;

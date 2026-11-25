@@ -173,6 +173,13 @@ function schema() {
       extra LONGTEXT NULL,
       INDEX (game_id)
     )$e",
+    "CREATE TABLE IF NOT EXISTS media (
+      id CHAR(24) NOT NULL PRIMARY KEY,
+      tenant_id INT UNSIGNED NOT NULL,
+      data LONGTEXT NOT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX (tenant_id)
+    )$e",
     "CREATE TABLE IF NOT EXISTS login_fails (
       k VARCHAR(190) NOT NULL PRIMARY KEY,
       n INT NOT NULL DEFAULT 0,
@@ -372,42 +379,216 @@ function suggest_essay($given, $key, $points) {
   $ratio = min(1, $hit / max(3, (int)ceil(count($k) * 0.6)));
   return round($ratio * $points * 2) / 2;
 }
-function default_points($t) { $d = array('pg' => 1, 'bs' => 1, 'isian' => 2, 'uraian' => 4); return isset($d[$t]) ? $d[$t] : 1; }
+function default_points($t) {
+  $d = array('pg' => 1, 'pgk' => 2, 'bs' => 1, 'isian' => 2, 'angka' => 2, 'uraian' => 4, 'jodoh' => 4, 'urut' => 3, 'kelompok' => 4, 'seret' => 3, 'dropdown' => 3, 'titik' => 2, 'label' => 4, 'gambar' => 5, 'suara' => 5, 'polling' => 0, 'slide' => 0);
+  return isset($d[$t]) ? $d[$t] : 1;
+}
+function q_types() { return array('pg', 'pgk', 'bs', 'isian', 'angka', 'jodoh', 'urut', 'kelompok', 'seret', 'dropdown', 'titik', 'label', 'uraian', 'gambar', 'suara', 'polling', 'slide'); }
+function manual_type($t) { return in_array($t, array('uraian', 'gambar', 'suara'), true); }
+function ungraded_type($t) { return in_array($t, array('polling', 'slide'), true); }
+/** Jenis yang bisa dipakai di Kuis Seru mode Permainan. */
+function game_type($t) { return in_array($t, array('pg', 'pgk', 'bs', 'isian', 'angka', 'jodoh', 'urut', 'kelompok', 'seret', 'dropdown', 'titik', 'label', 'polling', 'slide'), true); }
+function arr_of($v) { return is_array($v) ? $v : (is_object($v) ? (array)$v : array()); }
+function json_ans($v) {
+  if (is_array($v)) return $v;
+  $j = json_decode((string)$v, true);
+  return is_array($j) ? $j : null;
+}
+function blanks_of($text) { preg_match_all('/\[\[(.+?)\]\]/u', (string)$text, $m); return $m[1]; }
+function label_set($v) {
+  $p = preg_split('/[^A-H]+/', strtoupper((string)$v), -1, PREG_SPLIT_NO_EMPTY);
+  $p = array_values(array_unique($p)); sort($p); return $p;
+}
+function num_of($v) {
+  $s = str_replace(',', '.', preg_replace('/\s/', '', trim((string)$v)));
+  return preg_match('/^-?\d+(\.\d+)?/', $s, $m) ? (float)$m[0] : null;
+}
+function is_answered($ans) {
+  if ($ans === null) return false;
+  if (is_array($ans)) { foreach ($ans as $x) if ($x !== null && $x !== '') return true; return false; }
+  $s = trim((string)$ans); if ($s === '') return false;
+  $j = json_decode($s, true);
+  if (is_array($j)) { if (!$j) return false; foreach ($j as $x) if ($x !== null && $x !== '') return true; return false; }
+  return true;
+}
+/** Apakah soal lengkap kuncinya (sama dengan QT.hasKey di qtypes.js). */
+function has_key($q) {
+  $t = prop($q, 'type');
+  if (manual_type($t) || ungraded_type($t)) return true;
+  if (in_array($t, array('pg', 'pgk', 'bs', 'isian', 'angka'), true)) { $k = prop($q, 'answer'); return $k !== null && $k !== ''; }
+  if ($t === 'jodoh') { $n = 0; foreach (arr_of(prop($q, 'pairs', array())) as $p) { $p = arr_of($p); if (!empty($p['l']) && !empty($p['r'])) $n++; } return $n >= 2; }
+  if ($t === 'urut') return count(array_filter(arr_of(prop($q, 'items', array())), 'strlen')) >= 2;
+  if ($t === 'kelompok') { $n = 0; foreach (arr_of(prop($q, 'cats', array())) as $c) { $c = arr_of($c); if (!empty($c['name']) && !empty($c['items'])) $n++; } return $n >= 2; }
+  if ($t === 'seret' || $t === 'dropdown') return count(blanks_of(prop($q, 'text', ''))) > 0;
+  if ($t === 'titik') return prop($q, 'image') && prop($q, 'spot');
+  if ($t === 'label') { $m = arr_of(prop($q, 'marks', array())); if (!prop($q, 'image') || !$m) return false; foreach ($m as $x) { $x = arr_of($x); if (empty($x['label'])) return false; } return true; }
+  return false;
+}
+/**
+ * Nilai satu jawaban → pecahan 0..1, null (dinilai manual) atau false (tidak dinilai: polling/slide).
+ * Sama dengan SoalParser.gradeOne di public/js/parser.js.
+ */
+function grade_one($q, $ans) {
+  $t = prop($q, 'type'); $key = prop($q, 'answer');
+  if (ungraded_type($t)) return false;
+  if (manual_type($t)) return null;
+  if (!is_answered($ans)) return 0;
+  $a = is_array($ans) ? '' : trim((string)$ans);
+  if ($t === 'pg') return ($key !== null && strtoupper($a) === strtoupper(trim((string)$key))) ? 1 : 0;
+  if ($t === 'bs') return ($key !== null && norm_bs($a) !== null && norm_bs($a) === norm_bs($key)) ? 1 : 0;
+  if ($t === 'isian') return match_short($a, $key) ? 1 : 0;
+  if ($t === 'angka') { $x = num_of($a); $k = num_of($key); $tol = abs((float)prop($q, 'tol', 0)); return ($x !== null && $k !== null && abs($x - $k) <= $tol + 1e-9) ? 1 : 0; }
+  if ($t === 'pgk') {
+    $K = label_set($key); $A = label_set($a); if (!$K) return 0;
+    $hit = count(array_intersect($A, $K)); $wrong = count($A) - $hit;
+    return max(0, ($hit - $wrong) / count($K));
+  }
+  $j = json_ans($ans);
+  if ($t === 'jodoh') { $n = count(arr_of(prop($q, 'pairs', array()))); if (!$n || !is_array($j)) return 0; $c = 0; for ($i = 0; $i < $n; $i++) if (isset($j[$i]) && $j[$i] !== null && $j[$i] !== '' && (int)$j[$i] === $i) $c++; return $c / $n; }
+  if ($t === 'urut') { $n = count(arr_of(prop($q, 'items', array()))); if (!$n || !is_array($j)) return 0; $c = 0; for ($i = 0; $i < $n; $i++) if (isset($j[$i]) && is_numeric($j[$i]) && (int)$j[$i] === $i) $c++; return $c / $n; }
+  if ($t === 'kelompok') {
+    if (!is_array($j)) return 0; $n = 0; $c = 0;
+    foreach (array_values(arr_of(prop($q, 'cats', array()))) as $ci => $cat) {
+      $cat = arr_of($cat);
+      foreach (array_values(arr_of(isset($cat['items']) ? $cat['items'] : array())) as $ii => $it) { $n++; $k = $ci . '-' . $ii; if (isset($j[$k]) && is_numeric($j[$k]) && (int)$j[$k] === $ci) $c++; }
+    }
+    return $n ? $c / $n : 0;
+  }
+  if ($t === 'seret') { $bl = blanks_of(prop($q, 'text', '')); if (!$bl || !is_array($j)) return 0; $c = 0; foreach ($bl as $i => $b) if (!empty($j[$i]) && match_short($j[$i], $b)) $c++; return $c / count($bl); }
+  if ($t === 'dropdown') {
+    $bl = blanks_of(prop($q, 'text', '')); if (!$bl || !is_array($j)) return 0; $c = 0;
+    foreach ($bl as $i => $b) { $parts = explode('|', $b); $ok = lower(trim($parts[0])); if (isset($j[$i]) && $j[$i] !== null && lower(trim((string)$j[$i])) === $ok) $c++; }
+    return $c / count($bl);
+  }
+  if ($t === 'titik') {
+    $sp = arr_of(prop($q, 'spot')); if (!$sp) return 0;
+    $m = explode(',', $a); if (count($m) < 2 || !is_numeric($m[0]) || !is_numeric($m[1])) return 0;
+    $ar = !empty($sp['ar']) ? (float)$sp['ar'] : 1; $r = !empty($sp['r']) ? (float)$sp['r'] : 0.08;
+    $dx = (float)$m[0] - (float)$sp['x']; $dy = ((float)$m[1] - (float)$sp['y']) * $ar;
+    return sqrt($dx * $dx + $dy * $dy) <= $r ? 1 : 0;
+  }
+  if ($t === 'label') {
+    $mk = array_values(arr_of(prop($q, 'marks', array()))); if (!$mk || !is_array($j)) return 0; $c = 0;
+    foreach ($mk as $i => $m) { $m = arr_of($m); if (!empty($j[$i]) && norm_answer($j[$i]) === norm_answer(isset($m['label']) ? $m['label'] : '')) $c++; }
+    return $c / count($mk);
+  }
+  return 0;
+}
 function grade($questions, $answers, $manual = array()) {
   $earned = 0; $total = 0; $needs = false; $detail = array();
   foreach ($questions as $q) {
-    $type = prop($q, 'type'); $pts = (float)prop($q, 'points', 0); if (!$pts) $pts = default_points($type);
-    $total += $pts;
+    $type = prop($q, 'type');
     $ans = isset($answers[$q->id]) ? $answers[$q->id] : '';
-    $key = prop($q, 'answer');
-    $got = 0; $status = 'salah'; $auto = true;
-    if ($type === 'pg') $got = ($ans !== '' && $key !== null && strtoupper($ans) === strtoupper((string)$key)) ? $pts : 0;
-    elseif ($type === 'bs') $got = ($ans !== '' && $key !== null && norm_bs($ans) !== null && norm_bs($ans) === norm_bs($key)) ? $pts : 0;
-    elseif ($type === 'isian') $got = match_short($ans, $key) ? $pts : 0;
-    else { $auto = false; $got = suggest_essay($ans, $key, $pts); }
+    $f = grade_one($q, $ans);
+    if ($f === false) { $detail[] = array('id' => $q->id, 'got' => 0, 'pts' => 0, 'status' => 'tidak dinilai', 'auto' => true); continue; }
+    $pts = (float)prop($q, 'points', 0); if (!$pts) $pts = default_points($type); if (!$pts) $pts = 1;
+    $total += $pts;
+    $auto = $f !== null;
+    if ($f === null) $got = $type === 'uraian' ? suggest_essay($ans, prop($q, 'answer'), $pts) : 0;
+    else $got = round($f * $pts * 100) / 100;
     if (isset($manual[$q->id]) && $manual[$q->id] !== '' && $manual[$q->id] !== null) {
       $got = max(0, min($pts, (float)$manual[$q->id])); $auto = false; $status = 'dikoreksi';
-    } elseif ($type === 'uraian') { $status = 'perlu koreksi'; if (trim($ans) !== '') $needs = true; }
+    } elseif ($f === null) { $status = 'perlu koreksi'; if (is_answered($ans)) $needs = true; }
     else $status = $got >= $pts ? 'benar' : ($got > 0 ? 'sebagian' : 'salah');
-    if (trim($ans) === '' && $status !== 'dikoreksi') $status = 'kosong';
+    if (!is_answered($ans) && $status !== 'dikoreksi') $status = 'kosong';
     $earned += $got;
     $detail[] = array('id' => $q->id, 'got' => $got, 'pts' => $pts, 'status' => $status, 'auto' => $auto);
   }
-  return array('score' => $total ? round($earned / $total * 10000) / 100 : 0, 'earned' => $earned, 'total' => $total, 'detail' => $detail, 'needsReview' => $needs);
+  return array('score' => $total ? round($earned / $total * 10000) / 100 : 0, 'earned' => round($earned * 100) / 100, 'total' => $total, 'detail' => $detail, 'needsReview' => $needs);
+}
+
+/* ---------- versi soal untuk murid (tanpa kunci), sama dengan QT.publicView ---------- */
+function seeded_shuffle($arr, $seed) {
+  $h = crc32((string)$seed); $n = count($arr);
+  for ($i = $n - 1; $i > 0; $i--) {
+    $h = ($h * 1103515245 + 12345) & 0x7fffffff;
+    $j = $h % ($i + 1);
+    $t = $arr[$i]; $arr[$i] = $arr[$j]; $arr[$j] = $t;
+  }
+  return $arr;
+}
+function public_q($q, $seed = '', $shuffleOpt = false) {
+  $t = prop($q, 'type'); $seed = $seed . $q->id;
+  $v = array('id' => $q->id, 'type' => $t, 'text' => (string)prop($q, 'text', ''), 'image' => prop($q, 'image'), 'points' => prop($q, 'points'));
+  if ($t === 'pg' || $t === 'pgk' || $t === 'polling') {
+    $opts = array(); foreach (arr_of(prop($q, 'options', array())) as $o) { $o = arr_of($o); $opts[] = array('label' => $o['label'], 'text' => isset($o['text']) ? $o['text'] : ''); }
+    $v['options'] = $shuffleOpt ? seeded_shuffle($opts, $seed . 'o') : $opts;
+  }
+  if ($t === 'pgk') $v['multi'] = true;
+  if ($t === 'jodoh') {
+    $l = array(); $r = array();
+    foreach (array_values(arr_of(prop($q, 'pairs', array()))) as $i => $p) { $p = arr_of($p); $l[] = isset($p['l']) ? $p['l'] : ''; $r[] = array('id' => $i, 'text' => isset($p['r']) ? $p['r'] : ''); }
+    $v['lefts'] = $l; $v['rights'] = seeded_shuffle($r, $seed . 'r');
+  }
+  if ($t === 'urut') { $it = array(); foreach (array_values(arr_of(prop($q, 'items', array()))) as $i => $x) $it[] = array('id' => $i, 'text' => $x); $sh = seeded_shuffle($it, $seed . 'u'); if (count($sh) > 1 && array_column($sh, 'id') === array_column($it, 'id')) $sh = array_reverse($sh); $v['items'] = $sh; }
+  if ($t === 'kelompok') {
+    $cats = array(); $it = array();
+    foreach (array_values(arr_of(prop($q, 'cats', array()))) as $ci => $c) { $c = arr_of($c); $cats[] = isset($c['name']) ? $c['name'] : ''; foreach (array_values(arr_of(isset($c['items']) ? $c['items'] : array())) as $ii => $x) $it[] = array('id' => $ci . '-' . $ii, 'text' => $x); }
+    $v['cats'] = $cats; $v['items'] = seeded_shuffle($it, $seed . 'k');
+  }
+  if ($t === 'seret' || $t === 'dropdown') {
+    $bl = blanks_of($v['text']);
+    $v['text'] = preg_replace('/\[\[(.+?)\]\]/u', '[[ ]]', $v['text']);
+    if ($t === 'seret') {
+      $chips = array(); foreach ($bl as $b) { $p = explode('/', $b); $chips[] = trim($p[0]); }
+      foreach (explode(',', (string)prop($q, 'extra', '')) as $x) if (trim($x) !== '') $chips[] = trim($x);
+      $v['chips'] = seeded_shuffle($chips, $seed . 's');
+    } else {
+      $drops = array(); foreach ($bl as $i => $b) $drops[] = seeded_shuffle(array_values(array_filter(array_map('trim', explode('|', $b)), 'strlen')), $seed . 'd' . $i);
+      $v['drops'] = $drops;
+    }
+  }
+  if ($t === 'label') {
+    $marks = array(); $labels = array();
+    foreach (arr_of(prop($q, 'marks', array())) as $m) { $m = arr_of($m); $marks[] = array('x' => $m['x'], 'y' => $m['y']); $labels[] = isset($m['label']) ? $m['label'] : ''; }
+    $v['marks'] = $marks; $v['labels'] = seeded_shuffle($labels, $seed . 'l');
+  }
+  if ($t === 'suara') $v['maxSec'] = (int)prop($q, 'maxSec', 60) ?: 60;
+  return $v;
+}
+/** Teks kunci jawaban untuk umpan balik di kuis. */
+function key_text($q) {
+  $t = prop($q, 'type'); $key = prop($q, 'answer');
+  if ($t === 'pg' || $t === 'pgk') {
+    $out = array();
+    foreach (explode(',', (string)$key) as $l) { $txt = ''; foreach (arr_of(prop($q, 'options', array())) as $o) { $o = arr_of($o); if ($o['label'] === $l) $txt = isset($o['text']) ? $o['text'] : ''; } $out[] = $l . ($txt !== '' ? '. ' . $txt : ''); }
+    return implode('; ', $out);
+  }
+  if ($t === 'bs') return norm_bs($key) === 'B' ? 'Benar' : 'Salah';
+  if ($t === 'jodoh') { $o = array(); foreach (arr_of(prop($q, 'pairs', array())) as $p) { $p = arr_of($p); $o[] = $p['l'] . ' ↔ ' . $p['r']; } return implode('; ', $o); }
+  if ($t === 'urut') { $o = array(); foreach (array_values(arr_of(prop($q, 'items', array()))) as $i => $x) $o[] = ($i + 1) . '. ' . $x; return implode('  ', $o); }
+  if ($t === 'kelompok') { $o = array(); foreach (arr_of(prop($q, 'cats', array())) as $c) { $c = arr_of($c); $o[] = $c['name'] . ': ' . implode(', ', arr_of($c['items'])); } return implode(' | ', $o); }
+  if ($t === 'seret') return implode(' · ', blanks_of(prop($q, 'text', '')));
+  if ($t === 'dropdown') { $o = array(); foreach (blanks_of(prop($q, 'text', '')) as $b) { $p = explode('|', $b); $o[] = trim($p[0]); } return implode(' · ', $o); }
+  if ($t === 'label') { $o = array(); foreach (array_values(arr_of(prop($q, 'marks', array()))) as $i => $m) { $m = arr_of($m); $o[] = ($i + 1) . '. ' . $m['label']; } return implode('  ', $o); }
+  if ($t === 'titik') return 'bagian gambar yang ditandai guru';
+  if ($t === 'angka') return (string)$key . ((float)prop($q, 'tol', 0) ? ' (±' . prop($q, 'tol') . ')' : '');
+  return (string)$key;
 }
 
 
 /* ================= Kuis Seru (permainan live) ================= */
 function now_ms() { return (int)round(microtime(true) * 1000); }
-/** Nilai satu jawaban kuis: benar/salah. */
+/** Nilai satu jawaban kuis: pecahan 0..1 (false = tidak dinilai). */
 function game_check($q, $ans) {
-  $type = prop($q, 'type'); $key = prop($q, 'answer');
-  $ans = trim((string)$ans);
-  if ($ans === '' || $key === null || $key === '') return false;
-  if ($type === 'pg') return strtoupper($ans) === strtoupper((string)$key);
-  if ($type === 'bs') return norm_bs($ans) !== null && norm_bs($ans) === norm_bs($key);
-  if ($type === 'isian') return match_short($ans, $key);
-  return false;
+  $f = grade_one($q, $ans);
+  if ($f === false) return false;
+  return $f === null ? 0 : (float)$f;
+}
+/** Simpan gambar/rekaman jawaban murid; kembalikan "media:ID". */
+function store_media($tid, $data) {
+  $data = (string)$data;
+  if (!preg_match('#^data:(image/(jpeg|png|webp)|audio/(webm|ogg|mp4|mpeg|aac|x-m4a|wav))(;[a-z0-9=.+-]+)*;base64,[A-Za-z0-9+/=]+$#i', $data)) bad(400, 'Format berkas tidak didukung.');
+  if (strlen($data) > 4000000) bad(413, 'Berkas terlalu besar (maks. ±3 MB). Rekam lebih singkat.');
+  $id = bin2hex(random_bytes(12));
+  q('INSERT INTO media (id, tenant_id, data) VALUES (?,?,?)', array($id, (int)$tid, $data));
+  return 'media:' . $id;
+}
+/** Bersihkan satu jawaban dari murid: data gambar/suara dipindah ke tabel media. */
+function clean_answer($tid, $v) {
+  $v = is_scalar($v) ? (string)$v : '';
+  if (strncmp($v, 'data:', 5) === 0) { try { return store_media($tid, $v); } catch (Exception $e) { return ''; } }
+  return str_cut($v, 5000);
 }
 /** Poin: 500 dasar + bonus kecepatan s.d. 500 + bonus beruntun 100/soal (maks. 500). */
 function game_points($ok, $elapsedMs, $limitMs, $streak, $speedBonus) {

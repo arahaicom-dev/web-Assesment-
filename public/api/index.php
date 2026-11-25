@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.4.0');
+define('APP_VERSION', '5.5.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -38,7 +38,7 @@ try {
     $base = array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'saas' => true, 'version' => APP_VERSION);
     if (!$CFG) out(array_merge($base, array('needsConfig' => true)));
     try {
-      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id')) migrate();
+      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id') || !has_table(db(), 'media')) migrate();
       $n = (int)one('SELECT COUNT(*) AS n FROM users')['n'];
       out(array_merge($base, array('needsSetup' => $n === 0)));
     } catch (PDOException $e) {
@@ -426,6 +426,14 @@ try {
     }
   }
 
+  /* ---------- berkas jawaban (gambar/rekaman) untuk koreksi guru ---------- */
+  if ($seg && $seg[0] === 'media' && isset($seg[1]) && $method === 'GET') {
+    $u = auth(); $tid = tenant_of($u);
+    $m = one('SELECT data FROM media WHERE id = ? AND tenant_id = ?', array(preg_replace('/[^a-f0-9]/', '', $seg[1]), $tid));
+    if (!$m) bad(404, 'Berkas tidak ditemukan.');
+    out(array('data' => $m['data']));
+  }
+
   /* ---------- Kuis Seru: guru ---------- */
   if ($seg && $seg[0] === 'games') {
     $u = auth(); $tid = tenant_of($u);
@@ -447,12 +455,17 @@ try {
       $questions = array(); $skipped = 0;
       foreach ((array)prop($set, 'questions', array()) as $q) {
         $t = prop($q, 'type');
-        $noKey = prop($q, 'answer') === null || prop($q, 'answer') === '';
-        if ($mode === 'exam' && $t === 'uraian') { $questions[] = array('id' => (string)$q->id, 'type' => 'uraian', 'text' => (string)prop($q, 'text', ''), 'image' => prop($q, 'image'), 'options' => array(), 'answer' => (string)prop($q, 'answer', ''), 'points' => (float)prop($q, 'points', 4) ?: 4); continue; }
-        if (!in_array($t, array('pg', 'bs', 'isian'), true) || $noKey || ($t === 'pg' && count((array)prop($q, 'options', array())) < 2)) { $skipped++; continue; }
-        $questions[] = array('id' => (string)$q->id, 'type' => $t, 'text' => (string)prop($q, 'text', ''), 'image' => prop($q, 'image'), 'options' => $t === 'pg' ? $q->options : array(), 'answer' => $q->answer, 'points' => (float)prop($q, 'points', 1) ?: 1);
+        $okType = in_array($t, q_types(), true) && ($mode === 'exam' || game_type($t));
+        $needOpts = in_array($t, array('pg', 'pgk', 'polling'), true) && count((array)prop($q, 'options', array())) < 2;
+        if (!$okType || !has_key($q) || $needOpts) { $skipped++; continue; }
+        $qa = json_decode(json_encode($q), true);
+        unset($qa['num'], $qa['line'], $qa['ownerId']);
+        $qa['id'] = (string)$q->id; $qa['text'] = (string)prop($q, 'text', ''); $qa['image'] = prop($q, 'image');
+        if (!isset($qa['options'])) $qa['options'] = array();
+        $qa['points'] = ungraded_type($t) ? 0 : ((float)prop($q, 'points', 0) ?: default_points($t));
+        $questions[] = $qa;
       }
-      if (!$questions) bad(400, $mode === 'exam' ? 'Paket soal ini belum punya soal yang bisa dipakai.' : 'Paket soal ini tidak punya soal yang bisa dipakai untuk kuis (butuh pilihan ganda, benar/salah, atau isian yang sudah ada kuncinya).');
+      if (!$questions) bad(400, $mode === 'exam' ? 'Paket soal ini belum punya soal yang bisa dipakai (periksa kunci jawabannya).' : 'Paket soal ini tidak punya soal yang bisa dipakai untuk kuis permainan (soal harus sudah lengkap kuncinya; uraian, menggambar dan rekam suara hanya untuk mode Ujian).');
       $settings = array(
         'mode' => $mode,
         'music' => substr(preg_replace('/[^a-z]/', '', (string)prop($body, 'music', '')), 0, 16),
@@ -500,7 +513,7 @@ try {
         unset($p['extra'], $p['flags']);
       }
       $qs = array();
-      foreach ($data['questions'] as $i => $q) $qs[] = array('id' => $q['id'], 'no' => $i + 1, 'type' => $q['type'], 'text' => $q['text'], 'answer' => $q['answer'], 'options' => $q['options'], 'points' => isset($q['points']) ? $q['points'] : 1, 'ok' => $qstat[$q['id']]['ok'], 'n' => $qstat[$q['id']]['n']);
+      foreach ($data['questions'] as $i => $q) $qs[] = array_merge(array('answer' => null, 'options' => array(), 'points' => 1), $q, array('no' => $i + 1, 'ok' => $qstat[$q['id']]['ok'], 'n' => $qstat[$q['id']]['n']));
       out(array('game' => array('id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'classId' => $g['class_id'], 'subjectId' => $g['subject_id'],
         'settings' => $data['settings'], 'createdAt' => $g['created_at'], 'startedAt' => $g['started_at'], 'endedAt' => $g['ended_at']), 'questions' => $qs, 'players' => $players));
     }
@@ -560,8 +573,9 @@ try {
           'remainingMs' => ((int)$p['started_ms'] && $set['duration']) ? max(0, $set['duration'] * 60000 - (now_ms() - (int)$p['started_ms'])) : null,
           'result' => ($p['finished_at'] !== null && !empty($set['showResult']) && $ex && isset($ex['result'])) ? array('score' => $ex['result']['score'], 'needsReview' => !empty($ex['result']['needsReview'])) : null);
       }
+      $graded = 0; foreach ($qsAll as $x) if (!ungraded_type($x['type'])) $graded++;
       return array('id' => (int)$p['id'], 'nickname' => $p['nickname'], 'avatar' => $p['avatar'], 'score' => (int)$p['score'], 'correct' => (int)$p['correct'], 'answered' => (int)$p['answered'],
-        'streak' => (int)$p['streak'], 'bestStreak' => (int)$p['best_streak'], 'rank' => $rank_of($p), 'finished' => $p['finished_at'] !== null, 'total' => count($qsAll));
+        'streak' => (int)$p['streak'], 'bestStreak' => (int)$p['best_streak'], 'rank' => $rank_of($p), 'finished' => $p['finished_at'] !== null, 'total' => $graded);
     };
 
     if ($act === '' && $method === 'GET') {
@@ -616,6 +630,14 @@ try {
       out($out);
     }
 
+    if ($act === 'media' && $method === 'POST') {
+      if ($me['finished_at'] !== null) bad(409, 'Jawaban sudah dikumpulkan.');
+      $n = (int)one("SELECT COUNT(*) n FROM media WHERE tenant_id = ? AND created_at > (NOW() - INTERVAL 1 HOUR)", array($g['tenant_id']))['n'];
+      if ($n > 5000) bad(429, 'Terlalu banyak unggahan. Coba lagi nanti.');
+      $ref = store_media($g['tenant_id'], prop($body, 'data', ''));
+      out(array('id' => substr($ref, 6)));
+    }
+
     /* ----- mode ujian ----- */
     if ($isExam && in_array($act, array('exam-start', 'save', 'violation', 'submit'), true)) {
       if ($g['status'] === 'lobby') bad(409, 'Ujian belum dimulai guru.');
@@ -624,28 +646,24 @@ try {
       $limitMs = $set['duration'] ? $set['duration'] * 60000 : 0;
       $started = (int)$me['started_ms'];
       $expired = $started && $limitMs && now_ms() - $started > $limitMs + 60000;
-      $merge = function () use ($body, $me, $qsAll) {
+      $merge = function () use ($body, $me, $qsAll, $g) {
         $ans = $me['answers'] ? json_decode($me['answers'], true) : array(); if (!is_array($ans)) $ans = array();
         $flags = $me['flags'] ? json_decode($me['flags'], true) : array(); if (!is_array($flags)) $flags = array();
         $ids = array(); foreach ($qsAll as $q) $ids[$q['id']] = true;
-        $in = prop($body, 'answers'); if (is_object($in)) foreach (get_object_vars($in) as $k => $v) if (isset($ids[$k])) $ans[$k] = str_cut(is_scalar($v) ? (string)$v : '', 5000);
+        $in = prop($body, 'answers'); if (is_object($in)) foreach (get_object_vars($in) as $k => $v) if (isset($ids[$k])) $ans[$k] = clean_answer($g['tenant_id'], $v);
         $fl = prop($body, 'flags'); if (is_object($fl)) { $flags = array(); foreach (get_object_vars($fl) as $k => $v) if (isset($ids[$k]) && $v) $flags[$k] = true; }
         return array($ans, $flags);
       };
       if ($act === 'exam-start') {
         if (!$started) { q('UPDATE game_players SET started_ms = ? WHERE id = ? AND started_ms = 0', array(now_ms(), $me['id'])); $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id'])); }
         $order = json_decode($me['qorder'], true); $list = array();
-        foreach ($order as $i) {
-          $q = $qsAll[$i]; $opts = array();
-          if ($q['type'] === 'pg') { $opts = array_map(function ($o) { return array('label' => $o['label'], 'text' => $o['text']); }, $q['options']); if ($set['shuffleOpt']) { mt_srand(crc32($me['token'] . $q['id'])); shuffle($opts); mt_srand(); } }
-          $list[] = array('id' => $q['id'], 'type' => $q['type'], 'text' => $q['text'], 'image' => $q['image'], 'options' => $opts);
-        }
+        foreach ($order as $i) $list[] = public_q(json_decode(json_encode($qsAll[$i])), $me['token'], !empty($set['shuffleOpt']));
         out(array('questions' => $list, 'answers' => (object)($me['answers'] ? json_decode($me['answers'], true) : array()), 'flags' => (object)($me['flags'] ? json_decode($me['flags'], true) : array()), 'me' => $meOut($me)));
       }
       if ($act === 'save') {
         if ($expired) { exam_finish_player($qsAll, $me); $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id'])); out(array('finished' => true, 'me' => $meOut($me))); }
         list($ans, $flags) = $merge();
-        q('UPDATE game_players SET answers = ?, flags = ?, answered = ? WHERE id = ? AND finished_at IS NULL', array(jenc((object)$ans), jenc((object)$flags), count(array_filter($ans, 'strlen')), $me['id']));
+        q('UPDATE game_players SET answers = ?, flags = ?, answered = ? WHERE id = ? AND finished_at IS NULL', array(jenc((object)$ans), jenc((object)$flags), count(array_filter($ans, 'is_answered')), $me['id']));
         out(array('ok' => true, 'savedAt' => now_ms()));
       }
       if ($act === 'violation') {
@@ -656,7 +674,7 @@ try {
         out(array('locked' => false, 'violations' => (int)$me['violations'], 'max' => $max));
       }
       if ($act === 'submit') {
-        if (!$expired) { list($ans, $flags) = $merge(); q('UPDATE game_players SET answers = ?, flags = ?, answered = ? WHERE id = ?', array(jenc((object)$ans), jenc((object)$flags), count(array_filter($ans, 'strlen')), $me['id'])); }
+        if (!$expired) { list($ans, $flags) = $merge(); q('UPDATE game_players SET answers = ?, flags = ?, answered = ? WHERE id = ?', array(jenc((object)$ans), jenc((object)$flags), count(array_filter($ans, 'is_answered')), $me['id'])); }
         $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
         exam_finish_player($qsAll, $me);
         $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
@@ -680,10 +698,8 @@ try {
         $me['cur_started'] = now_ms();
       }
       $q = $qsAll[$order[$idx]];
-      $opts = array();
-      if ($q['type'] === 'pg') { $opts = array_map(function ($o) { return array('label' => $o['label'], 'text' => $o['text']); }, $q['options']); if ($set['shuffleOpt']) { mt_srand(crc32($me['token'] . $q['id'])); shuffle($opts); mt_srand(); } }
       $elapsed = now_ms() - (int)$me['cur_started'];
-      out(array('question' => array('id' => $q['id'], 'type' => $q['type'], 'text' => $q['text'], 'image' => $q['image'], 'options' => $opts),
+      out(array('question' => public_q(json_decode(json_encode($q)), $me['token'], !empty($set['shuffleOpt'])),
         'index' => $idx + 1, 'total' => count($order), 'time' => $set['time'], 'remainingMs' => max(0, $set['time'] * 1000 - $elapsed), 'me' => $meOut($me)));
     }
 
@@ -695,24 +711,28 @@ try {
       if ((string)prop($body, 'qid', '') !== $q['id']) bad(409, 'Soal tidak sesuai, muat ulang halaman.');
       $limit = $set['time'] * 1000;
       $elapsed = now_ms() - (int)$me['cur_started'];
-      $ans = str_cut((string)prop($body, 'answer', ''), 300);
+      $ans = str_cut((string)prop($body, 'answer', ''), 5000);
       $late = $elapsed > $limit + 1500;
-      $ok = !$late && game_check((object)$q, $ans);
+      $qo = json_decode(json_encode($q));
+      if (ungraded_type($q['type'])) {
+        $answers = $me['answers'] ? json_decode($me['answers'], true) : array(); if (!is_array($answers)) $answers = array();
+        $answers[$q['id']] = array('a' => $late ? '' : $ans, 'ok' => null, 'pts' => 0, 'ms' => min($elapsed, $limit + 1500), 'info' => true);
+        q('UPDATE game_players SET cur_open = 0, answers = ? WHERE id = ? AND cur_open = 1', array(jenc((object)$answers), $me['id']));
+        $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
+        out(array('info' => true, 'correct' => null, 'points' => 0, 'me' => $meOut($me), 'players' => $count()));
+      }
+      $frac = $late ? 0 : game_check($qo, $ans);
+      $ok = $frac >= 1;
       $streak = $ok ? (int)$me['streak'] + 1 : 0;
-      $pts = game_points($ok, min($elapsed, $limit), $limit, $streak, $set['speedBonus']);
+      $pts = $ok ? game_points(true, min($elapsed, $limit), $limit, $streak, $set['speedBonus']) : (int)round(500 * $frac);
       $answers = $me['answers'] ? json_decode($me['answers'], true) : array();
       if (!is_array($answers)) $answers = array();
-      $answers[$q['id']] = array('a' => $ans, 'ok' => $ok, 'pts' => $pts, 'ms' => min($elapsed, $limit + 1500));
+      $answers[$q['id']] = array('a' => $ans, 'ok' => $ok, 'f' => round($frac, 4), 'pts' => $pts, 'ms' => min($elapsed, $limit + 1500));
       q('UPDATE game_players SET cur_open = 0, score = score + ?, correct = correct + ?, answered = answered + 1, streak = ?, best_streak = GREATEST(best_streak, ?), answers = ? WHERE id = ? AND cur_open = 1',
         array($pts, $ok ? 1 : 0, $streak, $streak, jenc((object)$answers), $me['id']));
       $me = one('SELECT * FROM game_players WHERE id = ?', array($me['id']));
-      $key = null;
-      if ($set['showAnswer']) {
-        $key = $q['answer'];
-        if ($q['type'] === 'pg') foreach ($q['options'] as $o) if ($o['label'] === $q['answer']) $key = $o['label'] . '. ' . $o['text'];
-        if ($q['type'] === 'bs') $key = norm_bs($q['answer']) === 'B' ? 'Benar' : 'Salah';
-      }
-      out(array('correct' => $ok, 'late' => $late, 'points' => $pts, 'streak' => $streak, 'correctLabel' => ($set['showAnswer'] && $q['type'] === 'pg') ? $q['answer'] : null, 'correctText' => $key, 'me' => $meOut($me), 'players' => $count()));
+      $key = $set['showAnswer'] ? key_text($qo) : null;
+      out(array('correct' => $ok, 'partial' => (!$ok && $frac > 0) ? round($frac, 2) : 0, 'late' => $late, 'points' => $pts, 'streak' => $streak, 'correctLabel' => ($set['showAnswer'] && $q['type'] === 'pg') ? $q['answer'] : null, 'correctText' => $key, 'me' => $meOut($me), 'players' => $count()));
     }
   }
 
@@ -770,13 +790,18 @@ try {
         out(array('submitted' => true, 'result' => prop($a, 'hideScore') ? null : array('score' => isset($d['result']['score']) ? $d['result']['score'] : null, 'needsReview' => !empty($d['result']['needsReview']))));
       }
       $qs = array();
-      foreach ($questions as $qq) {
-        $opts = array();
-        if (prop($qq, 'type') === 'pg') foreach ((array)prop($qq, 'options', array()) as $o) $opts[] = array('label' => prop($o, 'label'), 'text' => prop($o, 'text'));
-        $qs[] = array('id' => $qq->id, 'type' => prop($qq, 'type'), 'text' => prop($qq, 'text', ''), 'image' => prop($qq, 'image'), 'points' => prop($qq, 'points'), 'options' => $opts);
-      }
+      foreach ($questions as $qq) if (in_array(prop($qq, 'type'), q_types(), true)) $qs[] = public_q($qq, $a->id . $sid, false);
       if (prop($a, 'shuffle')) { mt_srand(crc32($a->id . $sid)); shuffle($qs); mt_srand(); }
       out(array('submitted' => false, 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
+    }
+
+    if ($action === 'media' && $method === 'POST') {
+      $sid = (string)prop($body, 'studentId', '');
+      $chk = $find_student($sid, prop($body, 'nis', ''));
+      if (isset($chk['err'])) bad(401, $chk['err']);
+      if (one('SELECT 1 AS x FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a->id, $sid))) bad(409, 'Jawaban sudah dikumpulkan.');
+      $ref = store_media($tid, prop($body, 'data', ''));
+      out(array('id' => substr($ref, 6)));
     }
 
     if ($action === 'submit' && $method === 'POST') {
@@ -785,7 +810,7 @@ try {
       if (isset($chk['err'])) bad(401, $chk['err']);
       $ids = array(); foreach ($questions as $qq) $ids[$qq->id] = true;
       $clean = array(); $given = prop($body, 'answers');
-      if (is_object($given)) foreach (get_object_vars($given) as $k => $v) if (isset($ids[$k])) $clean[$k] = str_cut(is_scalar($v) ? (string)$v : '', 5000);
+      if (is_object($given)) foreach (get_object_vars($given) as $k => $v) if (isset($ids[$k])) $clean[$k] = clean_answer($tid, $v);
       $result = grade($questions, $clean);
       $kktp = $ex['settings'] && prop($ex['settings'], 'kktp') ? (float)$ex['settings']->kktp : 75;
       $cap = ($ex['settings'] && prop($ex['settings'], 'remedialCap') === false) ? 100 : $kktp;

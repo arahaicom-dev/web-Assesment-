@@ -88,6 +88,41 @@ t('gambar dipetakan ke soal di atasnya, kop sekolah dilewati', () => {
   assert.strictEqual(m[0].length, 1); assert.strictEqual(m[1].length, 1);
 });
 
+t('pilihan ganda kompleks dari kunci "A, C"', () => {
+  const r = P.parse('1. Bilangan prima di bawah ini adalah ... (jawaban lebih dari satu)\nA. 2\nB. 4\nC. 5\nD. 9\nKunci: A, C\n2. Pilih buah!\nA. apel\nB. batu\nC. jeruk\nKunci Jawaban\n2. A dan C');
+  assert.strictEqual(r.questions[0].type, 'pgk'); assert.strictEqual(r.questions[0].answer, 'A,C');
+  assert.strictEqual(r.questions[1].type, 'pgk'); assert.strictEqual(r.questions[1].answer, 'A,C');
+});
+
+t('bagian Jodohkan digabung jadi satu soal menjodohkan', () => {
+  const r = P.parse('I. PILIHAN GANDA\n1. 2+2 = ...\nA. 3\nB. 4\nKunci: B\nII. Jodohkanlah pernyataan berikut!\n1. Ibu kota Jawa Barat   a. Surabaya\n2. Ibu kota Jawa Timur   b. Bandung\n3. Ibu kota Jawa Tengah   c. Semarang\nKUNCI JAWABAN\nI. 1. B\nII. 1. b 2. a 3. c');
+  const j = r.questions.find(q => q.type === 'jodoh');
+  assert.ok(j, JSON.stringify(r.questions.map(q => q.type)));
+  assert.strictEqual(r.questions.length, 2);
+  assert.deepStrictEqual(j.pairs, [{ l: 'Ibu kota Jawa Barat', r: 'Bandung' }, { l: 'Ibu kota Jawa Timur', r: 'Surabaya' }, { l: 'Ibu kota Jawa Tengah', r: 'Semarang' }]);
+});
+
+t('penilaian jenis soal baru (nilai sebagian)', () => {
+  const g = P.gradeOne;
+  assert.strictEqual(g({ type: 'pgk', answer: 'A,C' }, 'A,C'), 1);
+  assert.strictEqual(g({ type: 'pgk', answer: 'A,C' }, 'A'), 0.5);
+  assert.strictEqual(g({ type: 'pgk', answer: 'A,C' }, 'A,B'), 0);
+  assert.strictEqual(g({ type: 'angka', answer: '3,14', tol: 0.01 }, '3.141'), 1);
+  assert.strictEqual(g({ type: 'angka', answer: '12' }, '13'), 0);
+  assert.strictEqual(g({ type: 'jodoh', pairs: [{}, {}, {}, {}] }, '[0,1,3,2]'), 0.5);
+  assert.strictEqual(g({ type: 'urut', items: ['a', 'b', 'c'] }, '[0,1,2]'), 1);
+  assert.strictEqual(g({ type: 'kelompok', cats: [{ items: ['x', 'y'] }, { items: ['z'] }] }, '{"0-0":0,"0-1":1,"1-0":1}'), 2 / 3);
+  assert.strictEqual(g({ type: 'seret', text: 'Ibu kota [[Jakarta/Nusantara]] di pulau [[Jawa]]' }, '["nusantara","Sumatra"]'), 0.5);
+  assert.strictEqual(g({ type: 'dropdown', text: 'Air [[mendidih|membeku]] pada 100°C' }, '["mendidih"]'), 1);
+  assert.strictEqual(g({ type: 'titik', spot: { x: 0.5, y: 0.5, r: 0.1, ar: 1 } }, '0.55,0.52'), 1);
+  assert.strictEqual(g({ type: 'titik', spot: { x: 0.5, y: 0.5, r: 0.1, ar: 1 } }, '0.9,0.9'), 0);
+  assert.strictEqual(g({ type: 'label', marks: [{ label: 'Akar' }, { label: 'Daun' }] }, '["akar","Batang"]'), 0.5);
+  assert.strictEqual(g({ type: 'polling' }, 'A'), undefined);
+  assert.strictEqual(g({ type: 'gambar' }, 'data:...'), null);
+  const r = P.grade([{ id: 'a', type: 'pg', answer: 'A', points: 2 }, { id: 'b', type: 'polling', points: 5 }, { id: 'c', type: 'jodoh', pairs: [{}, {}], points: 2 }], { a: 'A', b: 'B', c: '[0,0]' });
+  assert.strictEqual(r.total, 4); assert.strictEqual(r.earned, 3); assert.strictEqual(r.score, 75);
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur
