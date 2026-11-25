@@ -137,7 +137,48 @@
       `<a href="#/${n.href}" class="${isActive(n) ? 'active' : ''}"><span class="ic">${n.ic}</span><span>${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}</a>`).join('');
     $('#brand-sub').textContent = school;
     renderUserBox();
+    renderTabbar(groups, cur, isActive);
   }
+
+  /* ---- Tampilan HP: bilah tab bawah & lembar menu ---- */
+  function renderTabbar(groups, cur, isActive) {
+    let bar = $('#tabbar');
+    if (!bar) { bar = document.createElement('nav'); bar.id = 'tabbar'; bar.className = 'tabbar'; document.body.appendChild(bar); document.body.classList.add('has-tabbar'); }
+    const G = n => groups.find(g => g.name === n);
+    const tabs = [
+      { key: 'Utama', ic: '🏠', lbl: 'Beranda', href: 'beranda' },
+      { key: 'Asesmen', ic: '📚', lbl: 'Asesmen', sheet: 'Asesmen' },
+      { key: 'Kuis Interaktif', ic: '🎮', lbl: 'Kuis', href: 'kuis' },
+      { key: 'Soal', ic: '📄', lbl: 'Soal', href: 'bank-soal' },
+      { key: 'more', ic: '☰', lbl: 'Lainnya', sheet: 'more' }
+    ].filter(t => t.key === 'more' || G(t.key));
+    const hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
+    const activeKey = cur && (cur.name === 'Utama' && !/^beranda/.test(hash) ? 'more' : (tabs.some(t => t.key === cur.name) ? cur.name : 'more'));
+    bar.innerHTML = tabs.map(t => `<a href="${t.href ? '#/' + t.href : '#'}" class="${t.key === activeKey ? 'on' : ''}" ${t.sheet ? `data-sheet="${t.sheet}"` : ''}><span class="ti">${t.ic}</span><span class="tl">${t.lbl}</span></a>`).join('');
+    $$('[data-sheet]', bar).forEach(a => a.onclick = e => { e.preventDefault(); openMenuSheet(a.dataset.sheet, groups, isActive); });
+  }
+  function openMenuSheet(which, groups, isActive) {
+    closeMenuSheet();
+    const list = which === 'more' ? groups.filter(g => !['Asesmen', 'Kuis Interaktif', 'Soal'].includes(g.name)) : groups.filter(g => g.name === which);
+    const row = n => `<a href="#/${n.href}" class="sheet-item ${isActive(n) ? 'on' : ''}"><span class="si">${n.ic}</span><span class="sl">${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}<span class="chev">›</span></a>`;
+    const user = S.mode === 'server' && S.user ? `<div class="sheet-user"><div class="avatar">${esc((S.user.name || '?').charAt(0).toUpperCase())}</div><div style="flex:1;min-width:0"><b class="ellipsis">${esc(S.user.name)}</b><small class="muted ellipsis">${esc(st().settings.schoolName || '')}</small>${S.saas && S.subscription ? `<a href="#/langganan" class="sub-badge ${S.subscription.active ? S.subscription.status : 'expired'}">${subLabel(S.subscription)}</a>` : ''}</div><button class="btn ghost sm" id="sheet-logout">Keluar</button></div>` : '';
+    const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.id = 'menu-sheet';
+    bg.innerHTML = `<div class="sheet" role="dialog"><div class="sheet-grip"></div>
+      ${which === 'more' ? user : `<h3 class="sheet-title">${esc(which === 'Asesmen' ? 'Jenis Asesmen' : which)}</h3>`}
+      ${list.map(g => `${which === 'more' ? `<div class="sheet-group">${esc(g.name)}</div>` : ''}<div class="sheet-list">${g.items.map(row).join('')}</div>`).join('')}
+      ${which === 'more' && window.PWA && PWA.canInstall() ? '<button class="btn soft" style="width:100%;margin-top:12px" id="sheet-install">📲 Pasang aplikasi di HP</button>' : ''}
+    </div>`;
+    bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('.sheet-item')) closeMenuSheet(); });
+    const lo = $('#sheet-logout', bg); if (lo) lo.onclick = () => S.logout();
+    const ins = $('#sheet-install', bg); if (ins) ins.onclick = () => { closeMenuSheet(); PWA.install(); };
+    // geser ke bawah untuk menutup
+    const sheet = $('.sheet', bg); let y0 = null;
+    sheet.addEventListener('touchstart', e => { if (sheet.scrollTop <= 0) y0 = e.touches[0].clientY; }, { passive: true });
+    sheet.addEventListener('touchmove', e => { if (y0 === null) return; const dy = e.touches[0].clientY - y0; if (dy > 0) sheet.style.transform = `translateY(${dy}px)`; }, { passive: true });
+    sheet.addEventListener('touchend', e => { if (y0 === null) return; const dy = (e.changedTouches[0].clientY - y0); y0 = null; if (dy > 90) closeMenuSheet(); else sheet.style.transform = ''; });
+    document.body.appendChild(bg);
+  }
+  function closeMenuSheet() { const m = $('#menu-sheet'); if (m) m.remove(); }
 
   /* ---- Konteks kelas & mapel ---- */
   function ensureCtx() {
@@ -178,6 +219,7 @@
     const r = parts[0] || 'beranda';
     renderNav(hash);
     document.body.classList.remove('nav-open');
+    closeMenuSheet();
     const view = $('#view');
     let out;
     try {

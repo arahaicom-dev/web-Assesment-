@@ -65,6 +65,16 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 - Font yang dipakai **Unbounded** (judul) dan **Plus Jakarta Sans** (teks), keduanya berlisensi SIL Open Font License. File font disimpan lokal di `public/fonts/` beserta lisensinya.
 - Semua ilustrasi dan maskot adalah buatan sendiri (SVG di `public/js/art.js`), bukan aset merek lain.
 
+## Tampilan HP seperti aplikasi (PWA)
+- **Bisa dipasang ke layar utama HP**: ikon Kubi, terbuka layar penuh tanpa bilah alamat, dan layar pembuka bertema galaksi.
+  - Di Android, muncul ajakan **"Pasang aplikasi"**.
+  - Di iPhone, ditampilkan petunjuk *Bagikan → Tambah ke Layar Utama*.
+  - Ada dua aplikasi: **Asesmen** (guru, `app.html`) dan **Kuis Seru** (murid, `kuis.html`).
+- Di HP, navigasi memakai **bilah tab bawah**: Beranda · Asesmen · Kuis · Soal · Lainnya. Tab *Asesmen* dan *Lainnya* membuka **lembar menu** dari bawah, yang bisa digeser ke bawah untuk menutup.
+- Jendela isian tampil sebagai lembar dari bawah. Kolom isian berukuran 16px sehingga iPhone tidak zoom otomatis, dan area aman (notch) diperhitungkan.
+- **Service worker** (`sw.js`) menyimpan kerangka aplikasi supaya tetap terbuka saat sinyal lemah. Data dari `/api/` tidak pernah disimpan di cache dan selalu diambil langsung dari server. Kalau tidak ada koneksi, tampil `offline.html`.
+- PWA membutuhkan **HTTPS**. Di cPanel biasanya sudah otomatis lewat AutoSSL.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.

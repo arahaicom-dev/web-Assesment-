@@ -1,0 +1,25 @@
+{
+  "name": "Asesmen Merdeka",
+  "short_name": "Asesmen",
+  "description": "Asesmen Kurikulum Merdeka, Kuis Seru, Mode Ujian, dan nilai rapor otomatis.",
+  "id": "./app.html",
+  "start_url": "./app.html",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait",
+  "background_color": "#120f45",
+  "theme_color": "#16125a",
+  "lang": "id",
+  "categories": ["education"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-maskable-192.png", "sizes": "192x192", "type": "image/png", "purpose": "maskable" },
+    { "src": "icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Kuis Seru", "url": "./app.html#/kuis", "icons": [{ "src": "icons/kuis-192.png", "sizes": "192x192" }] },
+    { "name": "Rekap Nilai", "url": "./app.html#/rekap", "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }] }
+  ]
+}

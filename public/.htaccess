@@ -1,6 +1,8 @@
 # Asesmen Merdeka — pengaturan untuk hosting PHP (Apache/LiteSpeed)
 Options -Indexes
 DirectoryIndex index.html index.php
+AddType application/manifest+json .webmanifest
+AddType application/javascript .js
 
 <IfModule mod_rewrite.c>
   RewriteEngine On
