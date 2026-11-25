@@ -95,6 +95,8 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 
 ## 17 jenis soal (v5.5)
 
+📘 Panduan lengkap setiap jenis soal: menu **Panduan Jenis Soal** di aplikasi (dengan contoh yang bisa dicoba) atau [docs/PANDUAN-JENIS-SOAL.md](docs/PANDUAN-JENIS-SOAL.md).
+
 Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tambah Soal (17 jenis)**.
 
 | Jenis | Cara murid menjawab (dioptimalkan untuk HP) | Penilaian | Kuis Permainan |

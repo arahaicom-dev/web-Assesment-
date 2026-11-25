@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.5.1');
+define('APP_VERSION', '5.5.2');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';

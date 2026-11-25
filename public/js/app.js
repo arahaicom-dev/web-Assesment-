@@ -43,6 +43,95 @@
     importDraft = { id: S.uid('qs'), title: 'Paket Soal Baru', questions: [q], created: Date.now(), source: '', warnings: [], isNew: true };
     location.hash = '#/bank-soal/draft';
   }
+  /* ================= Panduan jenis soal ================= */
+  let demoImg = null;
+  function demoImage() {
+    if (demoImg) return demoImg;
+    const c = document.createElement('canvas'); c.width = 600; c.height = 400; const g = c.getContext('2d');
+    g.fillStyle = '#eaf6ff'; g.fillRect(0, 0, 600, 400);
+    g.fillStyle = '#7cc46b'; g.fillRect(0, 300, 600, 100);
+    g.fillStyle = '#8a5a2b'; g.fillRect(285, 170, 30, 140);
+    g.fillStyle = '#2e9e4f'; g.beginPath(); g.arc(300, 140, 85, 0, 7); g.fill();
+    g.fillStyle = '#ffcf33'; g.beginPath(); g.arc(510, 75, 45, 0, 7); g.fill();
+    g.strokeStyle = '#6b4a2b'; g.lineWidth = 6; for (const x of [270, 300, 330]) { g.beginPath(); g.moveTo(300, 305); g.lineTo(x + (x - 300) * 1.5, 360); g.stroke(); }
+    return (demoImg = c.toDataURL('image/png'));
+  }
+  function guideExample(t) {
+    const G = window.PANDUAN[t]; let q = G.contoh ? JSON.parse(JSON.stringify(G.contoh)) : null;
+    if (t === 'titik') q = { type: 'titik', text: 'Ketuk gambar matahari!', image: demoImage(), spot: { x: 0.85, y: 0.19, r: 0.09, ar: 0.6667 }, points: 2 };
+    if (t === 'label') q = { type: 'label', text: 'Beri label pada bagian pohon!', image: demoImage(), marks: [{ x: 0.5, y: 0.33, label: 'Daun' }, { x: 0.5, y: 0.6, label: 'Batang' }, { x: 0.5, y: 0.86, label: 'Akar' }], points: 3 };
+    if (q) q.id = 'demo-' + t;
+    return q;
+  }
+  const GRADE_TAG = t => isManual(t) ? '<span class="pill warn">✍️ Dikoreksi guru</span>' : (t === 'polling' || t === 'slide') ? '<span class="pill">Tidak dinilai</span>' : '<span class="pill ok">⚡ Dinilai otomatis</span>';
+  const MODE_TAG = t => QT.TYPES[t].game ? '<span class="pill pri">🎮 Permainan & 📝 Ujian</span>' : '<span class="pill">📝 Ujian saja</span>';
+  function guideHTML(t, opts) {
+    opts = opts || {};
+    const G = window.PANDUAN[t], T2 = QT.TYPES[t];
+    return `<div class="pd-card" id="pd-${t}">
+      <div class="pd-head"><span class="pd-ic">${T2.icon}</span><div><h3>${T2.label}</h3><div class="btns" style="gap:6px">${GRADE_TAG(t)}${MODE_TAG(t)}${+P.DEFAULT_POINTS[t] ? `<span class="pill">Poin bawaan ${P.DEFAULT_POINTS[t]}</span>` : ''}</div></div>
+        ${opts.noMake ? '' : `<button class="btn soft sm no-print" data-act="mk" data-t="${t}" style="margin-left:auto">＋ Buat soal jenis ini</button>`}</div>
+      <div class="pd-grid">
+        <div>
+          <h4>🎯 Kapan dipakai</h4><p>${G.kapan}</p>
+          <h4>👩‍🏫 Cara membuat (guru)</h4><ol>${G.buat.map(x => `<li>${x}</li>`).join('')}</ol>
+          <h4>📱 Cara murid menjawab</h4><p>${G.murid}</p>
+          <h4>🧮 Penilaian</h4><p>${G.nilai}</p>
+          ${G.pdf ? `<h4>📄 Bisa dari PDF / teks — contoh format</h4><pre class="pd-pre">${esc(G.pdf)}</pre>` : `<h4>📄 Dari PDF</h4><p class="muted">Jenis ini dibuat langsung di editor (tidak dikenali otomatis dari PDF). Soal hasil unggah PDF bisa diubah ke jenis ini lewat pilihan jenis soal.</p>`}
+          ${G.tips && G.tips.length ? `<h4>💡 Tips</h4><ul>${G.tips.map(x => `<li>${x}</li>`).join('')}</ul>` : ''}
+        </div>
+        <div class="pd-demo no-print"><div class="pd-demo-h">👀 Coba sendiri (tampilan murid)</div><div class="pd-demo-body" data-demo="${t}"></div></div>
+      </div></div>`;
+  }
+  function mountGuideDemos(root) {
+    $$('[data-demo]', root).forEach(el => {
+      const t = el.dataset.demo, q = guideExample(t); if (!q) return;
+      let ans = '';
+      el.innerHTML = `${q.image && t !== 'titik' && t !== 'label' && t !== 'gambar' ? `<img src="${q.image}" class="q-img">` : ''}${t === 'seret' || t === 'dropdown' ? '' : `<div class="q-text" style="margin-bottom:10px">${esc(q.text)}</div>`}<div class="pd-mount"></div>
+        ${t === 'slide' ? '' : `<div class="btns" style="margin-top:10px"><button class="btn sm pd-check">✔ Periksa jawaban</button><button class="btn ghost sm pd-reset">↺ Ulang</button></div><div class="pd-res small"></div>`}`;
+      const mnt = () => { ans = ''; $('.pd-res', el) && ($('.pd-res', el).innerHTML = ''); QT.mount($('.pd-mount', el), QT.publicView(q, 'demo'), '', { onChange: v => { ans = v; } }); };
+      mnt();
+      const chk = $('.pd-check', el), rs = $('.pd-reset', el);
+      if (rs) rs.onclick = mnt;
+      if (chk) chk.onclick = () => {
+        const f = P.gradeOne(q, ans), box = $('.pd-res', el);
+        if (f === undefined) box.innerHTML = '<span class="pill">Tercatat — polling tidak dinilai.</span>';
+        else if (f === null) box.innerHTML = P.isAnswered(q, ans) ? '<span class="pill warn">Jawaban tersimpan — jenis ini dinilai guru di halaman Koreksi.</span>' : '<span class="pill bad">Belum dijawab.</span>';
+        else box.innerHTML = `<span class="pill ${f >= 1 ? 'ok' : f > 0 ? 'warn' : 'bad'}">${f >= 1 ? '🎉 Benar' : f > 0 ? 'Benar sebagian' : 'Belum tepat'} — nilai ${fmt(f * q.points)} dari ${q.points} poin</span> <span class="muted">Kunci: ${esc(QT.keyText(q))}</span>`;
+      };
+    });
+  }
+  function viewGuide(focus) {
+    setTitle('📘 Panduan Jenis Soal', '17 jenis soal: kapan dipakai, cara membuat, cara murid menjawab, dan cara penilaiannya');
+    renderCtx(false);
+    const groups = [
+      ['⚡ Dinilai otomatis', QT.ORDER.filter(t => !isManual(t) && t !== 'polling' && t !== 'slide')],
+      ['✍️ Dikoreksi guru', QT.ORDER.filter(isManual)],
+      ['📊 Tidak dinilai', ['polling', 'slide']]
+    ];
+    return {
+      html: `<div class="card hero tilt no-print-bg"><div class="z1"><h2 style="margin:0 0 8px">Cara cepat memakai soal 🚀</h2>
+        <ol class="pd-steps">
+          <li><b>Buat soal</b> — di <a href="#/bank-soal">Bank Soal</a>, klik jenis soal di kotak "Buat Soal Langsung", <i>atau</i> unggah PDF/tempel teks soal.</li>
+          <li><b>Lengkapi kunci</b> — soal yang kuncinya belum lengkap diberi tanda merah <span class="pill bad">Kunci belum lengkap</span>. Cek tampilan murid dengan <b>👁 Pratinjau Murid</b>, lalu <b>💾 Simpan</b>.</li>
+          <li><b>Pakai soalnya</b> — di <a href="#/kuis">Kuis Seru</a> pilih <b>🎮 Buat Permainan</b> (poin & peringkat) atau <b>📝 Buat Ujian</b> (timer, pengawasan, semua jenis soal); atau pasang di asesmen (SLM/STS/SAS…) sebagai ujian dengan token.</li>
+          <li><b>Koreksi & nilai</b> — soal otomatis langsung bernilai; uraian, gambar, dan rekaman dinilai di tombol <b>📝 Koreksi</b>. Nilai akhir = poin diperoleh ÷ total poin × 100.</li>
+        </ol>
+        <div class="btns no-print" style="margin-top:10px"><button class="btn ghost sm" data-act="print">🖨 Cetak / Simpan PDF</button></div></div></div>
+      ${groups.map(([g, ts]) => `<div class="pd-toc"><b>${g}</b>${ts.map(t => `<a class="chip" href="#/panduan-soal/${t}">${QT.TYPES[t].icon} ${TYPE_LABEL[t]}</a>`).join('')}</div>`).join('')}
+      <div class="card small"><b>Penilaian sebagian:</b> pada PG Kompleks, Menjodohkan, Mengurutkan, Mengelompokkan, Seret ke Kalimat, Pilihan dalam Kalimat, dan Label Gambar, murid mendapat poin sesuai bagian yang benar. Contoh: soal 4 poin, 3 dari 4 pasangan benar → 3 poin. Di Kuis Permainan, jawaban benar sebagian juga mendapat poin sebagian.</div>
+      ${QT.ORDER.map(t => `<div class="card">${guideHTML(t)}</div>`).join('')}`,
+      mount(v) {
+        mountGuideDemos(v);
+        if (focus && $('#pd-' + focus, v)) setTimeout(() => { const el = $('#pd-' + focus, v); el.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' }); el.closest('.card').classList.add('pd-flash'); }, 80);
+      },
+      actions: { mk: el => startManual(el.dataset.t), print: () => window.print() }
+    };
+  }
+  function guideModal(t) {
+    const m = modal(`${guideHTML(t, { noMake: true })}<div class="foot"><a class="btn ghost" href="#/panduan-soal" data-close>Semua panduan</a><button class="btn" data-close>Mengerti</button></div>`, { wide: true, noFocus: true });
+    mountGuideDemos(m);
+  }
   function mountPreviews(m, qs) { $$('[data-pv]', m).forEach(el => { const q = qs[+el.dataset.pv]; QT.mount(el, QT.publicView(q, 'pv'), '', {}); }); }
 
   /* ================= Utilitas UI ================= */
@@ -150,6 +239,7 @@
     { href: 'kuis', ic: '🎮', label: 'Kuis Seru (Live)', tag: 'Baru' },
     { group: 'Soal' },
     { href: 'bank-soal', ic: '📄', label: 'Bank Soal & Unggah PDF' },
+    { href: 'panduan-soal', ic: '📘', label: 'Panduan Jenis Soal', tag: '17' },
     { group: 'Nilai Akhir' },
     { href: 'rekap', ic: '🧮', label: 'Rekap Nilai Rapor', tag: 'Total' },
     { href: 'leger', ic: '🏆', label: 'Leger Semua Mapel' },
@@ -275,6 +365,7 @@
       else if (r === 'rekap') out = viewRekap(parts[1]);
       else if (r === 'leger') out = viewLeger();
       else if (r === 'istilah') out = viewGlossary();
+      else if (r === 'panduan-soal') out = viewGuide(parts[1]);
       else if (r === 'pengaturan') out = viewSettings();
       else if (r === 'akun' && S.mode === 'server') out = viewAccount();
       else if (r === 'langganan' && S.saas) out = viewBilling();
@@ -989,7 +1080,8 @@
     const sets = s.questionSets.filter(q => bankFilter !== 'mine' || !multiUser || q.ownerId === S.user.id);
     return {
       html: `
-      <div class="card"><div class="card-head"><h3>✏️ Buat Soal Langsung — 17 Jenis Soal</h3><span class="small muted">🎮 = bisa dipakai di Kuis Permainan · semua jenis bisa untuk Ujian</span></div>
+      <div class="card"><div class="card-head"><h3>✏️ Buat Soal Langsung — 17 Jenis Soal</h3><a class="btn soft sm" href="#/panduan-soal">📘 Panduan setiap jenis soal</a></div>
+        <p class="small muted" style="margin:0 0 4px">🎮 = bisa dipakai di Kuis Permainan · semua jenis bisa dipakai di Ujian</p>
         <p class="small muted" style="margin-top:0">Klik jenis soal untuk mulai membuat paket soal baru. Di dalam editor Anda bisa menambah soal jenis lain sebanyak apa pun.</p>
         ${typeGallery('mk')}</div>
       <div class="grid g2">
@@ -1240,6 +1332,7 @@
         <div class="q-head"><span class="qn">${i + 1}</span>
           <select data-qt="type">${QT.ORDER.map(k => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${QT.TYPES[k].icon} ${TYPE_LABEL[k]}</option>`).join('')}</select>
           ${q.type === 'slide' || q.type === 'polling' ? '<span class="pill">tidak dinilai</span>' : `<label class="small">Poin <input type="number" min="0" step="0.5" data-qt="points" value="${+q.points || 0}" style="width:70px"></label>`}
+          <button class="btn ghost sm" data-act="guide" data-t="${q.type}" title="Cara membuat soal jenis ini">❓ Panduan</button>
           ${QT.hasKey(q) ? '' : '<span class="pill bad">Kunci belum lengkap</span>'}
           <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
         <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
@@ -1286,8 +1379,9 @@
         up: el => { const i = +el.dataset.i; if (i > 0) { const t = w.questions[i]; w.questions[i] = w.questions[i - 1]; w.questions[i - 1] = t; keepScroll(); } },
         down: el => { const i = +el.dataset.i; if (i < w.questions.length - 1) { const t = w.questions[i]; w.questions[i] = w.questions[i + 1]; w.questions[i + 1] = t; keepScroll(); } },
         addq: el => { const q = QT.blank(el.dataset.t, S.uid('q')); q.num = w.questions.length + 1; w.questions.push(q); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); },
+        guide: el => guideModal(el.dataset.t),
         addpick: () => {
-          const m = modal(`<h2>Pilih Jenis Soal</h2><p class="small muted" style="margin-top:0">Semua jenis bisa dipakai di Ujian. Yang bertanda 🎮 juga bisa dipakai di Kuis Seru mode Permainan.</p>
+          const m = modal(`<h2>Pilih Jenis Soal</h2><p class="small muted" style="margin-top:0">Semua jenis bisa dipakai di Ujian. Yang bertanda 🎮 juga bisa dipakai di Kuis Seru mode Permainan. Bingung memilih? <a href="#/panduan-soal" data-close>📘 Lihat panduan & coba contohnya</a>.</p>
             <div class="qt-picker">${QT.ORDER.map(t => `<button class="qt-pick" data-t="${t}"><span class="qt-pi">${QT.TYPES[t].icon}</span><b>${TYPE_LABEL[t]}</b><small>${QT.TYPES[t].desc}</small>${QT.TYPES[t].game ? '<i>🎮</i>' : ''}</button>`).join('')}</div>
             <div class="foot"><button class="btn ghost" data-close>Batal</button></div>`, { wide: true, noFocus: true });
           $$('.qt-pick', m).forEach(b => b.onclick = () => { closeModal(); const q = QT.blank(b.dataset.t, S.uid('q')); q.num = w.questions.length + 1; w.questions.push(q); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); });
@@ -1784,7 +1878,7 @@
         <p style="margin:0 0 14px">Pilih paket soal, tampilkan kode di proyektor, lalu murid bergabung dari HP. Ada dua mode: <b>🎮 Permainan</b> (poin kecepatan, papan peringkat, podium) dan <b>📝 Ujian</b> (timer total, ragu-ragu, pengawasan keluar halaman, soal uraian).</p>
         <div class="btns"><button class="btn ghost lg" data-act="new">🎮 Buat Permainan</button><button class="btn ghost lg" data-act="new-exam">📝 Buat Ujian</button></div></div></div>
         <details class="card" style="margin-top:18px"><summary style="cursor:pointer;font-weight:800">🧩 17 jenis soal yang bisa dipakai — klik untuk membuat soal baru</summary>
-          <p class="small muted">Buat soalnya di sini (atau unggah PDF di Bank Soal), simpan, lalu pilih paketnya saat <b>Buat Permainan</b> / <b>Buat Ujian</b>. Jenis bertanda 🎮 bisa dipakai di mode Permainan; semua jenis bisa dipakai di mode Ujian.</p>
+          <p class="small muted">Buat soalnya di sini (atau unggah PDF di Bank Soal), simpan, lalu pilih paketnya saat <b>Buat Permainan</b> / <b>Buat Ujian</b>. Jenis bertanda 🎮 bisa dipakai di mode Permainan; semua jenis bisa dipakai di mode Ujian. <a href="#/panduan-soal">📘 Baca panduan setiap jenis soal →</a></p>
           ${typeGallery('mk')}</details>
         <div id="games" class="muted" style="margin-top:18px">Memuat…</div>`,
       async mount(v) {
