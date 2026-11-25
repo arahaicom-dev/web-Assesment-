@@ -18,10 +18,17 @@
   const muteBtn = $('#mute');
   /* ---------- musik latar (dipilih guru, bisa diganti/dimatikan murid) ---------- */
   const SND = {
-    pref() { try { return Object.assign({ set: false, track: '', vol: 0.45 }, JSON.parse(localStorage.getItem('kuis-musik') || '{}')); } catch (e) { return { set: false, track: '', vol: 0.45 }; } },
-    save(p) { localStorage.setItem('kuis-musik', JSON.stringify(p)); },
+    // pilihan musik berlaku per kuis (kode); kuis baru kembali mengikuti pengaturan guru. Volume diingat.
+    key() { return 'kuis-musik:' + (G.code || ''); },
+    pref() { let p = { set: false, track: '' }; try { p = Object.assign(p, JSON.parse(localStorage.getItem(this.key()) || '{}')); } catch (e) { /* */ } p.vol = +(localStorage.getItem('kuis-vol') || 0.5); return p; },
+    save(p) { localStorage.setItem(this.key(), JSON.stringify({ set: p.set, track: p.track })); localStorage.setItem('kuis-vol', p.vol); },
+    told: false,
     want() { const p = this.pref(); return p.set ? p.track : ((G.info && G.info.music) || ''); },
-    start() { if (!window.Music) return; const p = this.pref(), id = this.want(); Music.setVolume(p.vol); if (id) Music.play(id); else Music.stop(); paintMute(); },
+    start() {
+      if (!window.Music) return; const p = this.pref(), id = this.want(); Music.setVolume(p.vol);
+      if (id) { const was = Music.current(); Music.play(id); if (!was && !this.told) { this.told = true; toast('🎵 Musik menyala. Ketuk 🎵 di atas untuk mengganti atau mematikan.'); } } else Music.stop();
+      paintMute();
+    },
     stop() { if (window.Music) Music.stop(); paintMute(); }
   };
   const paintMute = () => { const on = window.Music && Music.current(); muteBtn.textContent = on ? '🎵' : (muted ? '🔇' : '🔈'); muteBtn.classList.toggle('playing', !!on); };

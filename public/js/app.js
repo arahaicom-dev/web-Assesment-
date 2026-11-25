@@ -1749,7 +1749,7 @@
   }
 
   /* ================= Kuis Seru (permainan live) ================= */
-  let gamePoll = null;
+  let gamePoll = null, hostAutoMusic = null;
   const gameAvailable = () => S.mode === 'server' && S.backend === 'php';
   const playLink = code => location.origin + location.pathname.replace(/[^/]*$/, '') + 'kuis.html?kode=' + code;
   const GAME_STATUS = { lobby: ['warn', 'Menunggu pemain'], running: ['ok', '● Berlangsung'], ended: ['', 'Selesai'] };
@@ -1805,16 +1805,26 @@
       </div>
       <label class="field only-exam" style="margin-top:10px"><span>Pengawasan: jika murid keluar dari halaman ujian (pindah aplikasi/tab)…</span><select id="g-viol">
         <option value="0">Catat saja sebagai pelanggaran</option><option value="3" selected>Kumpulkan otomatis setelah 3 pelanggaran</option><option value="5">Kumpulkan otomatis setelah 5 pelanggaran</option><option value="1">Kumpulkan otomatis pada pelanggaran pertama</option></select></label>
-      <label class="field" style="margin-top:10px"><span>🎵 Musik latar di HP murid (murid tetap bisa mengganti/mematikan)</span><select id="g-music"></select></label>
+      <div class="music-box">
+        <label class="switch-row"><input type="checkbox" id="g-music-on" checked><span class="sw"></span><span><b>🎵 Musik latar di HP murid</b><small>Otomatis menyala saat murid masuk. Murid tetap bisa mengecilkan atau mematikan di HP-nya.</small></span></label>
+        <div class="row" id="g-music-row" style="margin-top:8px"><label class="field" style="margin:0"><span>Pilih musik (ketuk untuk mendengar contoh)</span><select id="g-music"></select></label></div>
+        <label class="switch-row" style="margin-top:10px"><input type="checkbox" id="g-music-host"><span class="sw"></span><span><b>🔊 Putar juga di layar guru</b><small>Musik keluar dari laptop/proyektor kelas saat layar kuis dibuka.</small></span></label>
+      </div>
       <p class="small muted" id="g-note"></p>
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="g-ok">Buat & Buka Layar Kuis</button></div>`);
-    let musicTouched = !!preset.music;
+    const mdef = md => { try { return Object.assign({ on: true, track: md === 'exam' ? 'fokus' : 'semangat', host: md !== 'exam' }, JSON.parse(localStorage.getItem('kuis-musik-def-' + md) || '{}')); } catch (e) { return { on: true, track: md === 'exam' ? 'fokus' : 'semangat', host: md !== 'exam' }; } };
+    let lastMode = null;
     const fillMusic = () => {
-      const T2 = window.Music ? Music.TRACKS : [], mine = mode === 'exam' ? 'ujian' : 'main';
-      const sel = $('#g-music', m), keep = musicTouched ? sel.value || preset.music || '' : (mode === 'exam' ? 'fokus' : 'semangat');
-      sel.innerHTML = `<option value="">🔇 Tanpa musik</option><optgroup label="${mode === 'exam' ? 'Cocok untuk ujian' : 'Untuk permainan'}">${T2.filter(t => t.kind === mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup><optgroup label="Lainnya">${T2.filter(t => t.kind !== mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup>`;
-      sel.value = keep;
+      if (lastMode === mode) return; lastMode = mode;
+      const T2 = window.Music ? Music.TRACKS : [], mine = mode === 'exam' ? 'ujian' : 'main', d = mdef(mode);
+      const sel = $('#g-music', m);
+      sel.innerHTML = `<optgroup label="${mode === 'exam' ? 'Cocok untuk ujian' : 'Untuk permainan'}">${T2.filter(t => t.kind === mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup><optgroup label="Lainnya">${T2.filter(t => t.kind !== mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup>`;
+      const on = preset.music !== undefined && preset.mode === mode ? !!preset.music : d.on;
+      sel.value = (preset.mode === mode && preset.music) || d.track;
+      $('#g-music-on', m).checked = on; $('#g-music-host', m).checked = d.host;
+      paintMusic();
     };
+    const paintMusic = () => { const on = $('#g-music-on', m).checked; $('#g-music', m).disabled = !on; $('#g-music-row', m).style.opacity = on ? 1 : .45; };
     const paint = () => {
       fillMusic();
       $$('.mode-card', m).forEach(c => c.classList.toggle('on', c.dataset.mode === mode));
@@ -1828,14 +1838,18 @@
       if (mode === 'exam' && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
     };
     $$('.mode-card', m).forEach(c => c.onclick = () => { mode = c.dataset.mode; paint(); });
-    $('#g-music', m).onchange = e => { musicTouched = true; if (window.Music) { Music.unlock(); Music.setVolume(0.45); if (e.target.value) { Music.play(e.target.value); clearTimeout(window.__mp); window.__mp = setTimeout(() => Music.stop(), 6000); } else Music.stop(); } };
+    $('#g-music-on', m).onchange = () => { paintMusic(); if (!$('#g-music-on', m).checked && window.Music) Music.stop(); };
+    $('#g-music', m).onchange = e => { if (window.Music) { Music.unlock(); Music.setVolume(0.45); if (e.target.value) { Music.play(e.target.value); clearTimeout(window.__mp); window.__mp = setTimeout(() => Music.stop(), 6000); } else Music.stop(); } };
     $('#g-qs', m).onchange = paint;
     paint();
     $('#g-ok', m).onclick = async () => {
       const b = $('#g-ok', m); b.disabled = true;
       try {
         if (window.Music) Music.stop();
-        const r = await S.api('games', { body: { mode, music: $('#g-music', m).value, qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+        const musicOn = $('#g-music-on', m).checked, track = $('#g-music', m).value, hostOn = $('#g-music-host', m).checked;
+        localStorage.setItem('kuis-musik-def-' + mode, JSON.stringify({ on: musicOn, track, host: hostOn }));
+        hostAutoMusic = hostOn ? track : null;
+        const r = await S.api('games', { body: { mode, music: musicOn ? track : '', qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
           duration: +$('#g-dur', m).value, showResult: $('#g-sr', m).checked, maxViolations: +$('#g-viol', m).value,
           shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
         closeModal();
@@ -1859,6 +1873,7 @@
       },
       mount() {
         out.load();
+        if (hostAutoMusic && window.Music) { Music.unlock(); Music.setVolume(+(localStorage.getItem('host-vol') || 0.5)); Music.play(hostAutoMusic); hostAutoMusic = null; }
         clearInterval(gamePoll);
         gamePoll = setInterval(() => { if (!/^#\/kuis\/\d+/.test(location.hash)) { clearInterval(gamePoll); gamePoll = null; return; } if (out.data && out.data.game.status === 'ended') return; out.load(); }, 2000);
       },

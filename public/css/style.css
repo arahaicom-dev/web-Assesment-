@@ -669,3 +669,14 @@ html.standalone input, html.standalone textarea, html.standalone [contenteditabl
 .snd-list { max-height: 52vh; overflow-y: auto; }
 #mute.playing { animation: sndGlow 1.6s ease-in-out infinite; border-color: var(--primary); }
 @keyframes sndGlow { 50% { box-shadow: 0 0 0 4px hsl(var(--h) 80% 65% / .35), 0 0 18px hsl(var(--h) 80% 65% / .55); } }
+
+/* Sakelar (switch) */
+.music-box { margin-top: 12px; padding: 12px; border-radius: 16px; background: var(--surface-2); border: 1px solid var(--border); }
+.switch-row { display: flex; align-items: flex-start; gap: 12px; cursor: pointer; }
+.switch-row input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.switch-row .sw { flex: none; position: relative; width: 50px; height: 30px; border-radius: 99px; background: hsl(var(--h) 15% 55% / .45); transition: background .2s; margin-top: 2px; }
+.switch-row .sw::after { content: ''; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 2px 6px rgba(0, 0, 0, .3); transition: transform .2s; }
+.switch-row input:checked + .sw { background: var(--ok); }
+.switch-row input:checked + .sw::after { transform: translateX(20px); }
+.switch-row input:focus-visible + .sw { outline: 3px solid var(--primary); outline-offset: 2px; }
+.switch-row b { display: block; } .switch-row small { display: block; color: var(--muted); font-size: .8rem; }
