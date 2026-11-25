@@ -1,5 +1,5 @@
 # Lindungi file konfigurasi & log
-<FilesMatch "^(config\.php|log-error\.php|\.user\.ini)$">
+<FilesMatch "^(config\.php|lib\.php|log-error\.php|\.user\.ini)$">
   <IfModule mod_authz_core.c>
     Require all denied
   </IfModule>

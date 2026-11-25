@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="id" data-mode="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Asesmen Merdeka — Penilaian & Nilai Rapor</title>
+  <meta name="description" content="Aplikasi asesmen Kurikulum Merdeka: Diagnostik, Formatif, Sumatif Lingkup Materi, STS, SAS, SAT, unggah soal PDF, ujian online, dan penghitungan nilai rapor otomatis.">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>">
+  <link rel="stylesheet" href="css/style.css?v=4.0.0">
+</head>
+<body>
+  <!-- Latar 3D -->
+  <div class="scene" aria-hidden="true">
+    <div class="shape cube s1"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+    <div class="shape ball s2"></div>
+    <div class="shape ring s3"></div>
+    <div class="shape cube s4"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+    <div class="shape ball s5"></div>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar" id="sidebar">
+      <a class="brand" href="#/beranda">
+        <div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
+        <div><b>Asesmen Merdeka</b><small id="brand-sub">Penilaian &amp; Nilai Rapor</small><small class="ver">Versi 4.0.0</small></div>
+      </a>
+      <nav class="nav" id="nav"></nav>
+    </aside>
+
+    <main class="main">
+      <div class="topbar">
+        <button class="btn ghost sm menu-btn" id="menu-btn" aria-label="Menu">☰</button>
+        <div class="title" id="page-title"></div>
+        <div class="ctx" id="ctx"></div>
+      </div>
+      <div id="view"></div>
+    </main>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+  <div id="modal-root"></div>
+  <input type="file" id="file-input" class="hidden">
+
+  <script src="lib/pdfjs/pdf.min.js"></script>
+  <script>
+    if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdfjs/pdf.worker.min.js';
+  </script>
+  <script src="js/calc.js?v=4.0.0"></script>
+  <script src="js/parser.js?v=4.0.0"></script>
+  <script src="js/store.js?v=4.0.0"></script>
+  <script src="js/app.js?v=4.0.0"></script>
+</body>
+</html>

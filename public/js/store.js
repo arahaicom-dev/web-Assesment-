@@ -103,7 +103,8 @@
     try { data = await res.json(); } catch (e) { data = {}; }
     if (!res.ok) {
       const err = new Error(data.error || ('Kesalahan server (' + res.status + ')'));
-      err.status = res.status;
+      err.status = res.status; err.data = data;
+      if (res.status === 402 && data.subscription) { Store.subscription = data.subscription; Store.onLocked && Store.onLocked(); }
       if (res.status === 401 && Store.mode === 'server' && !opts.noAuthEvent) Store.onAuthLost && Store.onAuthLost();
       throw err;
     }
@@ -116,6 +117,10 @@
   const Store = {
     KEY, PRESETS, uid, api,
     mode: 'local',
+    saas: false,
+    subscription: null,
+    /** Sekolah sedang tidak aktif (masa coba/langganan habis) — data hanya bisa dilihat. */
+    locked() { return this.saas && this.subscription && !this.subscription.active; },
     user: null,
     state: load(),
     /** Deteksi apakah aplikasi berjalan di server Node.js. */
@@ -128,6 +133,7 @@
       if (!health || health.mode !== 'server') { this.mode = 'local'; return { ok: true }; }
       this.mode = 'server';
       this.backend = health.backend || 'node';
+      this.saas = !!health.saas;
       if (health.needsConfig) return { needsConfig: true };
       if (health.dbError) throw new Error(health.dbError);
       if (health.needsSetup) return { needsSetup: true };
@@ -141,6 +147,11 @@
       await this.pull(true);
     },
     async installConfig(body) { return api('install', { body, noAuthEvent: true }); },
+    async register(body) {
+      const r = await api('register', { body, noAuthEvent: true });
+      localStorage.setItem(TOKEN_KEY, r.token); this.user = r.user;
+      await this.pull(true);
+    },
     async setup(body) {
       const r = await api('setup', { body, noAuthEvent: true });
       localStorage.setItem(TOKEN_KEY, r.token); this.user = r.user;
@@ -155,6 +166,7 @@
       if (!force && (sync.busy || sync.timer || this.pending())) return false;
       const r = await api('state');
       this.user = r.user;
+      this.subscription = r.subscription || null;
       let ui = {};
       try { ui = JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch (e) { /* */ }
       const next = normalize(Object.assign(r.state, { ui: Object.assign({ classId: null, subjectId: null }, ui) }));
@@ -182,6 +194,7 @@
         sync.snap = next; setStatus('ok');
       } catch (e) {
         console.error(e); setStatus('error');
+        if (e.status === 402) { setStatus('locked'); return; }
         if (e.status !== 401) sync.timer = setTimeout(() => this.flush(), 5000);
         window.App && App.toast('Gagal menyimpan ke server: ' + e.message + ' (dicoba lagi otomatis)', 'bad');
       } finally {
@@ -190,6 +203,12 @@
       }
     },
     save() {
+      if (this.mode === 'server' && this.locked()) {
+        // Perubahan tema tetap disimpan; data lain tidak bisa diubah saat langganan habis
+        try { localStorage.setItem(UI_KEY, JSON.stringify(this.state.ui || {})); } catch (e) { /* */ }
+        clearTimeout(sync.timer); sync.timer = setTimeout(() => { sync.timer = null; this.flush(); }, 500);
+        return;
+      }
       if (this.mode === 'server') {
         try { localStorage.setItem(UI_KEY, JSON.stringify(this.state.ui || {})); } catch (e) { /* */ }
         clearTimeout(sync.timer); setStatus('saving');

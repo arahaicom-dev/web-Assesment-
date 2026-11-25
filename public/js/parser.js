@@ -262,7 +262,7 @@
 
       if (KEY_HEADING.test(t) && !/^\(?\d/.test(t)) {
         const ia0 = t.match(INLINE_ANSWER);
-        const isInline = cur && ia0 && ia0[1].trim() && !/^\(?\d/.test(ia0[1].trim());
+        const isInline = cur && ia0 && ia0[1].trim() && !/^\(?\d{1,3}\s*[.)\-:=]\s*\S/.test(ia0[1].trim());
         if (!isInline) {
           keyStart = i + 1;
           const restKey = t.replace(/^[^:]*:\s*/, t.includes(':') ? '' : t);

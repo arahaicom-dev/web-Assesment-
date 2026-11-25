@@ -1,9 +1,9 @@
 <?php
 /*
- * Asesmen Merdeka — API versi PHP + MySQL (untuk hosting biasa / cPanel tanpa Node.js)
- * Fungsinya sama dengan server Node.js (server/api.js). Butuh PHP 7.2+ dengan PDO MySQL.
- *
- * Semua permintaan ke /api/... diarahkan ke file ini oleh .htaccess.
+ * Asesmen Merdeka — API versi PHP + MySQL, multi-sekolah (SaaS)
+ * - Tiap sekolah (tenant) punya data terpisah, masa coba gratis, dan langganan berbayar.
+ * - Pemilik platform (akun pertama) mengelola sekolah, pembayaran, harga, dan rekening.
+ * Semua permintaan ke /api/... diarahkan ke file ini oleh .htaccess. Butuh PHP 7.2+ (PDO MySQL).
  */
 error_reporting(E_ALL);
 ini_set('display_errors', '0');
@@ -11,243 +11,13 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '3.2.0');
+define('APP_VERSION', '4.0.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
+require __DIR__ . '/lib.php';
 
-/* ================= util ================= */
-function out($data, $code = 200) {
-  http_response_code($code);
-  echo is_string($data) ? $data : json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
-  exit;
-}
-function bad($code, $msg) { out(array('error' => $msg), $code); }
-function jenc($v) { return json_encode($v, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); }
-function prop($o, $k, $d = null) { return (is_object($o) && property_exists($o, $k)) ? $o->$k : $d; }
-function clean_id($v) { return (is_string($v) && strlen($v) > 0 && strlen($v) <= 64) ? $v : null; }
-function client_ip() { return isset($_SERVER['REMOTE_ADDR']) ? $_SERVER['REMOTE_ADDR'] : ''; }
-function log_error($msg) {
-  @file_put_contents(__DIR__ . '/log-error.php', '<?php exit; ?> ' . date('c') . ' ' . $msg . "\n", FILE_APPEND);
-}
-
-/* ================= konfigurasi & database ================= */
 $CFG = null;
 if (is_file(CONFIG_FILE)) { $CFG = include CONFIG_FILE; if (!is_array($CFG)) $CFG = null; }
-
-function pdo_connect($c) {
-  $port = isset($c['port']) && $c['port'] ? (int)$c['port'] : 3306;
-  $dsn = 'mysql:host=' . $c['host'] . ';port=' . $port . ';dbname=' . $c['name'] . ';charset=utf8mb4';
-  return new PDO($dsn, $c['user'], $c['pass'], array(
-    PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
-    PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
-    PDO::ATTR_EMULATE_PREPARES => true
-  ));
-}
-function db() {
-  static $pdo = null;
-  global $CFG;
-  if ($pdo) return $pdo;
-  $pdo = pdo_connect($CFG);
-  return $pdo;
-}
-function q($sql, $params = array()) {
-  $st = db()->prepare($sql);
-  $st->execute($params);
-  return $st;
-}
-function rows($sql, $params = array()) { return q($sql, $params)->fetchAll(); }
-
-/** Pesan kesalahan database yang mudah dipahami. */
-function explain_db($e) {
-  $m = $e->getMessage();
-  $code = 0;
-  if (preg_match('/SQLSTATE\[\w+\]\s*\[(\d+)\]/', $m, $mm)) $code = (int)$mm[1];
-  elseif (isset($e->errorInfo[1])) $code = (int)$e->errorInfo[1];
-  if ($code === 1045 || $code === 1044) return 'Database menolak login: periksa nama user dan password database, dan pastikan user sudah ditambahkan ke database dengan ALL PRIVILEGES (cPanel → MySQL Databases).';
-  if ($code === 1049) return 'Database tidak ditemukan: periksa nama database. Di cPanel nama database diawali nama akun, mis. akunanda_asesmen.';
-  if ($code === 2002 || $code === 2005 || $code === 2006) return 'Tidak bisa menghubungi server database: periksa host database (biasanya localhost).';
-  if ($code === 1142 || $code === 1227) return 'User database tidak punya izin yang cukup: beri ALL PRIVILEGES di cPanel → MySQL Databases.';
-  return null;
-}
-
-function schema() {
-  return array(
-    "CREATE TABLE IF NOT EXISTS users (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-      username VARCHAR(64) NOT NULL UNIQUE,
-      name VARCHAR(150) NOT NULL,
-      pass_hash VARCHAR(255) NOT NULL,
-      role VARCHAR(16) NOT NULL DEFAULT 'guru',
-      theme TEXT NULL,
-      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-    "CREATE TABLE IF NOT EXISTS sessions (
-      token CHAR(64) NOT NULL PRIMARY KEY,
-      user_id INT UNSIGNED NOT NULL,
-      expires_at DATETIME NOT NULL,
-      INDEX (user_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-    "CREATE TABLE IF NOT EXISTS docs (
-      kind VARCHAR(32) NOT NULL,
-      id VARCHAR(64) NOT NULL,
-      data LONGTEXT NOT NULL,
-      exam_code VARCHAR(16) NULL,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      updated_by INT UNSIGNED NULL,
-      PRIMARY KEY (kind, id),
-      INDEX (exam_code)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-    "CREATE TABLE IF NOT EXISTS scores (
-      assessment_id VARCHAR(64) NOT NULL,
-      student_id VARCHAR(64) NOT NULL,
-      value TEXT NOT NULL,
-      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (assessment_id, student_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-    "CREATE TABLE IF NOT EXISTS submissions (
-      assessment_id VARCHAR(64) NOT NULL,
-      student_id VARCHAR(64) NOT NULL,
-      data LONGTEXT NOT NULL,
-      submitted_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      PRIMARY KEY (assessment_id, student_id)
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4",
-    "CREATE TABLE IF NOT EXISTS login_fails (
-      k VARCHAR(190) NOT NULL PRIMARY KEY,
-      n INT NOT NULL DEFAULT 0,
-      t INT NOT NULL DEFAULT 0
-    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4"
-  );
-}
-function migrate($pdo = null) {
-  $pdo = $pdo ? $pdo : db();
-  foreach (schema() as $sql) $pdo->exec($sql);
-}
-
-/* ================= pembatas percobaan login ================= */
-function lock_key($u) { return substr(client_ip() . '|' . strtolower((string)$u), 0, 190); }
-function is_locked($k) {
-  $r = rows('SELECT n, t FROM login_fails WHERE k = ?', array($k));
-  return $r && $r[0]['n'] >= 8 && time() - $r[0]['t'] < 600;
-}
-function add_fail($k) {
-  $r = rows('SELECT n, t FROM login_fails WHERE k = ?', array($k));
-  $n = ($r && time() - $r[0]['t'] < 600) ? $r[0]['n'] + 1 : 1;
-  q('REPLACE INTO login_fails (k, n, t) VALUES (?,?,?)', array($k, $n, time()));
-}
-function clear_fail($k) { q('DELETE FROM login_fails WHERE k = ?', array($k)); }
-
-/* ================= akun ================= */
-function valid_password($p) { return is_string($p) && strlen($p) >= 6 && strlen($p) <= 200; }
-function valid_username($u) { return is_string($u) && preg_match('/^[a-zA-Z0-9._-]{3,64}$/', $u); }
-function public_user($u) { return array('id' => (int)$u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role']); }
-function new_session($uid) {
-  $token = bin2hex(random_bytes(32));
-  q('INSERT INTO sessions (token, user_id, expires_at) VALUES (?,?,?)', array($token, $uid, date('Y-m-d H:i:s', time() + SESSION_DAYS * 86400)));
-  q('DELETE FROM sessions WHERE expires_at < NOW()');
-  return $token;
-}
-function bearer_token() {
-  $h = '';
-  if (!empty($_SERVER['HTTP_X_AUTH_TOKEN'])) return trim($_SERVER['HTTP_X_AUTH_TOKEN']);
-  foreach (array('HTTP_AUTHORIZATION', 'REDIRECT_HTTP_AUTHORIZATION') as $k) if (!empty($_SERVER[$k])) { $h = $_SERVER[$k]; break; }
-  if (!$h && function_exists('apache_request_headers')) {
-    $hs = apache_request_headers();
-    foreach ($hs as $k => $v) if (strtolower($k) === 'authorization') $h = $v;
-  }
-  return stripos($h, 'Bearer ') === 0 ? trim(substr($h, 7)) : '';
-}
-function auth() {
-  $t = bearer_token();
-  if (!preg_match('/^[a-f0-9]{64}$/', $t)) bad(401, 'Silakan login.');
-  $r = rows('SELECT u.* FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > NOW()', array($t));
-  if (!$r) bad(401, 'Sesi berakhir, silakan login lagi.');
-  $GLOBALS['TOKEN'] = $t;
-  return $r[0];
-}
-function admin_only($u) { if ($u['role'] !== 'admin') bad(403, 'Hanya admin.'); }
-
-/* ================= penilaian (sama dengan public/js/parser.js) ================= */
-function norm_bs($v) {
-  $s = preg_replace('/[^a-z]/', '', strtolower((string)$v));
-  if (preg_match('/^(b|benar|t|true|betul|ya)$/', $s)) return 'B';
-  if (preg_match('/^(s|salah|f|false|tidak)$/', $s)) return 'S';
-  return null;
-}
-function lower($s) { return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s); }
-function norm_answer($s) {
-  $s = lower((string)$s);
-  if (class_exists('Normalizer')) { $n = Normalizer::normalize($s, Normalizer::FORM_KD); if ($n !== false) $s = preg_replace('/\p{Mn}+/u', '', $n); }
-  $s = preg_replace('/[^\p{L}\p{N}\s.,-]/u', ' ', $s);
-  $s = preg_replace('/[.,](?!\d)/u', ' ', $s);
-  return trim(preg_replace('/\s+/u', ' ', $s));
-}
-function str_len($s) { return function_exists('mb_strlen') ? mb_strlen($s, 'UTF-8') : strlen($s); }
-function lev($a, $b) {
-  if ($a === $b) return 0;
-  $a = preg_split('//u', $a, -1, PREG_SPLIT_NO_EMPTY); $b = preg_split('//u', $b, -1, PREG_SPLIT_NO_EMPTY);
-  $m = count($a); $n = count($b);
-  if (!$m) return $n; if (!$n) return $m;
-  $prev = range(0, $n);
-  for ($i = 1; $i <= $m; $i++) {
-    $cur = array($i);
-    for ($j = 1; $j <= $n; $j++) $cur[$j] = min($prev[$j] + 1, $cur[$j - 1] + 1, $prev[$j - 1] + ($a[$i - 1] === $b[$j - 1] ? 0 : 1));
-    $prev = $cur;
-  }
-  return $prev[$n];
-}
-function match_short($given, $key) {
-  $g = norm_answer($given);
-  if ($g === '' || $key === null || $key === '') return false;
-  $alts = array_filter(array_map('norm_answer', preg_split('/\s*(?:\/|;|\||\batau\b|\bor\b)\s*/iu', (string)$key)), 'strlen');
-  foreach ($alts as $a) {
-    if ($g === $a) return true;
-    if (preg_match('/^-?[\d.,]+$/', $g) && preg_match('/^-?[\d.,]+$/', $a) && abs((float)str_replace(',', '.', $g) - (float)str_replace(',', '.', $a)) < 1e-9) return true;
-    if (str_len($a) >= 5 && lev($g, $a) <= floor(str_len($a) * 0.15)) return true;
-  }
-  return false;
-}
-function suggest_essay($given, $key, $points) {
-  $stop = array_flip(explode(' ', 'yang dan di ke dari untuk pada adalah dengan atau ini itu dalam oleh karena juga akan sebagai tidak bisa dapat secara'));
-  $words = function ($s) use ($stop) {
-    $out = array();
-    foreach (explode(' ', norm_answer($s)) as $w) if (str_len($w) > 2 && !isset($stop[$w])) $out[] = $w;
-    return $out;
-  };
-  $k = array_values(array_unique($words($key)));
-  $g = array_unique($words($given));
-  if (!$k || !$g) return 0;
-  $hit = 0;
-  foreach ($k as $w) {
-    $ok = in_array($w, $g, true);
-    if (!$ok) foreach ($g as $x) {
-      if (str_len($x) > 4 && (strpos($x, mb_substr($w, 0, 5)) === 0 || strpos($w, mb_substr($x, 0, 5)) === 0)) { $ok = true; break; }
-    }
-    if ($ok) $hit++;
-  }
-  $ratio = min(1, $hit / max(3, (int)ceil(count($k) * 0.6)));
-  return round($ratio * $points * 2) / 2;
-}
-function default_points($t) { $d = array('pg' => 1, 'bs' => 1, 'isian' => 2, 'uraian' => 4); return isset($d[$t]) ? $d[$t] : 1; }
-function grade($questions, $answers) {
-  $earned = 0; $total = 0; $needs = false; $detail = array();
-  foreach ($questions as $q) {
-    $type = prop($q, 'type'); $pts = (float)prop($q, 'points', 0); if (!$pts) $pts = default_points($type);
-    $total += $pts;
-    $ans = isset($answers[$q->id]) ? $answers[$q->id] : '';
-    $key = prop($q, 'answer');
-    $got = 0; $status = 'salah'; $auto = true;
-    if ($type === 'pg') $got = ($ans !== '' && $key !== null && strtoupper($ans) === strtoupper((string)$key)) ? $pts : 0;
-    elseif ($type === 'bs') $got = ($ans !== '' && $key !== null && norm_bs($ans) !== null && norm_bs($ans) === norm_bs($key)) ? $pts : 0;
-    elseif ($type === 'isian') $got = match_short($ans, $key) ? $pts : 0;
-    else { $auto = false; $got = suggest_essay($ans, $key, $pts); }
-    if ($type === 'uraian') { $status = 'perlu koreksi'; if (trim($ans) !== '') $needs = true; }
-    else $status = $got >= $pts ? 'benar' : ($got > 0 ? 'sebagian' : 'salah');
-    if (trim($ans) === '') $status = 'kosong';
-    $earned += $got;
-    $detail[] = array('id' => $q->id, 'got' => $got, 'pts' => $pts, 'status' => $status, 'auto' => $auto);
-  }
-  return array('score' => $total ? round($earned / $total * 10000) / 100 : 0, 'earned' => $earned, 'total' => $total, 'detail' => $detail, 'needsReview' => $needs);
-}
 
 /* ================= routing ================= */
 $path = parse_url(isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '/', PHP_URL_PATH);
@@ -263,21 +33,17 @@ if (!is_object($body)) $body = new stdClass();
 $seg = $route === '' ? array() : explode('/', $route);
 
 try {
-  /* ---- pemasangan: isi pengaturan database ---- */
+  /* ---------- status & pemasangan ---------- */
   if ($route === 'health') {
-    if (!$CFG) out(array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'version' => APP_VERSION, 'needsConfig' => true));
+    $base = array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'saas' => true, 'version' => APP_VERSION);
+    if (!$CFG) out(array_merge($base, array('needsConfig' => true)));
     try {
-      try { $n = (int)rows('SELECT COUNT(*) AS n FROM users')[0]['n']; }
-      catch (PDOException $e) {
-        if (strpos($e->getMessage(), '1146') === false && strpos($e->getMessage(), "doesn't exist") === false) throw $e;
-        migrate(); $n = 0;
-      }
-      // tabel tambahan versi baru
-      try { rows('SELECT 1 FROM login_fails LIMIT 1'); } catch (PDOException $e) { migrate(); }
-      out(array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'version' => APP_VERSION, 'needsSetup' => $n === 0));
+      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_column(db(), 'users', 'tenant_id')) migrate();
+      $n = (int)one('SELECT COUNT(*) AS n FROM users')['n'];
+      out(array_merge($base, array('needsSetup' => $n === 0)));
     } catch (PDOException $e) {
       log_error($e->getMessage());
-      out(array('ok' => false, 'mode' => 'server', 'backend' => 'php', 'version' => APP_VERSION, 'dbError' => explain_db($e) ?: ('Gagal terhubung ke database: ' . $e->getMessage())));
+      out(array_merge($base, array('ok' => false, 'dbError' => explain_db($e) ?: ('Gagal terhubung ke database: ' . $e->getMessage()))));
     }
   }
 
@@ -294,41 +60,74 @@ try {
     try { $pdo = pdo_connect($c); migrate($pdo); }
     catch (PDOException $e) { bad(400, explain_db($e) ?: ('Gagal terhubung: ' . $e->getMessage())); }
     $php = "<?php\n// Pengaturan database Asesmen Merdeka (dibuat otomatis). Jangan bagikan file ini.\nreturn " . var_export($c, true) . ";\n";
-    if (@file_put_contents(CONFIG_FILE, $php) === false) {
-      bad(500, 'Koneksi berhasil, tetapi file api/config.php tidak bisa ditulis. Buat file itu lewat File Manager dengan isi: ' . $php);
-    }
+    if (@file_put_contents(CONFIG_FILE, $php) === false) bad(500, 'Koneksi berhasil, tetapi file api/config.php tidak bisa ditulis. Buat file itu lewat File Manager dengan isi: ' . $php);
     @chmod(CONFIG_FILE, 0640);
     out(array('ok' => true));
   }
 
-  if (!$CFG) bad(503, 'Database belum diatur. Buka halaman utama aplikasi untuk mengisi pengaturan database.');
+  if (!$CFG) bad(503, 'Database belum diatur. Buka halaman aplikasi untuk mengisi pengaturan database.');
 
-  /* ---- autentikasi ---- */
+  /* ---------- publik: harga untuk halaman utama ---------- */
+  if ($route === 'public/plans') out(public_platform());
+
+  /* ---------- pemasangan pertama: akun pemilik platform ---------- */
   if ($route === 'setup' && $method === 'POST') {
-    if ((int)rows('SELECT COUNT(*) AS n FROM users')[0]['n'] > 0) bad(409, 'Aplikasi sudah dipasang. Silakan login.');
-    $username = prop($body, 'username'); $password = prop($body, 'password');
-    $name = trim((string)prop($body, 'name', '')) ?: $username;
-    if (!valid_username($username)) bad(400, 'Username 3–64 karakter (huruf, angka, titik, minus, garis bawah).');
+    migrate();
+    if ((int)one('SELECT COUNT(*) AS n FROM users')['n'] > 0) bad(409, 'Aplikasi sudah dipasang. Silakan login.');
+    $username = trim((string)prop($body, 'username', '')); $password = prop($body, 'password');
+    $name = str_cut(prop($body, 'name', ''), 150) ?: $username;
+    if (!valid_username($username)) bad(400, 'Username/email 3–150 karakter tanpa spasi.');
     if (!valid_password($password)) bad(400, 'Password minimal 6 karakter.');
-    q('INSERT INTO users (username, name, pass_hash, role) VALUES (?,?,?,?)', array($username, mb_substr($name, 0, 150), password_hash($password, PASSWORD_DEFAULT), 'admin'));
+    $school = str_cut(prop($body, 'schoolName', ''), 200) ?: 'Sekolah Saya';
+    q('INSERT INTO tenants (name, plan, paid_until, contact_name, contact_email) VALUES (?,?,NULL,?,?)', array($school, 'unlimited', $name, valid_email($username) ? $username : null));
+    $tid = (int)db()->lastInsertId();
+    q('INSERT INTO users (tenant_id, username, name, pass_hash, role, is_super) VALUES (?,?,?,?,?,1)', array($tid, $username, $name, password_hash($password, PASSWORD_DEFAULT), 'admin'));
     $id = (int)db()->lastInsertId();
-    $school = trim((string)prop($body, 'schoolName', ''));
-    if ($school !== '') q('INSERT INTO docs (kind, id, data) VALUES (?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data)', array('settings', 'main', jenc(array('schoolName' => mb_substr($school, 0, 200), 'teacherName' => $name))));
-    out(array('token' => new_session($id), 'user' => array('id' => $id, 'username' => $username, 'name' => $name, 'role' => 'admin')));
+    q('INSERT INTO docs (tenant_id, kind, id, data) VALUES (?,?,?,?)', array($tid, 'settings', 'main', jenc(array('schoolName' => $school, 'teacherName' => $name))));
+    $p = platform(); $p['brand'] = $p['brand'] ?: 'Asesmen Merdeka';
+    out(array('token' => new_session($id), 'user' => public_user(one('SELECT * FROM users WHERE id = ?', array($id)))));
   }
 
+  /* ---------- pendaftaran sekolah baru (masa coba gratis) ---------- */
+  if ($route === 'register' && $method === 'POST') {
+    if ((int)one('SELECT COUNT(*) AS n FROM users')['n'] === 0) bad(409, 'Aplikasi belum dipasang oleh pemilik.');
+    $k = lock_key('register');
+    if (is_locked($k, 5)) bad(429, 'Terlalu banyak pendaftaran dari jaringan ini. Coba lagi 10 menit lagi.');
+    $school = str_cut(prop($body, 'schoolName', ''), 200);
+    $name = str_cut(prop($body, 'name', ''), 150);
+    $email = strtolower(trim((string)prop($body, 'email', '')));
+    $phone = str_cut(preg_replace('/[^0-9+]/', '', (string)prop($body, 'phone', '')), 40);
+    $password = prop($body, 'password');
+    if (strlen($school) < 3) bad(400, 'Nama sekolah wajib diisi.');
+    if ($name === '') bad(400, 'Nama Anda wajib diisi.');
+    if (!valid_email($email)) bad(400, 'Alamat email tidak valid.');
+    if (!valid_password($password)) bad(400, 'Password minimal 6 karakter.');
+    if (one('SELECT id FROM users WHERE username = ?', array($email))) bad(409, 'Email ini sudah terdaftar. Silakan masuk.');
+    add_fail($k);
+    $days = max(0, (int)platform()['trialDays']);
+    q('INSERT INTO tenants (name, plan, paid_until, contact_name, contact_email, contact_phone) VALUES (?,?,?,?,?,?)',
+      array($school, 'trial', date('Y-m-d H:i:s', time() + $days * 86400), $name, $email, $phone));
+    $tid = (int)db()->lastInsertId();
+    q('INSERT INTO users (tenant_id, username, name, pass_hash, role) VALUES (?,?,?,?,?)', array($tid, $email, $name, password_hash($password, PASSWORD_DEFAULT), 'admin'));
+    $id = (int)db()->lastInsertId();
+    q('INSERT INTO docs (tenant_id, kind, id, data) VALUES (?,?,?,?)', array($tid, 'settings', 'main', jenc(array('schoolName' => $school, 'teacherName' => $name))));
+    out(array('token' => new_session($id), 'user' => public_user(one('SELECT * FROM users WHERE id = ?', array($id)))));
+  }
+
+  /* ---------- login ---------- */
   if ($route === 'login' && $method === 'POST') {
-    $username = (string)prop($body, 'username', ''); $password = (string)prop($body, 'password', '');
+    $username = trim((string)prop($body, 'username', '')); $password = (string)prop($body, 'password', '');
     $k = lock_key($username);
     if (is_locked($k)) bad(429, 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.');
-    $r = rows('SELECT * FROM users WHERE username = ?', array($username));
-    if (!$r || !password_verify($password, $r[0]['pass_hash'])) { add_fail($k); bad(401, 'Username atau password salah.'); }
+    $u = one('SELECT * FROM users WHERE username = ?', array($username));
+    if (!$u && strpos($username, '@') !== false) $u = one('SELECT * FROM users WHERE LOWER(username) = ?', array(strtolower($username)));
+    if (!$u || !password_verify($password, $u['pass_hash'])) { add_fail($k); bad(401, 'Email/username atau password salah.'); }
     clear_fail($k);
-    out(array('token' => new_session((int)$r[0]['id']), 'user' => public_user($r[0])));
+    out(array('token' => new_session((int)$u['id']), 'user' => public_user($u)));
   }
 
   if ($route === 'logout') { auth(); q('DELETE FROM sessions WHERE token = ?', array($GLOBALS['TOKEN'])); out(array('ok' => true)); }
-  if ($route === 'me') { $u = auth(); out(array('user' => public_user($u))); }
+  if ($route === 'me') { $u = auth(); out(array('user' => public_user($u), 'subscription' => tenant_info(tenant_of($u)))); }
 
   if ($route === 'me/password' && $method === 'PUT') {
     $u = auth();
@@ -340,24 +139,26 @@ try {
     out(array('ok' => true));
   }
 
-  /* ---- akun guru (admin) ---- */
+  /* ---------- akun guru dalam sekolah (admin sekolah) ---------- */
   if ($seg && $seg[0] === 'users') {
-    $u = auth(); admin_only($u);
+    $u = auth(); admin_only($u); $tid = tenant_of($u);
     if (count($seg) === 1 && $method === 'GET') {
-      $list = rows('SELECT id, username, name, role, created_at FROM users ORDER BY id');
+      $list = rows('SELECT id, username, name, role, created_at FROM users WHERE tenant_id = ? ORDER BY id', array($tid));
       foreach ($list as &$x) $x['id'] = (int)$x['id'];
       out(array('users' => $list));
     }
+    require_active($u);
     if (count($seg) === 1 && $method === 'POST') {
-      $un = prop($body, 'username'); $pw = prop($body, 'password');
-      if (!valid_username($un)) bad(400, 'Username 3–64 karakter (huruf, angka, titik, minus, garis bawah).');
+      $un = trim((string)prop($body, 'username', '')); $pw = prop($body, 'password');
+      if (!valid_username($un)) bad(400, 'Username/email 3–150 karakter tanpa spasi.');
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
-      if (rows('SELECT id FROM users WHERE username = ?', array($un))) bad(409, 'Username sudah dipakai.');
-      $nm = trim((string)prop($body, 'name', '')) ?: $un;
-      q('INSERT INTO users (username, name, pass_hash, role) VALUES (?,?,?,?)', array($un, mb_substr($nm, 0, 150), password_hash($pw, PASSWORD_DEFAULT), prop($body, 'role') === 'admin' ? 'admin' : 'guru'));
+      if (one('SELECT id FROM users WHERE username = ?', array($un))) bad(409, 'Username sudah dipakai.');
+      $nm = str_cut(prop($body, 'name', ''), 150) ?: $un;
+      q('INSERT INTO users (tenant_id, username, name, pass_hash, role) VALUES (?,?,?,?,?)', array($tid, $un, $nm, password_hash($pw, PASSWORD_DEFAULT), prop($body, 'role') === 'admin' ? 'admin' : 'guru'));
       out(array('ok' => true));
     }
     $id = isset($seg[1]) ? (int)$seg[1] : 0;
+    if (!one('SELECT id FROM users WHERE id = ? AND tenant_id = ?', array($id, $tid))) bad(404, 'Akun tidak ditemukan.');
     if (count($seg) === 3 && $seg[2] === 'password' && $method === 'PUT') {
       $pw = prop($body, 'password');
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
@@ -368,83 +169,83 @@ try {
     if (count($seg) === 2 && $method === 'DELETE') {
       if ($id === (int)$u['id']) bad(400, 'Tidak bisa menghapus akun sendiri.');
       q('DELETE FROM sessions WHERE user_id = ?', array($id));
-      q('DELETE FROM users WHERE id = ?', array($id));
+      q('DELETE FROM users WHERE id = ? AND tenant_id = ?', array($id, $tid));
       out(array('ok' => true));
     }
   }
 
-  /* ---- data aplikasi ---- */
+  /* ---------- data aplikasi per sekolah ---------- */
   $DOC_KINDS = array('settings', 'classes', 'subjects', 'assessments', 'questionSets');
   $exam_code_of = function ($kind, $data) {
     return ($kind === 'assessments' && prop($data, 'examOpen') && prop($data, 'examCode')) ? substr(strtoupper((string)$data->examCode), 0, 16) : null;
   };
 
   if ($route === 'state') {
-    $u = auth();
-    // Susun JSON langsung dari teks tersimpan agar objek kosong {} tetap utuh
+    $u = auth(); $tid = tenant_of($u);
     $settings = '{}'; $lists = array('classes' => array(), 'subjects' => array(), 'assessments' => array(), 'questionSets' => array());
-    foreach (rows('SELECT kind, data FROM docs') as $d) {
+    foreach (rows('SELECT kind, data FROM docs WHERE tenant_id = ?', array($tid)) as $d) {
       if ($d['kind'] === 'settings') $settings = $d['data'];
       elseif (isset($lists[$d['kind']])) $lists[$d['kind']][] = $d['data'];
     }
-    $map = function ($sql, $col) {
+    $map = function ($sql, $col) use ($tid) {
       $g = array();
-      foreach (rows($sql) as $r) $g[$r['a']][] = jenc((string)$r['s']) . ':' . $r[$col];
+      foreach (rows($sql, array($tid)) as $r) $g[$r['a']][] = jenc((string)$r['s']) . ':' . $r[$col];
       $parts = array();
       foreach ($g as $a => $items) $parts[] = jenc((string)$a) . ':{' . implode(',', $items) . '}';
       return '{' . implode(',', $parts) . '}';
     };
-    $theme = rows('SELECT theme FROM users WHERE id = ?', array($u['id']));
-    $themeJson = ($theme && $theme[0]['theme']) ? $theme[0]['theme'] : 'null';
+    $themeJson = $u['theme'] ? $u['theme'] : 'null';
     $json = '{"state":{"settings":' . $settings;
     foreach ($lists as $k => $items) $json .= ',' . jenc($k) . ':[' . implode(',', $items) . ']';
-    $json .= ',"scores":' . $map('SELECT assessment_id a, student_id s, value FROM scores', 'value');
-    $json .= ',"submissions":' . $map('SELECT assessment_id a, student_id s, data FROM submissions', 'data');
-    $json .= ',"theme":' . $themeJson . '},"user":' . jenc(public_user($u)) . '}';
+    $json .= ',"scores":' . $map('SELECT assessment_id a, student_id s, value FROM scores WHERE tenant_id = ?', 'value');
+    $json .= ',"submissions":' . $map('SELECT assessment_id a, student_id s, data FROM submissions WHERE tenant_id = ?', 'data');
+    $json .= ',"theme":' . $themeJson . '},"user":' . jenc(public_user($u)) . ',"subscription":' . jenc(tenant_info($tid)) . '}';
     out($json);
   }
 
   if ($route === 'sync' && $method === 'POST') {
-    $u = auth(); $uid = (int)$u['id']; $n = 0;
+    $u = auth(); $uid = (int)$u['id']; $tid = tenant_of($u); $n = 0;
+    $theme = prop($body, 'theme');
+    $onlyTheme = !prop($body, 'docs') && !prop($body, 'delDocs') && !prop($body, 'scores') && !prop($body, 'delScores') && !prop($body, 'subs') && !prop($body, 'delSubs');
+    if (!$onlyTheme) require_active($u);
     $pdo = db(); $pdo->beginTransaction();
     try {
       foreach ((array)prop($body, 'docs', array()) as $d) {
         $kind = prop($d, 'kind'); $id = clean_id(prop($d, 'id')); $data = prop($d, 'data');
         if (!in_array($kind, $DOC_KINDS, true) || !$id || !is_object($data)) continue;
-        q('INSERT INTO docs (kind, id, data, exam_code, updated_by) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data), exam_code = VALUES(exam_code), updated_by = VALUES(updated_by)',
-          array($kind, $id, jenc($data), $exam_code_of($kind, $data), $uid));
+        q('INSERT INTO docs (tenant_id, kind, id, data, exam_code, updated_by) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data), exam_code = VALUES(exam_code), updated_by = VALUES(updated_by)',
+          array($tid, $kind, $id, jenc($data), $exam_code_of($kind, $data), $uid));
         $n++;
       }
       foreach ((array)prop($body, 'delDocs', array()) as $d) {
         $kind = prop($d, 'kind'); $id = clean_id(prop($d, 'id'));
         if (!in_array($kind, $DOC_KINDS, true) || !$id) continue;
-        q('DELETE FROM docs WHERE kind = ? AND id = ?', array($kind, $id)); $n++;
+        q('DELETE FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, $id)); $n++;
       }
       foreach ((array)prop($body, 'scores', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = clean_id(prop($s, 's'));
         if (!$a || !$st) continue;
-        q('INSERT INTO scores (assessment_id, student_id, value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', array($a, $st, jenc(prop($s, 'v')))); $n++;
+        q('INSERT INTO scores (tenant_id, assessment_id, student_id, value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', array($tid, $a, $st, jenc(prop($s, 'v')))); $n++;
       }
       foreach ((array)prop($body, 'delScores', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = prop($s, 's');
         if (!$a) continue;
-        if ($st === '*') q('DELETE FROM scores WHERE assessment_id = ?', array($a));
-        elseif (clean_id($st)) q('DELETE FROM scores WHERE assessment_id = ? AND student_id = ?', array($a, $st));
+        if ($st === '*') q('DELETE FROM scores WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a));
+        elseif (clean_id($st)) q('DELETE FROM scores WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a, $st));
         $n++;
       }
       foreach ((array)prop($body, 'subs', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = clean_id(prop($s, 's'));
         if (!$a || !$st) continue;
-        q('INSERT INTO submissions (assessment_id, student_id, data) VALUES (?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data)', array($a, $st, jenc(prop($s, 'd')))); $n++;
+        q('INSERT INTO submissions (tenant_id, assessment_id, student_id, data) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data)', array($tid, $a, $st, jenc(prop($s, 'd')))); $n++;
       }
       foreach ((array)prop($body, 'delSubs', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = prop($s, 's');
         if (!$a) continue;
-        if ($st === '*') q('DELETE FROM submissions WHERE assessment_id = ?', array($a));
-        elseif (clean_id($st)) q('DELETE FROM submissions WHERE assessment_id = ? AND student_id = ?', array($a, $st));
+        if ($st === '*') q('DELETE FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a));
+        elseif (clean_id($st)) q('DELETE FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a, $st));
         $n++;
       }
-      $theme = prop($body, 'theme');
       if (is_object($theme)) { q('UPDATE users SET theme = ? WHERE id = ?', array(jenc($theme), $uid)); $n++; }
       $pdo->commit();
     } catch (Exception $e) { $pdo->rollBack(); throw $e; }
@@ -452,27 +253,27 @@ try {
   }
 
   if ($route === 'import' && $method === 'POST') {
-    $u = auth(); admin_only($u);
+    $u = auth(); admin_only($u); require_active($u); $tid = tenant_of($u);
     $d = prop($body, 'state');
     if (!is_object($d) || !is_array(prop($d, 'classes'))) bad(400, 'Format cadangan tidak dikenali.');
     $pdo = db(); $pdo->beginTransaction();
     try {
-      $pdo->exec('DELETE FROM docs'); $pdo->exec('DELETE FROM scores'); $pdo->exec('DELETE FROM submissions');
-      if (is_object(prop($d, 'settings'))) q('INSERT INTO docs (kind, id, data) VALUES (?,?,?)', array('settings', 'main', jenc($d->settings)));
+      foreach (array('docs', 'scores', 'submissions') as $t) q("DELETE FROM `$t` WHERE tenant_id = ?", array($tid));
+      if (is_object(prop($d, 'settings'))) q('INSERT INTO docs (tenant_id, kind, id, data) VALUES (?,?,?,?)', array($tid, 'settings', 'main', jenc($d->settings)));
       foreach (array('classes', 'subjects', 'assessments', 'questionSets') as $kind) {
         foreach ((array)prop($d, $kind, array()) as $it) {
-          if (is_object($it) && clean_id(prop($it, 'id'))) q('INSERT INTO docs (kind, id, data, exam_code) VALUES (?,?,?,?)', array($kind, $it->id, jenc($it), $exam_code_of($kind, $it)));
+          if (is_object($it) && clean_id(prop($it, 'id'))) q('INSERT INTO docs (tenant_id, kind, id, data, exam_code) VALUES (?,?,?,?,?)', array($tid, $kind, $it->id, jenc($it), $exam_code_of($kind, $it)));
         }
       }
-      foreach (array('scores' => 'scores', 'submissions' => 'submissions') as $k => $table) {
+      foreach (array('scores', 'submissions') as $k) {
         $m = prop($d, $k);
         if (!is_object($m)) continue;
         foreach (get_object_vars($m) as $a => $bys) {
           if (!clean_id($a) || !is_object($bys)) continue;
           foreach (get_object_vars($bys) as $s => $v) {
             if (!clean_id($s)) continue;
-            if ($table === 'scores') q('INSERT INTO scores (assessment_id, student_id, value) VALUES (?,?,?)', array($a, $s, jenc($v)));
-            else q('INSERT INTO submissions (assessment_id, student_id, data) VALUES (?,?,?)', array($a, $s, jenc($v)));
+            if ($k === 'scores') q('INSERT INTO scores (tenant_id, assessment_id, student_id, value) VALUES (?,?,?,?)', array($tid, $a, $s, jenc($v)));
+            else q('INSERT INTO submissions (tenant_id, assessment_id, student_id, data) VALUES (?,?,?,?)', array($tid, $a, $s, jenc($v)));
           }
         }
       }
@@ -481,22 +282,158 @@ try {
     out(array('ok' => true));
   }
 
-  /* ---- ujian online murid ---- */
+  /* ---------- langganan sekolah ---------- */
+  if ($route === 'billing' && $method === 'GET') {
+    $u = auth(); $tid = tenant_of($u); $p = platform();
+    $pays = rows('SELECT id, plan_id, plan_name, months, amount, note, status, admin_note, created_at, decided_at, (proof IS NOT NULL AND proof <> \'\') AS has_proof FROM payments WHERE tenant_id = ? ORDER BY id DESC LIMIT 50', array($tid));
+    foreach ($pays as &$x) { $x['id'] = (int)$x['id']; $x['months'] = (int)$x['months']; $x['amount'] = (int)$x['amount']; $x['has_proof'] = (bool)$x['has_proof']; }
+    out(array('subscription' => tenant_info($tid), 'plans' => $p['plans'], 'bankInfo' => $p['bankInfo'], 'whatsapp' => $p['whatsapp'], 'email' => $p['email'], 'payments' => $pays, 'isAdmin' => $u['role'] === 'admin'));
+  }
+  if ($route === 'billing/pay' && $method === 'POST') {
+    $u = auth(); admin_only($u); $tid = tenant_of($u);
+    $plan = find_plan((string)prop($body, 'planId', ''));
+    if (!$plan) bad(400, 'Paket tidak ditemukan.');
+    $proof = (string)prop($body, 'proof', '');
+    if ($proof !== '' && !preg_match('#^data:image/(png|jpe?g|webp);base64,[A-Za-z0-9+/=]+$#', $proof)) bad(400, 'Bukti transfer harus berupa gambar.');
+    if (strlen($proof) > 3 * 1024 * 1024) bad(400, 'Gambar bukti transfer terlalu besar.');
+    if ($proof === '') bad(400, 'Unggah foto/screenshot bukti transfer.');
+    if ((int)one("SELECT COUNT(*) AS n FROM payments WHERE tenant_id = ? AND status = 'pending'", array($tid))['n'] >= 3) bad(429, 'Masih ada pembayaran yang menunggu verifikasi.');
+    $info = tenant_info($tid);
+    $amount = (int)$plan['price'] + $info['uniqueCode'];
+    q('INSERT INTO payments (tenant_id, user_id, plan_id, plan_name, months, amount, proof, note) VALUES (?,?,?,?,?,?,?,?)',
+      array($tid, $u['id'], $plan['id'], $plan['name'], (int)$plan['months'], $amount, $proof, str_cut(prop($body, 'note', ''), 500)));
+    out(array('ok' => true));
+  }
+
+  /* ---------- panel pemilik platform ---------- */
+  if ($seg && $seg[0] === 'owner') {
+    $u = auth(); super_only($u);
+    $sub = isset($seg[1]) ? $seg[1] : '';
+
+    if ($sub === 'overview' && $method === 'GET') {
+      $ts = rows('SELECT * FROM tenants ORDER BY id DESC');
+      $users = array(); foreach (rows('SELECT tenant_id, COUNT(*) n FROM users GROUP BY tenant_id') as $r) $users[(int)$r['tenant_id']] = (int)$r['n'];
+      $students = array(); $asm = array();
+      foreach (rows("SELECT tenant_id, kind, data FROM docs WHERE kind IN ('classes','assessments')") as $r) {
+        $t = (int)$r['tenant_id'];
+        if ($r['kind'] === 'classes') { $c = json_decode($r['data']); $students[$t] = (isset($students[$t]) ? $students[$t] : 0) + count((array)prop($c, 'students', array())); }
+        else $asm[$t] = (isset($asm[$t]) ? $asm[$t] : 0) + 1;
+      }
+      $paid = array(); foreach (rows("SELECT tenant_id, SUM(amount) s FROM payments WHERE status = 'approved' GROUP BY tenant_id") as $r) $paid[(int)$r['tenant_id']] = (int)$r['s'];
+      $list = array();
+      foreach ($ts as $t) {
+        $id = (int)$t['id'];
+        $admin = one("SELECT id, username FROM users WHERE tenant_id = ? AND role = 'admin' ORDER BY id LIMIT 1", array($id));
+        $list[] = array_merge(tenant_info($t), array(
+          'contactName' => $t['contact_name'], 'contactEmail' => $t['contact_email'], 'contactPhone' => $t['contact_phone'], 'createdAt' => $t['created_at'],
+          'users' => isset($users[$id]) ? $users[$id] : 0, 'students' => isset($students[$id]) ? $students[$id] : 0, 'assessments' => isset($asm[$id]) ? $asm[$id] : 0,
+          'revenue' => isset($paid[$id]) ? $paid[$id] : 0, 'adminId' => $admin ? (int)$admin['id'] : null, 'adminUser' => $admin ? $admin['username'] : null
+        ));
+      }
+      $pending = (int)one("SELECT COUNT(*) n FROM payments WHERE status = 'pending'")['n'];
+      $revenue = (int)one("SELECT COALESCE(SUM(amount),0) s FROM payments WHERE status = 'approved'")['s'];
+      $month = (int)one("SELECT COALESCE(SUM(amount),0) s FROM payments WHERE status = 'approved' AND decided_at >= ?", array(date('Y-m-01 00:00:00')))['s'];
+      out(array('tenants' => $list, 'pending' => $pending, 'revenue' => $revenue, 'revenueMonth' => $month, 'platform' => platform()));
+    }
+
+    if ($sub === 'tenants' && isset($seg[2]) && $method === 'PUT') {
+      $id = (int)$seg[2];
+      $t = one('SELECT * FROM tenants WHERE id = ?', array($id));
+      if (!$t) bad(404, 'Sekolah tidak ditemukan.');
+      if (property_exists($body, 'suspended')) q('UPDATE tenants SET suspended = ? WHERE id = ?', array($body->suspended ? 1 : 0, $id));
+      if (property_exists($body, 'name') && str_cut($body->name, 200) !== '') q('UPDATE tenants SET name = ? WHERE id = ?', array(str_cut($body->name, 200), $id));
+      if (property_exists($body, 'unlimited') && $body->unlimited) q("UPDATE tenants SET paid_until = NULL, plan = 'unlimited' WHERE id = ?", array($id));
+      if (property_exists($body, 'addDays') && (int)$body->addDays !== 0) {
+        $base = ($t['paid_until'] !== null && strtotime($t['paid_until']) > time()) ? strtotime($t['paid_until']) : time();
+        q('UPDATE tenants SET paid_until = ?, plan = IF(plan = \'unlimited\', \'manual\', plan) WHERE id = ?', array(date('Y-m-d H:i:s', $base + (int)$body->addDays * 86400), $id));
+      }
+      if (property_exists($body, 'setUntil') && is_string($body->setUntil) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $body->setUntil)) {
+        q('UPDATE tenants SET paid_until = ?, plan = IF(plan = \'unlimited\', \'manual\', plan) WHERE id = ?', array($body->setUntil . ' 23:59:59', $id));
+      }
+      out(array('ok' => true, 'tenant' => tenant_info($id)));
+    }
+
+    if ($sub === 'payments' && !isset($seg[2]) && $method === 'GET') {
+      $status = isset($_GET['status']) ? $_GET['status'] : 'pending';
+      $sql = 'SELECT p.*, t.name AS tenant_name FROM payments p JOIN tenants t ON t.id = p.tenant_id' . ($status === 'all' ? '' : ' WHERE p.status = ?') . ' ORDER BY p.id DESC LIMIT 100';
+      $list = rows($sql, $status === 'all' ? array() : array($status));
+      foreach ($list as &$x) { $x['id'] = (int)$x['id']; $x['amount'] = (int)$x['amount']; $x['months'] = (int)$x['months']; $x['tenant_id'] = (int)$x['tenant_id']; }
+      out(array('payments' => $list));
+    }
+
+    if ($sub === 'payments' && isset($seg[2]) && $method === 'POST') {
+      $id = (int)$seg[2];
+      $p = one('SELECT * FROM payments WHERE id = ?', array($id));
+      if (!$p) bad(404, 'Pembayaran tidak ditemukan.');
+      if ($p['status'] !== 'pending') bad(409, 'Pembayaran ini sudah diproses.');
+      $action = prop($body, 'action'); $note = str_cut(prop($body, 'note', ''), 500);
+      $pdo = db(); $pdo->beginTransaction();
+      try {
+        if ($action === 'approve') {
+          $t = one('SELECT * FROM tenants WHERE id = ? FOR UPDATE', array($p['tenant_id']));
+          if ($t['paid_until'] !== null) {
+            $base = strtotime($t['paid_until']) > time() ? strtotime($t['paid_until']) : time();
+            $until = date('Y-m-d H:i:s', strtotime('+' . (int)$p['months'] . ' months', $base));
+            q('UPDATE tenants SET paid_until = ?, plan = ? WHERE id = ?', array($until, $p['plan_id'], $p['tenant_id']));
+          }
+          q("UPDATE payments SET status = 'approved', admin_note = ?, decided_at = NOW() WHERE id = ?", array($note, $id));
+        } elseif ($action === 'reject') {
+          q("UPDATE payments SET status = 'rejected', admin_note = ?, decided_at = NOW() WHERE id = ?", array($note, $id));
+        } else { $pdo->rollBack(); bad(400, 'Aksi tidak dikenali.'); }
+        $pdo->commit();
+      } catch (Exception $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+      out(array('ok' => true, 'tenant' => tenant_info((int)$p['tenant_id'])));
+    }
+
+    if ($sub === 'config' && $method === 'PUT') {
+      $cur = platform();
+      $new = array(
+        'brand' => str_cut(prop($body, 'brand', $cur['brand']), 80) ?: 'Asesmen Merdeka',
+        'tagline' => str_cut(prop($body, 'tagline', $cur['tagline']), 300),
+        'trialDays' => max(0, min(365, (int)prop($body, 'trialDays', $cur['trialDays']))),
+        'bankInfo' => str_cut(prop($body, 'bankInfo', $cur['bankInfo']), 1000),
+        'whatsapp' => str_cut(preg_replace('/[^0-9]/', '', (string)prop($body, 'whatsapp', $cur['whatsapp'])), 20),
+        'email' => str_cut(prop($body, 'email', $cur['email']), 150),
+        'plans' => array()
+      );
+      foreach ((array)prop($body, 'plans', array()) as $pl) {
+        $pid = preg_replace('/[^a-z0-9_-]/', '', strtolower((string)prop($pl, 'id', '')));
+        $name = str_cut(prop($pl, 'name', ''), 60);
+        if ($pid === '' || $name === '' || $pid === 'trial' || $pid === 'unlimited' || $pid === 'manual') continue;
+        $new['plans'][] = array('id' => $pid, 'name' => $name, 'price' => max(0, (int)prop($pl, 'price', 0)), 'months' => max(1, min(36, (int)prop($pl, 'months', 1))), 'desc' => str_cut(prop($pl, 'desc', ''), 120));
+      }
+      if (!$new['plans']) bad(400, 'Minimal harus ada satu paket.');
+      q('REPLACE INTO platform (k, v) VALUES (?,?)', array('config', jenc($new)));
+      out(array('ok' => true, 'platform' => $new));
+    }
+
+    if ($sub === 'users' && isset($seg[2]) && isset($seg[3]) && $seg[3] === 'password' && $method === 'PUT') {
+      $pw = prop($body, 'password');
+      if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
+      q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($pw, PASSWORD_DEFAULT), (int)$seg[2]));
+      q('DELETE FROM sessions WHERE user_id = ?', array((int)$seg[2]));
+      out(array('ok' => true));
+    }
+  }
+
+  /* ---------- ujian online murid ---------- */
   if ($seg && $seg[0] === 'exam' && isset($seg[1])) {
     $code = preg_replace('/[^A-Z0-9]/', '', strtoupper(urldecode($seg[1])));
-    $ex = null;
+    $ex = null; $closedBySub = false;
     if ($code !== '') {
-      $r = rows('SELECT data FROM docs WHERE kind = ? AND exam_code = ?', array('assessments', $code));
-      if ($r) {
-        $a = json_decode($r[0]['data']);
-        if ($a && prop($a, 'examOpen') && prop($a, 'qsetId')) {
-          $load = function ($kind, $id) { $x = rows('SELECT data FROM docs WHERE kind = ? AND id = ?', array($kind, (string)$id)); return $x ? json_decode($x[0]['data']) : null; };
-          $qset = $load('questionSets', $a->qsetId); $cls = $load('classes', prop($a, 'classId'));
-          if ($qset && $cls) $ex = array('a' => $a, 'qset' => $qset, 'cls' => $cls, 'subj' => $load('subjects', prop($a, 'subjectId')), 'settings' => $load('settings', 'main'));
-        }
+      foreach (rows('SELECT tenant_id, data FROM docs WHERE kind = ? AND exam_code = ?', array('assessments', $code)) as $r) {
+        $a = json_decode($r['data']);
+        if (!$a || !prop($a, 'examOpen') || !prop($a, 'qsetId')) continue;
+        $tid = (int)$r['tenant_id'];
+        $ti = tenant_info($tid);
+        if (!$ti || !$ti['active']) { $closedBySub = true; continue; }
+        $load = function ($kind, $id) use ($tid) { $x = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, (string)$id)); return $x ? json_decode($x['data']) : null; };
+        $qset = $load('questionSets', $a->qsetId); $cls = $load('classes', prop($a, 'classId'));
+        if ($qset && $cls) { $ex = array('tid' => $tid, 'a' => $a, 'qset' => $qset, 'cls' => $cls, 'subj' => $load('subjects', prop($a, 'subjectId')), 'settings' => $load('settings', 'main')); break; }
       }
     }
-    if (!$ex) bad(404, 'Token ujian tidak ditemukan atau ujian sudah ditutup.');
+    if (!$ex) bad(404, $closedBySub ? 'Ujian tidak tersedia: langganan sekolah sedang tidak aktif. Hubungi guru.' : 'Token ujian tidak ditemukan atau ujian sudah ditutup.');
+    $tid = $ex['tid'];
     $a = $ex['a']; $students = (array)prop($ex['cls'], 'students', array()); $questions = (array)prop($ex['qset'], 'questions', array());
     $find_student = function ($sid, $nis) use ($students) {
       foreach ($students as $s) if (prop($s, 'id') === $sid) {
@@ -510,7 +447,7 @@ try {
 
     if ($action === '' && $method === 'GET') {
       $done = array();
-      foreach (rows('SELECT student_id FROM submissions WHERE assessment_id = ?', array($a->id)) as $r) $done[$r['student_id']] = true;
+      foreach (rows('SELECT student_id FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a->id)) as $r) $done[$r['student_id']] = true;
       $list = array();
       foreach ($students as $s) $list[] = array('id' => $s->id, 'name' => prop($s, 'name', ''), 'needNis' => trim((string)prop($s, 'nis', '')) !== '', 'done' => isset($done[$s->id]));
       out(array(
@@ -523,13 +460,13 @@ try {
 
     if ($action === 'start' && $method === 'POST') {
       $sid = (string)prop($body, 'studentId', '');
-      $k = lock_key('exam:' . $sid);
+      $k = lock_key('exam:' . $tid . ':' . $sid);
       if (is_locked($k)) bad(429, 'Terlalu banyak percobaan. Tunggu 10 menit.');
       $chk = $find_student($sid, prop($body, 'nis', ''));
       if (isset($chk['err'])) { add_fail($k); bad(401, $chk['err']); }
-      $sub = rows('SELECT data FROM submissions WHERE assessment_id = ? AND student_id = ?', array($a->id, $sid));
+      $sub = one('SELECT data FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a->id, $sid));
       if ($sub) {
-        $d = json_decode($sub[0]['data'], true);
+        $d = json_decode($sub['data'], true);
         out(array('submitted' => true, 'result' => prop($a, 'hideScore') ? null : array('score' => isset($d['result']['score']) ? $d['result']['score'] : null, 'needsReview' => !empty($d['result']['needsReview']))));
       }
       $qs = array();
@@ -548,27 +485,27 @@ try {
       if (isset($chk['err'])) bad(401, $chk['err']);
       $ids = array(); foreach ($questions as $qq) $ids[$qq->id] = true;
       $clean = array(); $given = prop($body, 'answers');
-      if (is_object($given)) foreach (get_object_vars($given) as $k => $v) if (isset($ids[$k])) $clean[$k] = mb_substr(is_scalar($v) ? (string)$v : '', 0, 5000);
+      if (is_object($given)) foreach (get_object_vars($given) as $k => $v) if (isset($ids[$k])) $clean[$k] = str_cut(is_scalar($v) ? (string)$v : '', 5000);
       $result = grade($questions, $clean);
       $kktp = $ex['settings'] && prop($ex['settings'], 'kktp') ? (float)$ex['settings']->kktp : 75;
       $cap = ($ex['settings'] && prop($ex['settings'], 'remedialCap') === false) ? 100 : $kktp;
       $pdo = db(); $pdo->beginTransaction();
       try {
-        if (rows('SELECT 1 FROM submissions WHERE assessment_id = ? AND student_id = ? FOR UPDATE', array($a->id, $sid))) { $pdo->rollBack(); bad(409, 'Jawaban kamu sudah pernah dikumpulkan.'); }
+        if (one('SELECT 1 AS x FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ? FOR UPDATE', array($tid, $a->id, $sid))) { $pdo->rollBack(); bad(409, 'Jawaban kamu sudah pernah dikumpulkan.'); }
         $started = (float)prop($body, 'startedAt', 0);
         $sub = array('answers' => $clean ? $clean : new stdClass(), 'manual' => new stdClass(), 'result' => $result, 'at' => round(microtime(true) * 1000),
           'duration' => $started ? max(0, (int)round((microtime(true) * 1000 - $started) / 1000)) : null, 'online' => true);
-        q('INSERT INTO submissions (assessment_id, student_id, data) VALUES (?,?,?)', array($a->id, $sid, jenc($sub)));
-        $prev = rows('SELECT value FROM scores WHERE assessment_id = ? AND student_id = ? FOR UPDATE', array($a->id, $sid));
+        q('INSERT INTO submissions (tenant_id, assessment_id, student_id, data) VALUES (?,?,?,?)', array($tid, $a->id, $sid, jenc($sub)));
+        $prev = one('SELECT value FROM scores WHERE tenant_id = ? AND assessment_id = ? AND student_id = ? FOR UPDATE', array($tid, $a->id, $sid));
         $val = $result['score'];
-        $pv = $prev ? json_decode($prev[0]['value']) : null;
+        $pv = $prev ? json_decode($prev['value']) : null;
         if (is_object($pv)) {
           $pv->score = $result['score'];
           if (is_numeric(prop($pv, 'remedial')) && $result['score'] < $kktp) $pv->final = max($result['score'], min((float)$pv->remedial, $cap));
           else { unset($pv->remedial); unset($pv->final); }
           $val = $pv;
         }
-        q('INSERT INTO scores (assessment_id, student_id, value) VALUES (?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', array($a->id, $sid, jenc($val)));
+        q('INSERT INTO scores (tenant_id, assessment_id, student_id, value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', array($tid, $a->id, $sid, jenc($val)));
         $pdo->commit();
       } catch (Exception $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
       out(array('ok' => true, 'result' => prop($a, 'hideScore') ? null : array('score' => $result['score'], 'earned' => $result['earned'], 'total' => $result['total'], 'needsReview' => $result['needsReview'])));

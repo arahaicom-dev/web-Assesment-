@@ -112,10 +112,12 @@
     { group: 'Lainnya' },
     { href: 'istilah', ic: '📖', label: 'Istilah Lama → Baru' },
     { href: 'pengaturan', ic: '🎨', label: 'Pengaturan & Tema' },
-    { href: 'akun', ic: '👤', label: 'Akun Guru', server: true }
+    { href: 'akun', ic: '👤', label: 'Akun Guru', server: true },
+    { href: 'langganan', ic: '💳', label: 'Langganan', saas: true },
+    { href: 'pemilik', ic: '👑', label: 'Panel Pemilik', owner: true }
   ];
   function renderNav(route) {
-    $('#nav').innerHTML = NAV.filter(n => !n.server || S.mode === 'server').map(n => n.group ? `<div class="nav-group">${n.group}</div>` :
+    $('#nav').innerHTML = NAV.filter(n => (!n.server || S.mode === 'server') && (!n.saas || S.saas) && (!n.owner || (S.saas && S.user && S.user.super))).map(n => n.group ? `<div class="nav-group">${n.group}</div>` :
       `<a href="#/${n.href}" class="${route === n.href || route.startsWith(n.href + '/') ? 'active' : ''}"><span class="ic">${n.ic}</span><span>${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}</a>`).join('');
     $('#brand-sub').textContent = st().settings.schoolName || 'Penilaian & Nilai Rapor';
     renderUserBox();
@@ -154,7 +156,8 @@
   let current = null;
   function setTitle(title, sub) { $('#page-title').innerHTML = `<h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ''}`; }
   function route() {
-    const hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
+    let hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
+    if (S.locked() && !/^(langganan|akun|pemilik)/.test(hash)) { hash = 'langganan'; history.replaceState(null, '', '#/langganan'); }
     const parts = hash.split('/');
     const r = parts[0] || 'beranda';
     renderNav(hash);
@@ -174,6 +177,8 @@
       else if (r === 'istilah') out = viewGlossary();
       else if (r === 'pengaturan') out = viewSettings();
       else if (r === 'akun' && S.mode === 'server') out = viewAccount();
+      else if (r === 'langganan' && S.saas) out = viewBilling();
+      else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
       else { location.hash = '#/beranda'; return; }
     } catch (e) {
       console.error(e);
@@ -181,8 +186,11 @@
     }
     current = out;
     const onHosting = S.mode === 'local' && /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
-    const banner = onHosting ? `<div class="note warn no-print" style="margin-bottom:16px"><b>⚠️ Aplikasi berjalan dalam MODE LOKAL (tanpa server Node.js).</b> Data hanya tersimpan di browser ini, tidak ada login, dan murid tidak bisa ujian dari HP masing-masing (tidak ada token).
-      <br>Penyebab paling umum: file aplikasi diekstrak ke dalam <b>public_html</b>. Seharusnya di folder terpisah (mis. <b>/home/akun/asesmen</b>) dan dijalankan lewat <b>Setup Node.js App</b>. Cek: buka <a href="api/health" target="_blank">${esc(location.host)}/api/health</a>. Kalau server berjalan benar, halaman itu berisi <span class="kbd">"mode":"server"</span>.</div>` : '';
+    let banner = onHosting ? `<div class="note warn no-print" style="margin-bottom:16px"><b>⚠️ Aplikasi berjalan dalam MODE LOKAL (server tidak terdeteksi).</b> Data hanya tersimpan di browser ini, tidak ada login, dan murid tidak bisa ujian dari HP masing-masing (tidak ada token).
+      <br>Pastikan folder <b>api</b> ikut terunggah dan PHP aktif. Cek: buka <a href="api/health" target="_blank">${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}api/health</a> — kalau benar, isinya memuat <span class="kbd">"mode":"server"</span>.</div>` : '';
+    const sub = S.subscription;
+    if (S.saas && sub && sub.active && sub.status === 'trial' && r !== 'langganan') banner += `<div class="note no-print" style="margin-bottom:16px">🎁 Masa coba gratis tersisa <b>${sub.daysLeft} hari</b>. <a href="#/langganan">Pilih paket langganan →</a></div>`;
+    else if (S.saas && sub && sub.active && sub.status === 'active' && sub.daysLeft !== null && sub.daysLeft <= 7 && r !== 'langganan') banner += `<div class="note warn no-print" style="margin-bottom:16px">⏳ Langganan berakhir dalam <b>${sub.daysLeft} hari</b>. <a href="#/langganan">Perpanjang sekarang →</a></div>`;
     view.innerHTML = `<div class="page">${banner}${out.html}</div>`;
     bindTilt(view);
     if (out.mount) out.mount(view);
@@ -676,7 +684,7 @@
     for (let i = 0; i < 6; i++) c += abc[r[i] % abc.length];
     return c;
   }
-  function examLink(a) { return location.origin + location.pathname.replace(/index\.html$/, '').replace(/\/?$/, '/') + 'ujian.html?token=' + (a.examCode || ''); }
+  function examLink(a) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'ujian.html?token=' + (a.examCode || ''); }
   function examPanel(a) {
     const cls = S.cls(a.classId); const subs = st().submissions[a.id] || {};
     const done = cls.students.filter(m => subs[m.id]).length;
@@ -1337,7 +1345,7 @@
     if (S.mode !== 'server' || !S.user) { if (box) box.remove(); return; }
     if (!box) { box = document.createElement('div'); box.id = 'user-box'; box.className = 'user-box'; $('#sidebar').appendChild(box); }
     box.innerHTML = `<div class="avatar">${esc((S.user.name || '?').charAt(0).toUpperCase())}</div>
-      <div style="min-width:0;flex:1"><b class="ellipsis">${esc(S.user.name)}</b><div class="small muted"><span id="sync-dot" class="sync-dot"></span><span id="sync-txt"></span></div></div>
+      <div style="min-width:0;flex:1"><b class="ellipsis">${esc(S.user.name)}</b><div class="small muted"><span id="sync-dot" class="sync-dot"></span><span id="sync-txt"></span></div>${S.saas && S.subscription ? `<a href="#/langganan" class="sub-badge ${S.subscription.active ? S.subscription.status : 'expired'}">${subLabel(S.subscription)}</a>` : ''}</div>
       <button class="btn ghost sm" id="btn-logout" title="Keluar">⎋</button>`;
     $('#btn-logout', box).onclick = () => S.logout();
     paintSync(S.syncStatus());
@@ -1345,7 +1353,7 @@
   function paintSync(stt) {
     const d = $('#sync-dot'), t = $('#sync-txt'); if (!d) return;
     d.className = 'sync-dot ' + stt;
-    t.textContent = stt === 'saving' ? 'Menyimpan…' : stt === 'error' ? 'Gagal tersimpan' : 'Tersimpan di server';
+    t.textContent = stt === 'saving' ? 'Menyimpan…' : stt === 'error' ? 'Gagal tersimpan' : stt === 'locked' ? 'Hanya-baca' : 'Tersimpan di server';
   }
 
   function viewAccount() {
@@ -1433,35 +1441,236 @@
     };
   }
 
-  /* Layar login / pemasangan pertama */
-  function authScreen(needsSetup, msg) {
+  /* Layar login / daftar sekolah / pemasangan pertama */
+  function authScreen(mode, msg) {
+    // mode: true = pemasangan pertama (pemilik), 'register' = daftar sekolah, lainnya = login
+    if (mode === true) mode = 'setup';
+    if (!mode) mode = 'login';
+    if (mode === 'register' && !S.saas) mode = 'login';
     document.body.classList.add('auth-mode');
     let el = $('#auth');
     if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
+    const sub = { setup: S.saas ? 'Pemasangan pertama — buat akun pemilik platform' : 'Pemasangan pertama — buat akun admin', register: 'Daftar sekolah baru — coba gratis', login: 'Masuk ke akun sekolah' }[mode];
+    const userLabel = S.saas ? 'Email' : 'Username';
     el.innerHTML = `<div class="card auth-card tilt"><div class="z1">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
-      <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${needsSetup ? 'Pemasangan pertama — buat akun admin' : 'Masuk sebagai guru'}</div></div></div>
+      <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${sub}</div></div></div>
+      ${S.saas && mode !== 'setup' ? `<div class="tabs" style="width:100%"><button type="button" class="${mode === 'login' ? 'on' : ''}" style="flex:1" data-m="login">Masuk</button><button type="button" class="${mode === 'register' ? 'on' : ''}" style="flex:1" data-m="register">Daftar Sekolah</button></div>` : ''}
       ${msg ? `<div class="note warn" style="margin-bottom:12px">${esc(msg)}</div>` : ''}
+      ${mode === 'setup' && S.saas ? '<p class="small muted" style="margin-top:0">Akun ini adalah <b>pemilik platform</b>: bisa memakai aplikasi untuk sekolah Anda sendiri sekaligus mengelola sekolah lain yang berlangganan, pembayaran, dan harga.</p>' : ''}
       <form id="auth-form">
-        ${needsSetup ? '<label class="field"><span>Nama sekolah</span><input id="au-school" required placeholder="SMP Negeri 1 ..."></label><label class="field"><span>Nama Anda</span><input id="au-name" required></label>' : ''}
-        <label class="field"><span>Username</span><input id="au-user" required autocomplete="username" autocapitalize="off"></label>
-        <label class="field"><span>Password${needsSetup ? ' (min. 6 karakter)' : ''}</span><input id="au-pw" type="password" required autocomplete="${needsSetup ? 'new-password' : 'current-password'}"></label>
-        <button class="btn lg" style="width:100%" type="submit">${needsSetup ? 'Buat Akun & Mulai' : 'Masuk'}</button>
+        ${mode === 'setup' || mode === 'register' ? '<label class="field"><span>Nama sekolah</span><input id="au-school" required placeholder="SMP Negeri 1 ..."></label><label class="field"><span>Nama Anda</span><input id="au-name" required autocomplete="name"></label>' : ''}
+        <label class="field"><span>${mode === 'login' ? (S.saas ? 'Email atau username' : 'Username') : userLabel}</span><input id="au-user" required autocomplete="${mode === 'login' ? 'username' : 'email'}" autocapitalize="off" ${mode !== 'login' && S.saas ? 'type="email"' : ''}></label>
+        ${mode === 'register' ? '<label class="field"><span>No. WhatsApp (opsional)</span><input id="au-phone" inputmode="tel" autocomplete="tel" placeholder="08…"></label>' : ''}
+        <label class="field"><span>Password${mode !== 'login' ? ' (min. 6 karakter)' : ''}</span><input id="au-pw" type="password" required autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>
+        <button class="btn lg" style="width:100%" type="submit">${mode === 'setup' ? 'Buat Akun & Mulai' : mode === 'register' ? 'Daftar & Mulai Coba Gratis' : 'Masuk'}</button>
       </form>
-      <div class="small muted" style="margin-top:14px;text-align:center">Murid? <a href="ujian.html">Masuk ke halaman ujian →</a></div>
+      ${mode === 'login' && S.saas ? '<div class="small muted" style="margin-top:10px;text-align:center">Lupa password? Minta admin sekolah Anda mengatur ulang di menu Akun Guru.</div>' : ''}
+      <div class="small muted" style="margin-top:14px;text-align:center">${S.saas ? '<a href="index.html">← Halaman utama</a> · ' : ''}Murid? <a href="ujian.html">Masuk ke halaman ujian →</a></div>
     </div></div>`;
     bindTilt(el);
-    $('#au-user', el).focus();
+    $$('[data-m]', el).forEach(b => b.onclick = () => { history.replaceState(null, '', b.dataset.m === 'register' ? '#daftar' : '#masuk'); authScreen(b.dataset.m); });
+    ($('#au-school', el) || $('#au-user', el)).focus();
     $('#auth-form', el).onsubmit = async e => {
       e.preventDefault();
       const btn = $('button[type=submit]', el); btn.disabled = true;
+      const val = id => { const x = $(id, el); return x ? x.value.trim() : ''; };
       try {
-        if (needsSetup) await S.setup({ schoolName: $('#au-school', el).value.trim(), name: $('#au-name', el).value.trim(), username: $('#au-user', el).value.trim(), password: $('#au-pw', el).value });
-        else await S.login($('#au-user', el).value.trim(), $('#au-pw', el).value);
+        if (mode === 'setup') await S.setup({ schoolName: val('#au-school'), name: val('#au-name'), username: val('#au-user'), password: $('#au-pw', el).value });
+        else if (mode === 'register') await S.register({ schoolName: val('#au-school'), name: val('#au-name'), email: val('#au-user'), phone: val('#au-phone'), password: $('#au-pw', el).value });
+        else await S.login(val('#au-user'), $('#au-pw', el).value);
         el.remove(); document.body.classList.remove('auth-mode');
+        if (/^#(daftar|masuk)$/.test(location.hash)) history.replaceState(null, '', '#/beranda');
         startApp();
+        if (mode === 'register') toast('Selamat datang! Masa coba gratis Anda sudah aktif.');
       } catch (err) { btn.disabled = false; toast(err.message, 'bad'); }
     };
+  }
+
+  /* ================= Langganan (SaaS) ================= */
+  const rupiah = n => 'Rp' + Math.round(+n || 0).toLocaleString('id-ID');
+  const tgl = d => d ? new Date(String(d).replace(' ', 'T')).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '–';
+  function subLabel(sb) {
+    if (!sb) return '';
+    if (sb.status === 'unlimited') return '★ Tanpa batas';
+    if (sb.status === 'suspended') return '⛔ Dinonaktifkan';
+    if (!sb.active) return '⚠ Langganan habis';
+    if (sb.status === 'trial') return '🎁 Coba gratis · ' + sb.daysLeft + ' hari';
+    return '✓ Aktif · ' + sb.daysLeft + ' hari';
+  }
+  const PAY_STATUS = { pending: ['warn', 'Menunggu verifikasi'], approved: ['ok', 'Disetujui'], rejected: ['bad', 'Ditolak'] };
+
+  function viewBilling() {
+    setTitle('💳 Langganan', 'Status langganan sekolah dan pembayaran');
+    renderCtx(false);
+    const out = {
+      html: '<div id="billing" class="muted">Memuat…</div>',
+      async mount(v) {
+        let d;
+        try { d = await S.api('billing'); } catch (e) { $('#billing', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+        S.subscription = d.subscription; renderUserBox();
+        const sb = d.subscription;
+        const locked = !sb.active;
+        const waLink = d.whatsapp ? `https://wa.me/${d.whatsapp.replace(/^0/, '62')}` : '';
+        $('#billing', v).innerHTML = `
+          ${locked ? `<div class="note warn" style="margin-bottom:16px"><b>${sb.status === 'suspended' ? 'Akun sekolah dinonaktifkan.' : 'Masa ' + (sb.plan === 'trial' ? 'coba gratis' : 'langganan') + ' sudah berakhir.'}</b> Data Anda tetap aman, tetapi aplikasi terkunci sampai langganan diperpanjang. ${sb.status === 'suspended' ? 'Hubungi pengelola.' : 'Pilih paket di bawah lalu kirim bukti transfer.'}</div>` : ''}
+          <div class="grid g3">
+            <div class="card stat tilt"><div class="blob"><span>🏫</span></div><div class="z1"><div class="lbl">Sekolah</div><div class="num" style="font-size:1.3rem">${esc(sb.name)}</div></div></div>
+            <div class="card stat tilt"><div class="blob"><span>${sb.active ? '✅' : '⛔'}</span></div><div class="z1"><div class="lbl">Status</div><div class="num" style="font-size:1.3rem">${subLabel(sb)}</div></div></div>
+            <div class="card stat tilt"><div class="blob"><span>📅</span></div><div class="z1"><div class="lbl">Aktif sampai</div><div class="num" style="font-size:1.3rem">${sb.status === 'unlimited' ? 'Tanpa batas' : tgl(sb.paidUntil)}</div></div></div>
+          </div>
+          ${sb.status === 'unlimited' ? '<div class="card"><p style="margin:0">Sekolah ini tidak memiliki batas waktu langganan.</p></div>' : `
+          <h2 style="margin:24px 0 12px">Pilih Paket</h2>
+          <div class="grid g3">${d.plans.map((p, i) => `<div class="card tilt plan-card ${i === 1 ? 'featured' : ''}"><div class="z1">
+            ${i === 1 ? '<span class="pill ok" style="position:absolute;top:14px;right:14px">Populer</span>' : ''}
+            <h3>${esc(p.name)}</h3><div class="price">${rupiah(p.price)}</div><div class="small muted">untuk ${p.months} bulan${p.months > 1 ? ` · ±${rupiah(p.price / p.months)}/bulan` : ''}</div>
+            <p class="small" style="min-height:2.6em">${esc(p.desc || '')}</p>
+            ${d.isAdmin ? `<button class="btn ${i === 1 ? '' : 'soft'}" style="width:100%" data-act="pay" data-id="${esc(p.id)}">Pilih Paket Ini</button>` : '<div class="small muted">Hanya admin sekolah yang dapat membayar.</div>'}
+          </div></div>`).join('')}</div>`}
+          <div class="card" style="margin-top:18px"><div class="card-head"><h3>Riwayat Pembayaran</h3>${waLink ? `<a class="btn ok sm" target="_blank" href="${waLink}">💬 Hubungi Admin</a>` : ''}</div>
+            ${d.payments.length ? `<div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Paket</th><th class="num">Jumlah</th><th>Status</th><th>Catatan</th></tr></thead><tbody>
+            ${d.payments.map(x => `<tr><td>${tgl(x.created_at)}</td><td>${esc(x.plan_name)} (${x.months} bln)</td><td class="num">${rupiah(x.amount)}</td><td><span class="pill ${PAY_STATUS[x.status][0]}">${PAY_STATUS[x.status][1]}</span></td><td class="small">${esc(x.admin_note || x.note || '')}</td></tr>`).join('')}
+            </tbody></table></div>` : '<p class="muted small" style="margin:0">Belum ada pembayaran.</p>'}</div>`;
+        bindTilt(v);
+        out.data = d;
+      },
+      actions: {
+        pay: el => {
+          const d = out.data; const p = d.plans.find(x => x.id === el.dataset.id); const amount = p.price + d.subscription.uniqueCode;
+          let proof = '';
+          const m = modal(`<h2>Bayar Paket ${esc(p.name)}</h2>
+            <div class="pay-box"><div class="small muted">Transfer tepat sebesar</div><div class="score-big" style="font-size:2.4rem">${rupiah(amount)}</div>
+              <div class="small muted">${rupiah(p.price)} + kode unik ${d.subscription.uniqueCode} (agar pembayaran mudah dikenali)</div></div>
+            <h3>Ke rekening</h3><pre class="bank-info">${esc(d.bankInfo)}</pre>
+            <label class="field"><span>Foto / screenshot bukti transfer</span><input type="file" id="pf" accept="image/*"></label>
+            <img id="pf-prev" class="hidden" style="max-height:200px;border-radius:12px;margin-bottom:10px">
+            <label class="field"><span>Catatan (opsional)</span><input id="pn" placeholder="mis. transfer dari rekening a.n. …"></label>
+            <p class="small muted">Setelah diverifikasi admin, masa aktif bertambah ${p.months} bulan secara otomatis.</p>
+            <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="p-ok">Kirim Bukti Transfer</button></div>`, { noFocus: true });
+          $('#pf', m).onchange = async e => { const f = e.target.files[0]; if (!f) return; proof = await resizeImage(f, 1100); const im = $('#pf-prev', m); im.src = proof; im.classList.remove('hidden'); };
+          $('#p-ok', m).onclick = async () => {
+            if (!proof) return toast('Pilih foto bukti transfer terlebih dahulu.', 'bad');
+            const b = $('#p-ok', m); b.disabled = true;
+            try { await S.api('billing/pay', { body: { planId: p.id, proof, note: $('#pn', m).value.trim() } }); closeModal(); toast('Bukti transfer terkirim. Menunggu verifikasi admin.'); route(); }
+            catch (e) { b.disabled = false; toast(e.message, 'bad'); }
+          };
+        }
+      }
+    };
+    return out;
+  }
+
+  /* ================= Panel Pemilik Platform ================= */
+  function viewOwner(tab) {
+    tab = tab || 'sekolah';
+    setTitle('👑 Panel Pemilik', 'Kelola sekolah pelanggan, pembayaran, harga, dan rekening');
+    renderCtx(false);
+    const out = {
+      html: `<div class="tabs"><button class="${tab === 'sekolah' ? 'on' : ''}" data-act="tab" data-t="sekolah">🏫 Sekolah</button><button class="${tab === 'bayar' ? 'on' : ''}" data-act="tab" data-t="bayar">💸 Pembayaran <span id="pend-badge"></span></button><button class="${tab === 'atur' ? 'on' : ''}" data-act="tab" data-t="atur">⚙️ Harga & Rekening</button></div><div id="owner" class="muted">Memuat…</div>`,
+      async mount(v) {
+        let d;
+        try { d = await S.api('owner/overview'); } catch (e) { $('#owner', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+        out.data = d;
+        if (d.pending) $('#pend-badge', v).innerHTML = `<span class="pill bad">${d.pending}</span>`;
+        const box = $('#owner', v);
+        if (tab === 'sekolah') {
+          const act = d.tenants.filter(t => t.active).length;
+          box.innerHTML = `<div class="grid g4">
+            <div class="card stat tilt"><div class="blob"><span>🏫</span></div><div class="z1"><div class="num">${d.tenants.length}</div><div class="lbl">Sekolah terdaftar</div></div></div>
+            <div class="card stat tilt"><div class="blob"><span>✅</span></div><div class="z1"><div class="num">${act}</div><div class="lbl">Sekolah aktif</div></div></div>
+            <div class="card stat tilt"><div class="blob"><span>💰</span></div><div class="z1"><div class="num" style="font-size:1.5rem">${rupiah(d.revenueMonth)}</div><div class="lbl">Pendapatan bulan ini</div></div></div>
+            <div class="card stat tilt"><div class="blob"><span>📈</span></div><div class="z1"><div class="num" style="font-size:1.5rem">${rupiah(d.revenue)}</div><div class="lbl">Total pendapatan</div></div></div></div>
+            <div class="card" style="margin-top:18px"><div class="card-head"><h3>Daftar Sekolah</h3><input id="t-q" placeholder="Cari sekolah / email…" style="max-width:260px"></div>
+            <div class="table-wrap"><table id="t-table"><thead><tr><th>Sekolah</th><th>Kontak</th><th>Status</th><th>Aktif sampai</th><th class="num">Guru</th><th class="num">Murid</th><th class="num">Asesmen</th><th class="num">Pendapatan</th><th></th></tr></thead><tbody>
+            ${d.tenants.map(t => `<tr data-q="${esc((t.name + ' ' + (t.contactEmail || '') + ' ' + (t.contactName || '')).toLowerCase())}"><td><b>${esc(t.name)}</b><div class="small muted">Daftar ${tgl(t.createdAt)}</div></td>
+              <td class="small">${esc(t.contactName || '')}<br>${esc(t.contactEmail || '')}${t.contactPhone ? `<br><a target="_blank" href="https://wa.me/${esc(t.contactPhone.replace(/^0/, '62').replace(/\D/g, ''))}">${esc(t.contactPhone)}</a>` : ''}</td>
+              <td><span class="sub-badge ${t.active ? t.status : 'expired'}">${subLabel(t)}</span></td><td class="small">${t.status === 'unlimited' ? '∞' : tgl(t.paidUntil)}</td>
+              <td class="num">${t.users}</td><td class="num">${t.students}</td><td class="num">${t.assessments}</td><td class="num">${rupiah(t.revenue)}</td>
+              <td><button class="btn soft sm" data-act="manage" data-id="${t.id}">Kelola</button></td></tr>`).join('')}
+            </tbody></table></div></div>`;
+          $('#t-q', box).oninput = e => { const f = e.target.value.toLowerCase(); $$('#t-table tbody tr', box).forEach(tr => { tr.style.display = !f || tr.dataset.q.includes(f) ? '' : 'none'; }); };
+        } else if (tab === 'bayar') {
+          const r = await S.api('owner/payments?status=' + (out.all ? 'all' : 'pending'));
+          box.innerHTML = `<div class="card"><div class="card-head"><h3>${out.all ? 'Semua Pembayaran' : 'Menunggu Verifikasi'}</h3><button class="btn ghost sm" data-act="toggle-all">${out.all ? 'Tampilkan yang menunggu saja' : 'Tampilkan semua'}</button></div>
+            ${r.payments.length ? r.payments.map(x => `<div class="pay-row">
+              ${x.proof ? `<a href="#" data-act="proof" data-id="${x.id}"><img src="${x.proof}" alt="bukti"></a>` : '<div class="noimg">Tanpa bukti</div>'}
+              <div style="flex:1;min-width:200px"><b>${esc(x.tenant_name)}</b> <span class="pill ${PAY_STATUS[x.status][0]}">${PAY_STATUS[x.status][1]}</span>
+                <div>${esc(x.plan_name)} · ${x.months} bulan · <b>${rupiah(x.amount)}</b></div>
+                <div class="small muted">Dikirim ${tgl(x.created_at)}${x.note ? ' · “' + esc(x.note) + '”' : ''}${x.admin_note ? ' · Catatan: ' + esc(x.admin_note) : ''}</div></div>
+              ${x.status === 'pending' ? `<div class="btns"><button class="btn ok sm" data-act="approve" data-id="${x.id}">✔ Setujui</button><button class="btn danger sm" data-act="reject" data-id="${x.id}">✕ Tolak</button></div>` : ''}
+            </div>`).join('') : '<p class="muted">Tidak ada pembayaran.</p>'}</div>`;
+          out.payments = r.payments;
+        } else {
+          const p = d.platform;
+          box.innerHTML = `<div class="grid g2" style="align-items:start">
+            <div class="card"><h3>Identitas & Kontak</h3>
+              <label class="field"><span>Nama layanan</span><input id="pf-brand" value="${esc(p.brand)}"></label>
+              <label class="field"><span>Slogan di halaman utama</span><input id="pf-tag" value="${esc(p.tagline)}"></label>
+              <div class="row"><label class="field"><span>Masa coba gratis (hari)</span><input type="number" id="pf-trial" min="0" value="${p.trialDays}"></label>
+              <label class="field"><span>WhatsApp admin (62…)</span><input id="pf-wa" value="${esc(p.whatsapp)}" placeholder="628123456789"></label></div>
+              <label class="field"><span>Email admin</span><input id="pf-email" value="${esc(p.email)}"></label>
+              <label class="field"><span>Info rekening untuk transfer</span><textarea id="pf-bank" style="min-height:110px">${esc(p.bankInfo)}</textarea></label></div>
+            <div class="card"><div class="card-head"><h3>Paket & Harga</h3><button class="btn soft sm" data-act="add-plan">+ Paket</button></div>
+              <div id="plans">${p.plans.map(planRow).join('')}</div>
+              <p class="small muted">Kode paket hanya huruf kecil/angka (mis. <span class="kbd">tahunan</span>). Harga dalam rupiah.</p></div></div>
+            <div class="btns"><button class="btn lg" data-act="save-config">💾 Simpan Pengaturan</button></div>`;
+        }
+        bindTilt(box);
+      },
+      actions: {
+        tab: el => { location.hash = '#/pemilik/' + el.dataset.t; },
+        'toggle-all': () => { out.all = !out.all; out.mount($('#view')); },
+        proof: el => { const x = out.payments.find(p => p.id === +el.dataset.id); modal(`<h2>Bukti Transfer — ${esc(x.tenant_name)}</h2><img src="${x.proof}" style="width:100%;border-radius:12px"><div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true }); },
+        approve: async el => {
+          const x = out.payments.find(p => p.id === +el.dataset.id);
+          if (!await confirmBox(`Setujui pembayaran <b>${rupiah(x.amount)}</b> dari <b>${esc(x.tenant_name)}</b>? Masa aktif bertambah ${x.months} bulan.`, 'Setujui')) return;
+          try { await S.api('owner/payments/' + x.id, { body: { action: 'approve' } }); toast('Pembayaran disetujui, masa aktif diperpanjang.'); route(); } catch (e) { toast(e.message, 'bad'); }
+        },
+        reject: el => {
+          const m = modal(`<h2>Tolak Pembayaran</h2><label class="field"><span>Alasan (akan terlihat oleh sekolah)</span><input id="rj" placeholder="mis. nominal tidak sesuai / bukti tidak terbaca"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn danger" id="rj-ok">Tolak</button></div>`);
+          $('#rj-ok', m).onclick = async () => { try { await S.api('owner/payments/' + el.dataset.id, { body: { action: 'reject', note: $('#rj', m).value.trim() } }); closeModal(); toast('Pembayaran ditolak.'); route(); } catch (e) { toast(e.message, 'bad'); } };
+        },
+        manage: el => {
+          const t = out.data.tenants.find(x => x.id === +el.dataset.id);
+          const m = modal(`<h2>${esc(t.name)}</h2><p class="small muted" style="margin-top:0">${subLabel(t)} · aktif sampai ${t.status === 'unlimited' ? 'tanpa batas' : tgl(t.paidUntil)} · admin: ${esc(t.adminUser || '-')}</p>
+            <h3>Perpanjang / atur masa aktif</h3>
+            <div class="btns" style="margin-bottom:10px"><button class="btn soft sm" data-days="7">+7 hari</button><button class="btn soft sm" data-days="30">+30 hari</button><button class="btn soft sm" data-days="182">+6 bulan</button><button class="btn soft sm" data-days="365">+1 tahun</button></div>
+            <div class="row"><label class="field"><span>Atur tanggal berakhir</span><input type="date" id="mt-date"></label><button class="btn ghost" id="mt-set" style="margin-bottom:12px">Atur</button><button class="btn ghost" id="mt-unl" style="margin-bottom:12px">∞ Tanpa batas</button></div>
+            <h3>Lainnya</h3>
+            <div class="btns"><button class="btn ${t.status === 'suspended' ? 'ok' : 'danger'} sm" id="mt-susp">${t.status === 'suspended' ? 'Aktifkan kembali' : 'Nonaktifkan sekolah'}</button>${t.adminId ? '<button class="btn ghost sm" id="mt-pw">🔑 Atur ulang password admin</button>' : ''}</div>
+            <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { noFocus: true });
+          const upd = async body => { try { await S.api('owner/tenants/' + t.id, { method: 'PUT', body }); closeModal(); toast('Tersimpan.'); route(); } catch (e) { toast(e.message, 'bad'); } };
+          $$('[data-days]', m).forEach(b => b.onclick = () => upd({ addDays: +b.dataset.days }));
+          $('#mt-set', m).onclick = () => { const v = $('#mt-date', m).value; if (v) upd({ setUntil: v }); };
+          $('#mt-unl', m).onclick = () => upd({ unlimited: true });
+          $('#mt-susp', m).onclick = () => upd({ suspended: t.status !== 'suspended' });
+          const pw = $('#mt-pw', m);
+          if (pw) pw.onclick = async () => {
+            const np = prompt('Password baru untuk ' + t.adminUser + ' (min. 6 karakter):'); if (!np) return;
+            try { await S.api('owner/users/' + t.adminId + '/password', { method: 'PUT', body: { password: np } }); toast('Password admin diatur ulang.'); } catch (e) { toast(e.message, 'bad'); }
+          };
+        },
+        'add-plan': () => { $('#plans').insertAdjacentHTML('beforeend', planRow({ id: '', name: '', price: 0, months: 1, desc: '' })); },
+        'del-plan': el => { el.closest('.plan-row').remove(); },
+        'save-config': async () => {
+          const plans = $$('.plan-row').map(r => ({ id: $('[data-k=id]', r).value.trim(), name: $('[data-k=name]', r).value.trim(), price: +$('[data-k=price]', r).value || 0, months: +$('[data-k=months]', r).value || 1, desc: $('[data-k=desc]', r).value.trim() }));
+          try {
+            await S.api('owner/config', { method: 'PUT', body: { brand: $('#pf-brand').value, tagline: $('#pf-tag').value, trialDays: +$('#pf-trial').value, whatsapp: $('#pf-wa').value, email: $('#pf-email').value, bankInfo: $('#pf-bank').value, plans } });
+            toast('Pengaturan tersimpan. Harga baru langsung tampil di halaman utama.');
+          } catch (e) { toast(e.message, 'bad'); }
+        }
+      }
+    };
+    return out;
+  }
+  function planRow(p) {
+    return `<div class="plan-row"><div class="row">
+      <label class="field" style="max-width:120px"><span>Kode</span><input data-k="id" value="${esc(p.id)}" placeholder="tahunan"></label>
+      <label class="field"><span>Nama paket</span><input data-k="name" value="${esc(p.name)}"></label>
+      <label class="field" style="max-width:140px"><span>Harga (Rp)</span><input type="number" min="0" data-k="price" value="${p.price}"></label>
+      <label class="field" style="max-width:90px"><span>Bulan</span><input type="number" min="1" data-k="months" value="${p.months}"></label>
+      <button class="btn ghost sm" data-act="del-plan" style="margin-bottom:12px">🗑</button></div>
+      <label class="field"><span>Keterangan singkat</span><input data-k="desc" value="${esc(p.desc || '')}"></label></div>`;
   }
 
   let started = false;
@@ -1485,11 +1694,12 @@
   $('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
   window.App = { toast, route };
   S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
+  S.onLocked = () => { renderUserBox(); if (!/^#\/(langganan|akun|pemilik)/.test(location.hash)) { toast('Masa langganan sekolah berakhir — data hanya bisa dilihat. Perpanjang di menu Langganan.', 'bad'); location.hash = '#/langganan'; } };
   applyTheme();
   S.init().then(r => {
     if (r.needsConfig) configScreen();
     else if (r.needsSetup) authScreen(true);
-    else if (r.needLogin) authScreen(false);
+    else if (r.needLogin) authScreen(location.hash === '#daftar' ? 'register' : 'login');
     else startApp();
   }).catch(e => {
     $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">${S.backend === 'php' ? 'Periksa database di cPanel → MySQL® Databases. Untuk mengisi ulang pengaturan database, hapus file <b>api/config.php</b> lewat File Manager lalu muat ulang halaman ini.' : 'Periksa pengaturan database di cPanel → Setup Node.js App → Environment variables (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD), lalu Restart. Detail juga tercatat di file log-aplikasi.txt di folder aplikasi.'}</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;

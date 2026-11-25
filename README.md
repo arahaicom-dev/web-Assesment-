@@ -54,13 +54,27 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
   - Murid tidak bisa mengumpulkan dua kali. Jawaban tersimpan sementara di HP murid kalau halamannya tertutup.
 - Kalau aplikasi dibuka tanpa server (hosting statis biasa), aplikasi tetap jalan dalam **mode lokal** seperti sebelumnya, dengan data tersimpan di browser.
 
+## Mode SaaS (versi PHP): banyak sekolah berlangganan
+
+Versi PHP berjalan sebagai layanan berlangganan:
+- **Halaman utama** (`index.html`) berisi fitur, harga (diambil dari server), FAQ, serta tombol *Coba Gratis* dan *Masuk*. Aplikasi guru ada di `app.html`.
+- **Akun pertama** yang dibuat saat pemasangan adalah **pemilik platform**. Sekolahnya sendiri tanpa batas waktu, dan menu **👑 Panel Pemilik** tersedia untuk:
+  - melihat semua sekolah (kontak, jumlah guru/murid/asesmen, status, pendapatan),
+  - memperpanjang, mengatur tanggal berakhir, menonaktifkan sekolah, atau mengatur ulang password admin sekolah,
+  - memverifikasi **bukti transfer** (Setujui/Tolak). Masa aktif sekolah bertambah otomatis saat pembayaran disetujui,
+  - mengatur **harga paket**, lama masa coba, info rekening, WhatsApp, dan email.
+- **Sekolah lain mendaftar sendiri** lewat *Daftar Sekolah* dan langsung mendapat masa coba gratis (bawaan 14 hari). Data setiap sekolah terpisah.
+- Menu **💳 Langganan** di akun sekolah: pilih paket, transfer sesuai nominal (harga + kode unik), lalu unggah foto bukti transfer.
+- Kalau masa aktif habis, aplikasi sekolah terkunci (data tetap aman) dan token ujian sekolah itu tidak bisa dipakai sampai diperpanjang.
+- Memperbarui dari versi PHP 3.x tidak menghapus data. Data lama otomatis menjadi milik sekolah pemilik platform.
+
 ## Pasang di hosting biasa (PHP + MySQL) — paling mudah, tanpa Node.js
 
 Cara ini cocok untuk hosting cPanel pada umumnya. Tidak perlu Setup Node.js App dan tidak mengganggu situs lain di `public_html`. Butuh PHP 7.2+ (dengan PDO MySQL) dan MySQL/MariaDB.
 
 1. **cPanel → MySQL® Databases**: buat database dan user, lalu tambahkan user ke database dengan **ALL PRIVILEGES**. Catat nama lengkapnya (biasanya diawali nama akun, mis. `akunanda_asesmen`).
 2. **File Manager → `public_html`**: unggah `asesmen-merdeka-php.zip`, lalu **Extract**. Akan terbentuk folder `public_html/asesmen`.
-3. Buka `https://domainanda.com/asesmen`. Isi formulir **pengaturan database**, lalu buat **akun admin**. Selesai.
+3. Buka `https://domainanda.com/asesmen/app.html`. Isi formulir **pengaturan database**, lalu buat **akun pemilik**. Halaman utama untuk calon pelanggan ada di `https://domainanda.com/asesmen/`.
 
 Catatan:
 - Pengaturan database disimpan di `asesmen/api/config.php`, dan file ini tidak bisa dibuka dari browser. Untuk mengisi ulang, hapus file itu lalu buka aplikasinya lagi.
@@ -160,7 +174,8 @@ server/db.js         koneksi MySQL & pembuatan tabel otomatis
 server/api.js        login, akun guru, sinkronisasi data, ujian murid
 schema.sql           struktur tabel (opsional, untuk phpMyAdmin)
 .env.example         contoh konfigurasi database
-public/index.html    aplikasi guru
+public/index.html    halaman utama (landing page)
+public/app.html      aplikasi guru
 public/ujian.html    halaman ujian murid
 public/css/style.css tema 3D & warna dinamis
 public/js/calc.js    jenis asesmen, istilah, rumus nilai rapor, predikat, deskripsi

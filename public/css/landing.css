@@ -1,0 +1,70 @@
+/* Halaman utama (landing page) */
+body.landing { min-height: 100vh; }
+.lp-nav { position: sticky; top: 0; z-index: 30; display: flex; align-items: center; gap: 18px; padding: 12px 5vw;
+  background: var(--surface); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-bottom: 1px solid var(--border); }
+.lp-nav .brand { padding: 0; }
+.lp-links { display: flex; gap: 22px; margin-left: auto; }
+.lp-links a { color: var(--text); text-decoration: none; font-weight: 600; font-size: .92rem; }
+.lp-links a:hover { color: var(--primary); }
+main { padding: 0 5vw; }
+.lp-hero { display: grid; grid-template-columns: 1.1fr 1fr; gap: 40px; align-items: center; min-height: calc(100vh - 70px); padding: 40px 0; max-width: 1200px; margin: 0 auto; }
+.lp-hero h1 { font-size: clamp(2rem, 4.6vw, 3.4rem); line-height: 1.1; margin: 14px 0; letter-spacing: -.03em; }
+.grad { background: linear-gradient(135deg, var(--primary), var(--accent)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.lead { font-size: 1.15rem; color: var(--muted); max-width: 560px; margin-bottom: 22px; }
+.lp-hero .btns { margin-bottom: 10px; }
+.lp-hero-visual { position: relative; perspective: 1200px; min-height: 380px; display: grid; place-items: center; }
+.mock { width: min(440px, 100%); border-radius: 22px; overflow: hidden; background: var(--surface-solid); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  transform: rotateY(-14deg) rotateX(6deg); transition: transform .3s; position: relative; }
+.mock-bar { display: flex; gap: 6px; align-items: center; padding: 10px 14px; background: linear-gradient(135deg, var(--primary), var(--accent)); color: #fff; font-weight: 700; font-size: .85rem; }
+.mock-bar i { width: 10px; height: 10px; border-radius: 50%; background: hsl(0 0% 100% / .55); }
+.mock-bar span { margin-left: 8px; }
+.mock-body { padding: 16px; }
+.mock-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-bottom: 14px; }
+.mock-stats div { background: var(--surface-2); border-radius: 12px; padding: 10px; }
+.mock-stats b { display: block; font-size: 1.4rem; }
+.mock-stats small { color: var(--muted); font-size: .72rem; }
+.mock-chart { display: flex; gap: 12px; align-items: flex-end; height: 90px; padding: 0 10px 8px; border-bottom: 1px dashed var(--border); margin-bottom: 10px; }
+.mock-chart i { flex: 1; border-radius: 8px 8px 2px 2px; background: linear-gradient(180deg, var(--accent), var(--primary)); box-shadow: 6px 0 0 var(--primary-strong); }
+.mock-row { display: flex; align-items: center; gap: 10px; padding: 8px 4px; border-bottom: 1px solid var(--border); font-size: .9rem; }
+.mock-row span { flex: 1; }
+.mock-row em { font-style: normal; font-weight: 800; color: #fff; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--primary); }
+.mock-row em.warn { background: hsl(30 90% 50%); }
+.float-cube { position: absolute; right: 2%; bottom: 4%; width: 96px; height: 96px; perspective: 500px; }
+.float-cube > div { width: 96px; height: 96px; position: relative; transform-style: preserve-3d; animation: spin 14s linear infinite; }
+.float-cube span { position: absolute; inset: 0; display: grid; place-items: center; border-radius: 18px; font-weight: 800; color: #fff;
+  background: linear-gradient(135deg, var(--primary), var(--accent)); border: 2px solid hsl(0 0% 100% / .4); }
+.float-cube span:nth-child(1) { transform: translateZ(48px); }
+.float-cube span:nth-child(2) { transform: rotateY(90deg) translateZ(48px); filter: brightness(.85); }
+.float-cube span:nth-child(3) { transform: rotateY(180deg) translateZ(48px); }
+.float-cube span:nth-child(4) { transform: rotateY(-90deg) translateZ(48px); filter: brightness(.85); }
+.float-cube span:nth-child(5) { transform: rotateX(90deg) translateZ(48px); filter: brightness(1.1); }
+.float-cube span:nth-child(6) { transform: rotateX(-90deg) translateZ(48px); filter: brightness(.75); }
+.lp-section { max-width: 1200px; margin: 0 auto; padding: 70px 0 20px; scroll-margin-top: 60px; }
+.lp-section h2 { font-size: clamp(1.5rem, 3vw, 2.2rem); }
+.center { text-align: center; }
+.lp-features, .lp-steps, .lp-pricing { margin-top: 30px; }
+.lp-features .card p, .lp-steps .card p { color: var(--muted); margin-bottom: 0; }
+.lp-features .ico3d { width: 54px; height: 54px; border-radius: 16px; display: grid; place-items: center; font-size: 26px; margin-bottom: 12px;
+  background: linear-gradient(145deg, var(--primary-soft), var(--accent-soft)); box-shadow: 0 6px 0 hsl(var(--h) 40% 70% / .55), 0 12px 20px var(--shadow-c); }
+.lp-steps .step { display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; font-weight: 900; font-size: 1.2rem; color: #fff; margin-bottom: 10px;
+  background: linear-gradient(145deg, var(--primary), var(--accent)); box-shadow: 0 4px 0 var(--primary-strong); }
+.lp-pricing .plan-card { display: flex; flex-direction: column; }
+.lp-pricing .plan-card .btn { margin-top: auto; }
+.checks { list-style: none; padding: 0; margin: 0 0 18px; }
+.checks li { padding: 4px 0 4px 26px; position: relative; font-size: .92rem; }
+.checks li::before { content: '✓'; position: absolute; left: 0; color: var(--ok); font-weight: 900; }
+.lp-faq details { margin: 0 auto 12px; max-width: 820px; }
+.lp-faq summary { cursor: pointer; font-weight: 700; font-size: 1.02rem; list-style: none; }
+.lp-faq summary::after { content: '+'; float: right; font-size: 1.3rem; color: var(--primary); }
+.lp-faq details[open] summary::after { content: '–'; }
+.lp-faq details p { color: var(--muted); margin: 10px 0 0; }
+.lp-cta { text-align: center; display: block; padding: 40px 20px; }
+.lp-cta h2 { color: inherit; }
+.lp-footer { display: flex; gap: 16px; justify-content: space-between; flex-wrap: wrap; padding: 30px 5vw; margin-top: 50px; border-top: 1px solid var(--border); background: var(--surface); }
+@media (max-width: 900px) {
+  .lp-hero { grid-template-columns: 1fr; min-height: auto; }
+  .lp-hero-visual { min-height: 300px; }
+  .mock { transform: none; }
+  .lp-links { display: none; }
+  .lp-nav .btns { margin-left: auto; }
+}

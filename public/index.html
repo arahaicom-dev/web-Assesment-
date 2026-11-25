@@ -3,51 +3,120 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Asesmen Merdeka — Penilaian & Nilai Rapor</title>
-  <meta name="description" content="Aplikasi asesmen Kurikulum Merdeka: Diagnostik, Formatif, Sumatif Lingkup Materi, STS, SAS, SAT, unggah soal PDF, ujian online, dan penghitungan nilai rapor otomatis.">
+  <title>Asesmen Merdeka — Asesmen Kurikulum Merdeka, Nilai Rapor Otomatis & Ujian Online</title>
+  <meta name="description" content="Aplikasi asesmen sekolah Kurikulum Merdeka: Asesmen Diagnostik, Formatif, Sumatif Lingkup Materi, STS, SAS, SAT. Unggah soal PDF, ujian online dari HP murid, dan nilai rapor otomatis.">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>">
-  <link rel="stylesheet" href="css/style.css?v=3.2.0">
+  <link rel="stylesheet" href="css/style.css?v=4.0.0">
+  <link rel="stylesheet" href="css/landing.css?v=4.0.0">
 </head>
-<body>
-  <!-- Latar 3D -->
+<body class="landing">
   <div class="scene" aria-hidden="true">
     <div class="shape cube s1"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
     <div class="shape ball s2"></div>
     <div class="shape ring s3"></div>
     <div class="shape cube s4"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
-    <div class="shape ball s5"></div>
   </div>
 
-  <div class="app">
-    <aside class="sidebar" id="sidebar">
-      <a class="brand" href="#/beranda">
-        <div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
-        <div><b>Asesmen Merdeka</b><small id="brand-sub">Penilaian &amp; Nilai Rapor</small><small class="ver">Versi 3.2.0</small></div>
-      </a>
-      <nav class="nav" id="nav"></nav>
-    </aside>
+  <header class="lp-nav">
+    <a class="brand" href="#">
+      <div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
+      <b data-brand>Asesmen Merdeka</b>
+    </a>
+    <nav class="lp-links">
+      <a href="#fitur">Fitur</a><a href="#cara">Cara Kerja</a><a href="#harga" data-saas>Harga</a><a href="#faq">FAQ</a>
+    </nav>
+    <div class="btns">
+      <a class="btn ghost sm" href="app.html" id="btn-login">Masuk</a>
+      <a class="btn sm" href="app.html#daftar" data-saas>Coba Gratis</a>
+    </div>
+  </header>
 
-    <main class="main">
-      <div class="topbar">
-        <button class="btn ghost sm menu-btn" id="menu-btn" aria-label="Menu">☰</button>
-        <div class="title" id="page-title"></div>
-        <div class="ctx" id="ctx"></div>
+  <main>
+    <!-- Hero -->
+    <section class="lp-hero">
+      <div class="lp-hero-text">
+        <span class="pill pri">✨ Sesuai Kurikulum Merdeka</span>
+        <h1>Asesmen sekolah jadi <span class="grad">rapi, cepat, & otomatis</span></h1>
+        <p class="lead" data-tagline>Asesmen Kurikulum Merdeka, nilai rapor otomatis, dan ujian online dalam satu aplikasi.</p>
+        <div class="btns">
+          <a class="btn lg" href="app.html#daftar" data-saas>🚀 Coba Gratis <span data-trial>14</span> Hari</a>
+          <a class="btn ghost lg" href="app.html">Masuk ke Aplikasi</a>
+        </div>
+        <p class="small muted" data-saas>Tanpa kartu kredit. Data sekolah Anda aman & terpisah.</p>
       </div>
-      <div id="view"></div>
-    </main>
-  </div>
+      <div class="lp-hero-visual">
+        <div class="mock tilt">
+          <div class="mock-bar"><i></i><i></i><i></i><span>Rekap Nilai Rapor</span></div>
+          <div class="mock-body">
+            <div class="mock-stats"><div><b>83</b><small>Rata-rata</small></div><div><b>92%</b><small>Tercapai KKTP</small></div><div><b>1</b><small>Remedial</small></div></div>
+            <div class="mock-chart"><i style="height:30%"></i><i style="height:75%"></i><i style="height:55%"></i><i style="height:20%"></i></div>
+            <div class="mock-row"><span>Adinda P.</span><b>88</b><em class="ok">B</em></div>
+            <div class="mock-row"><span>Bagas P.</span><b>91</b><em class="ok">A</em></div>
+            <div class="mock-row"><span>Citra A.</span><b>72</b><em class="warn">C</em></div>
+          </div>
+        </div>
+        <div class="float-cube"><div><span>SLM</span><span>STS</span><span>SAS</span><span>SAT</span><span>AD</span><span>AF</span></div></div>
+      </div>
+    </section>
 
-  <div class="toasts" id="toasts"></div>
-  <div id="modal-root"></div>
-  <input type="file" id="file-input" class="hidden">
+    <!-- Fitur -->
+    <section id="fitur" class="lp-section">
+      <h2 class="center">Semua yang guru butuhkan untuk asesmen</h2>
+      <p class="center muted">Istilah terbaru Kurikulum Merdeka — bukan lagi UH, UTS, UAS, atau KKM.</p>
+      <div class="grid g3 lp-features">
+        <div class="card tilt"><div class="ico3d">📚</div><h3>Semua jenis asesmen</h3><p>Asesmen Diagnostik, Formatif, Sumatif Lingkup Materi, Sumatif Tengah Semester, Sumatif Akhir Semester, dan Sumatif Akhir Tahun.</p></div>
+        <div class="card tilt"><div class="ico3d">🧮</div><h3>Nilai rapor otomatis</h3><p>Nilai akhir, predikat, ketercapaian KKTP, peringkat, dan deskripsi capaian per Tujuan Pembelajaran tersusun sendiri.</p></div>
+        <div class="card tilt"><div class="ico3d">📄</div><h3>Unggah soal PDF</h3><p>Soal dari PDF format apa pun langsung diubah ke format web: pilihan ganda, benar/salah, isian, dan uraian lengkap dengan kuncinya.</p></div>
+        <div class="card tilt"><div class="ico3d">📱</div><h3>Ujian dari HP murid</h3><p>Bagikan token atau link lewat WhatsApp. Murid mengerjakan dari HP masing-masing, nilai langsung masuk ke daftar nilai.</p></div>
+        <div class="card tilt"><div class="ico3d">🏆</div><h3>Leger & ekspor Excel</h3><p>Rekap semua mapel, rata-rata, dan peringkat kelas. Cetak atau unduh ke Excel/CSV dalam sekali klik.</p></div>
+        <div class="card tilt"><div class="ico3d">🎨</div><h3>Tampilan 3D yang nyaman</h3><p>Pilih warna tema sesuka hati, mode terang/gelap, dan bisa dipakai di laptop maupun HP.</p></div>
+      </div>
+    </section>
 
-  <script src="lib/pdfjs/pdf.min.js"></script>
-  <script>
-    if (window.pdfjsLib) window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'lib/pdfjs/pdf.worker.min.js';
-  </script>
-  <script src="js/calc.js?v=3.2.0"></script>
-  <script src="js/parser.js?v=3.2.0"></script>
-  <script src="js/store.js?v=3.2.0"></script>
-  <script src="js/app.js?v=3.2.0"></script>
+    <!-- Cara kerja -->
+    <section id="cara" class="lp-section">
+      <h2 class="center">Mulai dalam 3 langkah</h2>
+      <div class="grid g3 lp-steps">
+        <div class="card"><span class="step">1</span><h3>Daftarkan sekolah</h3><p>Isi nama sekolah dan email. Masa coba gratis langsung aktif.</p></div>
+        <div class="card"><span class="step">2</span><h3>Isi kelas & soal</h3><p>Tempel daftar murid dari Excel, unggah soal PDF, lalu buat asesmen.</p></div>
+        <div class="card"><span class="step">3</span><h3>Bagikan & lihat nilai</h3><p>Kirim token ke murid, nilai masuk otomatis, rekap rapor langsung jadi.</p></div>
+      </div>
+    </section>
+
+    <!-- Harga -->
+    <section id="harga" class="lp-section" data-saas>
+      <h2 class="center">Harga sederhana, per sekolah</h2>
+      <p class="center muted">Semua fitur termasuk di setiap paket. Guru dan murid tanpa batas.</p>
+      <div class="grid g3 lp-pricing" id="pricing"></div>
+      <p class="center small muted">Pembayaran melalui transfer bank. Masa aktif bertambah setelah pembayaran diverifikasi.</p>
+    </section>
+
+    <!-- FAQ -->
+    <section id="faq" class="lp-section lp-faq">
+      <h2 class="center">Pertanyaan yang sering diajukan</h2>
+      <details class="card"><summary>Apakah istilahnya sudah sesuai Kurikulum Merdeka?</summary><p>Ya. Aplikasi memakai Sumatif Lingkup Materi (bukan Ulangan Harian), Sumatif Tengah/Akhir Semester (bukan UTS/UAS), Sumatif Akhir Tahun, KKTP (bukan KKM), serta Capaian dan Tujuan Pembelajaran.</p></details>
+      <details class="card"><summary>Bagaimana nilai rapor dihitung?</summary><p>Bawaannya 50% rata-rata Sumatif Lingkup Materi + 25% STS + 25% SAS/SAT. Bobot, KKTP, predikat, dan apakah formatif ikut dihitung bisa diatur sendiri oleh sekolah.</p></details>
+      <details class="card"><summary>Soal PDF saya formatnya berbeda-beda, apakah bisa?</summary><p>Bisa. Penomoran, huruf pilihan, bagian soal, kunci jawaban di akhir, dan PDF dua kolom dikenali otomatis. Hasilnya bisa diperiksa dan diperbaiki sebelum dipakai.</p></details>
+      <details class="card"><summary>Apakah murid perlu membuat akun?</summary><p>Tidak. Murid cukup membuka link ujian, memilih nama, dan memasukkan NIS.</p></details>
+      <details class="card"><summary>Apa yang terjadi kalau masa langganan habis?</summary><p>Data sekolah tetap tersimpan dengan aman. Aplikasi terkunci sementara sampai langganan diperpanjang.</p></details>
+      <details class="card"><summary>Apakah satu sekolah bisa dipakai banyak guru?</summary><p>Bisa. Admin sekolah dapat membuat akun untuk guru lain, dan semuanya memakai data sekolah yang sama.</p></details>
+    </section>
+
+    <section class="lp-section">
+      <div class="card hero lp-cta">
+        <h2>Siap merapikan asesmen di sekolah Anda?</h2>
+        <p>Mulai sekarang — gratis selama masa coba.</p>
+        <div class="btns" style="justify-content:center"><a class="btn ghost lg" href="app.html#daftar" data-saas>🚀 Daftar Sekarang</a><a class="btn ghost lg" href="app.html">Masuk</a></div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="lp-footer">
+    <div><b data-brand>Asesmen Merdeka</b> · <span class="muted">Asesmen Kurikulum Merdeka</span></div>
+    <div class="muted small" id="contact"></div>
+    <div class="small"><a href="ujian.html">Halaman ujian murid</a> · <a href="app.html">Masuk guru</a></div>
+  </footer>
+
+  <script src="js/landing.js?v=4.0.0"></script>
 </body>
 </html>

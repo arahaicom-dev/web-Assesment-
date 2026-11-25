@@ -65,6 +65,13 @@ Kunci: C`);
   assert.strictEqual(r.questions[1].answer, 'C');
 });
 
+t('kunci berupa angka tetap dianggap kunci sebaris', () => {
+  const r = P.parse('1. 5 + 7 = ....\nKunci: 12\n2. 3 x 4 = ....\nJawaban: 12,5');
+  assert.strictEqual(r.stats.total, 2);
+  assert.strictEqual(r.questions[0].answer, '12');
+  assert.strictEqual(r.questions[1].answer, '12,5');
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur
