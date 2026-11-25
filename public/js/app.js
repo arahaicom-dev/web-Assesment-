@@ -118,10 +118,24 @@
     { href: 'langganan', ic: '💳', label: 'Langganan', saas: true },
     { href: 'pemilik', ic: '👑', label: 'Panel Pemilik', owner: true }
   ];
+  const RAIL = { 'Utama': ['🏠', 'Utama'], 'Asesmen': ['📚', 'Asesmen'], 'Kuis Interaktif': ['🎮', 'Kuis Seru'], 'Soal': ['📄', 'Bank Soal'], 'Nilai Akhir': ['🧮', 'Nilai Akhir'], 'Lainnya': ['⚙️', 'Lainnya'] };
+  function navGroups() {
+    const vis = NAV.filter(n => (!n.server || S.mode === 'server') && (!n.saas || S.saas) && (!n.owner || (S.saas && S.user && S.user.super)));
+    const groups = []; let g = null;
+    vis.forEach(n => { if (n.group) { g = { name: n.group, items: [] }; groups.push(g); } else if (g) g.items.push(n); });
+    return groups.filter(x => x.items.length);
+  }
   function renderNav(route) {
-    $('#nav').innerHTML = NAV.filter(n => (!n.server || S.mode === 'server') && (!n.saas || S.saas) && (!n.owner || (S.saas && S.user && S.user.super))).map(n => n.group ? `<div class="nav-group">${n.group}</div>` :
-      `<a href="#/${n.href}" class="${route === n.href || route.startsWith(n.href + '/') ? 'active' : ''}"><span class="ic">${n.ic}</span><span>${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}</a>`).join('');
-    $('#brand-sub').textContent = st().settings.schoolName || 'Penilaian & Nilai Rapor';
+    const groups = navGroups();
+    const isActive = n => route === n.href || route.startsWith(n.href + '/');
+    let cur = groups.find(g => g.items.some(isActive)) || groups[0];
+    const school = st().settings.schoolName || 'Asesmen Merdeka';
+    $('#rail').innerHTML = `<a class="rail-home ${cur === groups[0] ? 'on' : ''}" href="#/beranda" title="${esc(school)}"><span>${esc((school.match(/[A-Za-z0-9]/) || ['A'])[0].toUpperCase())}</span></a><i class="rail-sep"></i>` +
+      groups.slice(1).map(g => { const [ic, lbl] = RAIL[g.name] || ['•', g.name]; return `<a class="rail-btn ${g === cur ? 'on' : ''}" href="#/${g.items[0].href}" data-tip="${esc(lbl)}" aria-label="${esc(lbl)}"><span>${ic}</span></a>`; }).join('');
+    $('#side-title').textContent = cur ? (RAIL[cur.name] || [0, cur.name])[1] : 'Menu';
+    $('#nav').innerHTML = `<div class="nav-group">${esc(cur.name)}</div>` + cur.items.map(n =>
+      `<a href="#/${n.href}" class="${isActive(n) ? 'active' : ''}"><span class="ic">${n.ic}</span><span>${n.label}</span>${n.tag ? `<span class="tag">${n.tag}</span>` : ''}</a>`).join('');
+    $('#brand-sub').textContent = school;
     renderUserBox();
   }
 
@@ -163,7 +177,7 @@
     const parts = hash.split('/');
     const r = parts[0] || 'beranda';
     renderNav(hash);
-    $('#sidebar').classList.remove('open');
+    document.body.classList.remove('nav-open');
     const view = $('#view');
     let out;
     try {
@@ -1435,7 +1449,7 @@
         $$('[data-dband]', v).forEach(inp => inp.addEventListener('change', () => { const b = g.diagnosticBands[+inp.dataset.dband]; b[inp.dataset.k] = inp.dataset.k === 'min' ? +inp.value : inp.value; S.save(); }));
       },
       actions: {
-        preset: el => { const p = S.PRESETS.find(x => x.id === el.dataset.id); Object.assign(t, { preset: p.id, h: p.h, s: p.s }); applyTheme(); S.save(); keepScroll(); },
+        preset: el => { const p = S.PRESETS.find(x => x.id === el.dataset.id); Object.assign(t, { preset: p.id, h: p.h, s: p.s }, p.mode ? { mode: p.mode } : {}); applyTheme(); S.save(); keepScroll(); },
         export: () => download('asesmen-merdeka-cadangan-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(s, (k, v) => k && k[0] === '_' ? undefined : v, 1), 'application/json'),
         import: async () => {
           const f = await pickFile('.json,application/json'); if (!f) return;
@@ -1575,6 +1589,7 @@
     const sub = { setup: S.saas ? 'Pemasangan pertama — buat akun pemilik platform' : 'Pemasangan pertama — buat akun admin', register: 'Daftar sekolah baru — coba gratis', login: 'Masuk ke akun sekolah' }[mode];
     const userLabel = S.saas ? 'Email' : 'Username';
     el.innerHTML = `<div class="card auth-card tilt"><div class="z1">
+      ${window.Art ? `<div class="auth-mascot">${Art.kubi({ pose: mode === 'register' ? 'cheer' : 'wave', eyes: 'happy' })}</div>` : ''}
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
       <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${sub}</div></div></div>
       ${S.saas && mode !== 'setup' ? `<div class="tabs" style="width:100%"><button type="button" class="${mode === 'login' ? 'on' : ''}" style="flex:1" data-m="login">Masuk</button><button type="button" class="${mode === 'register' ? 'on' : ''}" style="flex:1" data-m="register">Daftar Sekolah</button></div>` : ''}
@@ -2084,7 +2099,8 @@
     }
   }
 
-  $('#menu-btn').onclick = () => $('#sidebar').classList.toggle('open');
+  $('#menu-btn').onclick = () => document.body.classList.toggle('nav-open');
+  $('#nav-backdrop').onclick = () => document.body.classList.remove('nav-open');
   window.App = { toast, route };
   S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
   S.onLocked = () => { renderUserBox(); if (!/^#\/(langganan|akun|pemilik)/.test(location.hash)) { toast('Masa langganan sekolah berakhir — data hanya bisa dilihat. Perpanjang di menu Langganan.', 'bad'); location.hash = '#/langganan'; } };

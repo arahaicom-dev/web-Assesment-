@@ -54,6 +54,17 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
   - Murid tidak bisa mengumpulkan dua kali. Jawaban tersimpan sementara di HP murid kalau halamannya tertutup.
 - Kalau aplikasi dibuka tanpa server (hosting statis biasa), aplikasi tetap jalan dalam **mode lokal** seperti sebelumnya, dengan data tersimpan di browser.
 
+## Tampilan "Galaksi" (v5)
+- **Halaman utama** bertema malam galaksi: latar gelap berbintang, judul tebal huruf besar, tombol pil, mockup laptop & HP, serta maskot orisinal **Kubi** (robot kubus) dan objek 3D melayang.
+- **Aplikasi guru** memakai tata letak tiga kolom:
+  - **rel ikon bulat** di kiri untuk berpindah bagian (Utama, Asesmen, Kuis Seru, Bank Soal, Nilai Akhir, Lainnya),
+  - **daftar menu** dari bagian yang dipilih,
+  - **panel pengguna** di bawah.
+  Di HP, rel dan menu tampil sebagai panel geser lewat tombol ☰.
+- Tema bawaan adalah **Galaksi** (gelap). Tema lain, mode terang, dan warna bebas tetap bisa dipilih di *Pengaturan & Tema*.
+- Font yang dipakai **Unbounded** (judul) dan **Plus Jakarta Sans** (teks), keduanya berlisensi SIL Open Font License. File font disimpan lokal di `public/fonts/` beserta lisensinya.
+- Semua ilustrasi dan maskot adalah buatan sendiri (SVG di `public/js/art.js`), bukan aset merek lain.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.
@@ -219,6 +230,8 @@ public/js/parser.js  konversi teks/PDF → soal, penilaian jawaban (dipakai juga
 public/js/store.js   penyimpanan data (lokal atau server) & data contoh
 public/js/app.js     semua tampilan/menu guru
 public/js/student.js halaman ujian murid
+public/js/art.js     ilustrasi SVG orisinal (maskot Kubi, objek 3D)
+public/fonts/        font Unbounded & Plus Jakarta Sans (OFL)
 public/lib/pdfjs/    pdf.js (Apache-2.0) untuk membaca PDF
 public/contoh-soal/  contoh file PDF soal untuk dicoba
 tests/run-tests.js   pengujian parser & penghitungan (npm test)

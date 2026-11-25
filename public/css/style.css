@@ -426,3 +426,82 @@ img.zoomable { cursor: zoom-in; }
 .crop-stage { position: relative; max-height: 68vh; overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface-2); cursor: crosshair; touch-action: none; user-select: none; }
 .crop-stage canvas { display: block; width: 100%; height: auto; }
 .crop-sel { position: absolute; border: 2px solid var(--primary); background: hsl(var(--h) 80% 60% / .18); box-shadow: 0 0 0 9999px hsl(0 0% 0% / .25); pointer-events: none; }
+
+/* =========================================================
+   v5 — Tampilan "Galaksi": rel ikon bulat + daftar menu bergaya kanal
+   ========================================================= */
+:root { --font: 'Plus Jakarta Sans', 'Segoe UI', system-ui, sans-serif; --font-display: 'Unbounded', 'Plus Jakarta Sans', sans-serif; }
+body { font-family: var(--font); }
+.topbar .title h1, .hero h1, .hero h2, .auth-card h2, .host-code, .score-big, .kz-final-score, .kz-count-n, .stat .num, .display { font-family: var(--font-display); letter-spacing: -.02em; }
+.topbar .title h1 { font-size: 1.45rem; font-weight: 800; }
+.stat .num { font-weight: 800; }
+
+/* Mode gelap = malam galaksi */
+[data-mode="dark"] {
+  --bg: hsl(var(--h) 48% 9%);
+  --bg2: hsl(calc(var(--h) + 20) 55% 16%);
+  --surface: hsl(var(--h) 32% 15% / .82);
+  --surface-solid: hsl(var(--h) 30% 15%);
+  --surface-2: hsl(var(--h) 28% 21%);
+  --border: hsl(var(--h) 26% 27%);
+  --primary: hsl(var(--h) calc(var(--s) * 1%) 67%);
+  --primary-strong: hsl(var(--h) calc(var(--s) * 1%) 52%);
+  --on-primary: #fff;
+}
+[data-mode="dark"] body {
+  background: radial-gradient(1100px 650px at 80% -5%, hsl(var(--h) 70% 30% / .75), transparent 60%),
+              radial-gradient(900px 600px at 0% 40%, hsl(calc(var(--h) + 25) 60% 22% / .7), transparent 65%), var(--bg);
+}
+[data-mode="dark"] body::before { content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none; opacity: .5;
+  background-image: radial-gradient(1.2px 1.2px at 20px 30px, #fff, transparent), radial-gradient(1px 1px at 140px 90px, #fff, transparent), radial-gradient(1.6px 1.6px at 230px 170px, #e3dcff, transparent), radial-gradient(1px 1px at 320px 50px, #fff, transparent);
+  background-size: 360px 230px; }
+[data-mode="dark"] .scene { opacity: .55; }
+[data-mode="dark"] .btn.ghost { --b: hsl(var(--h) 25% 24%); --bd: hsl(var(--h) 30% 12%); --c: var(--text); border-color: hsl(var(--h) 25% 30%); }
+[data-mode="dark"] .hero { color: #fff; background: linear-gradient(135deg, hsl(var(--h) 75% 58%), hsl(calc(var(--h) + 30) 70% 42%)); }
+
+/* Tata letak 3 kolom: rel ikon | menu | konten */
+.app { grid-template-columns: 76px 248px minmax(0, 1fr); }
+.rail { position: sticky; top: 0; height: 100vh; overflow-y: auto; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 0;
+  background: hsl(var(--h) 40% 6% / .92); z-index: 21; scrollbar-width: none; }
+[data-mode="light"] .rail { background: hsl(var(--h) 35% 22%); }
+.rail a { position: relative; width: 50px; height: 50px; display: grid; place-items: center; text-decoration: none; color: #fff;
+  border-radius: 50%; background: hsl(var(--h) 25% 22%); font-size: 22px; transition: border-radius .18s, background .18s, transform .18s; }
+.rail a:hover { border-radius: 16px; background: var(--primary); }
+.rail a.on { border-radius: 16px; background: linear-gradient(135deg, var(--primary), var(--accent)); box-shadow: 0 6px 18px hsl(var(--h) 80% 40% / .5); }
+.rail a::before { content: ''; position: absolute; left: -13px; width: 6px; height: 0; border-radius: 0 6px 6px 0; background: #fff; transition: height .18s; }
+.rail a:hover::before { height: 20px; } .rail a.on::before { height: 40px; }
+.rail-home span { font-family: var(--font-display); font-weight: 900; font-size: 1.15rem; }
+.rail-home { background: linear-gradient(135deg, hsl(var(--h) 75% 62%), hsl(calc(var(--h) + 30) 70% 48%)) !important; }
+.rail-sep { width: 32px; height: 2px; border-radius: 2px; background: hsl(var(--h) 20% 30%); margin: 2px 0; }
+.rail a[data-tip]:hover::after { content: attr(data-tip); position: absolute; left: 64px; white-space: nowrap; background: #111214; color: #fff; font-size: .85rem; font-weight: 700; padding: 7px 12px; border-radius: 8px; box-shadow: 0 8px 20px rgba(0, 0, 0, .35); pointer-events: none; z-index: 50; }
+
+.sidebar { padding: 0 10px 12px; }
+.side-head { display: flex; align-items: center; gap: 8px; padding: 18px 8px 14px; margin: 0 -10px 8px; text-decoration: none; color: var(--text); border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 hsl(0 0% 0% / .15); }
+.side-head b { display: block; font-family: var(--font-display); font-size: 1rem; letter-spacing: -.01em; padding-left: 10px; }
+.side-head small { display: block; color: var(--muted); font-size: .76rem; padding-left: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 190px; }
+.side-head .ver { margin-left: auto; font-size: .66rem; opacity: .6; }
+.nav a { border-radius: 8px; padding: 8px 10px; font-weight: 600; color: var(--muted); }
+.nav a .ic { background: transparent; box-shadow: none; width: 24px; }
+.nav a:hover { background: hsl(var(--h) 25% 50% / .14); color: var(--text); transform: none; }
+.nav a.active { background: hsl(var(--h) 30% 55% / .24); color: var(--text); box-shadow: none; }
+[data-mode="light"] .nav a.active { background: var(--primary-soft); }
+.nav a.active .ic { background: transparent; }
+.nav-group { margin: 10px 8px 6px; }
+.user-box { margin: 14px -10px -12px; border-radius: 0; border: none; border-top: 1px solid var(--border); background: hsl(var(--h) 35% 8% / .55); }
+[data-mode="light"] .user-box { background: var(--surface-2); }
+.nav-backdrop { display: none; }
+
+@media (max-width: 860px) {
+  .app { grid-template-columns: 1fr; }
+  .rail, .sidebar { position: fixed; top: 0; height: 100vh; transform: translateX(calc(-100% - 100px)); transition: transform .28s; z-index: 60; }
+  .rail { left: 0; width: 76px; }
+  .sidebar { left: 76px; width: 260px; background: var(--surface-solid); }
+  body.nav-open .rail, body.nav-open .sidebar { transform: none; }
+  body.nav-open .nav-backdrop { display: block; position: fixed; inset: 0; background: hsl(0 0% 0% / .45); z-index: 55; }
+  .rail a[data-tip]:hover::after { display: none; }
+}
+
+.auth-mascot { width: 120px; margin: -96px auto 4px; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .35)); animation: kubiHop 3s ease-in-out infinite; }
+.auth-mascot svg, .kz-mascot svg { width: 100%; height: auto; display: block; }
+.auth { padding-top: 90px; }
+@keyframes kubiHop { 50% { transform: translateY(-8px) rotate(-2deg); } }

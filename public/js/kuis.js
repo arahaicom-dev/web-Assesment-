@@ -55,7 +55,7 @@
   function stepCode(msg) {
     stopAll(); G.me = null; setHud();
     view.innerHTML = `<div class="kz-card pop" style="max-width:460px;margin:6vh auto 0;text-align:center">
-      <div class="kz-big-ico">🎮</div><h1>Gabung Kuis</h1><p class="muted">Masukkan kode yang ditampilkan guru di layar.</p>
+      <div class="kz-mascot">${window.Art ? Art.kubi({ pose: 'wave', eyes: 'happy' }) : '🎮'}</div><h1 class="kz-title">Gabung Kuis</h1><p class="muted">Masukkan kode yang ditampilkan guru di layar.</p>
       ${msg ? `<div class="note warn" style="text-align:left;margin-bottom:12px">${esc(msg)}</div>` : ''}
       <form id="f"><input id="code" class="kz-code" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="123456" value="${esc(G.code)}">
       <button class="btn lg kz-go" type="submit">Masuk ▶</button></form></div>`;

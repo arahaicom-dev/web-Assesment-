@@ -1,139 +1,166 @@
 <!DOCTYPE html>
-<html lang="id" data-mode="light">
+<html lang="id">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Asesmen Merdeka — Asesmen Kurikulum Merdeka, Nilai Rapor Otomatis & Ujian Online</title>
-  <meta name="description" content="Aplikasi asesmen sekolah Kurikulum Merdeka: Asesmen Diagnostik, Formatif, Sumatif Lingkup Materi, STS, SAS, SAT. Unggah soal PDF, ujian online dari HP murid, dan nilai rapor otomatis.">
+  <title>Asesmen Merdeka — Kuis Seru, Ujian Online & Nilai Rapor Otomatis</title>
+  <meta name="description" content="Kuis interaktif bergaya permainan, ujian online dengan pengawasan, unggah soal PDF, dan nilai rapor Kurikulum Merdeka otomatis.">
+  <meta name="theme-color" content="#14124a">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧊</text></svg>">
-  <link rel="stylesheet" href="css/style.css?v=4.3.0">
-  <link rel="stylesheet" href="css/landing.css?v=4.3.0">
+  <link rel="stylesheet" href="css/fonts.css?v=5.0.0">
+  <link rel="stylesheet" href="css/style.css?v=5.0.0">
+  <link rel="stylesheet" href="css/landing.css?v=5.0.0">
 </head>
-<body class="landing">
-  <div class="scene" aria-hidden="true">
-    <div class="shape cube s1"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
-    <div class="shape ball s2"></div>
-    <div class="shape ring s3"></div>
-    <div class="shape cube s4"><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i><i class="f"></i></div>
+<body class="lp">
+  <div class="sky" aria-hidden="true"><i class="stars s1"></i><i class="stars s2"></i><i class="stars s3"></i>
+    <span class="spark" style="top:14%;left:8%"></span><span class="spark" style="top:32%;left:46%;animation-delay:-1.2s"></span><span class="spark" style="top:70%;left:4%;animation-delay:-2.4s"></span><span class="spark" style="top:20%;left:88%;animation-delay:-.6s"></span><span class="spark" style="top:58%;left:93%;animation-delay:-3s"></span>
   </div>
 
   <header class="lp-nav">
-    <a class="brand" href="#">
-      <div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
-      <b data-brand>Asesmen Merdeka</b>
-    </a>
+    <a class="lp-brand" href="#"><span class="lp-logo"><span>A</span></span><b data-brand>Asesmen Merdeka</b></a>
     <nav class="lp-links">
-      <a href="#fitur">Fitur</a><a href="#cara">Cara Kerja</a><a href="#harga" data-saas>Harga</a><a href="#faq">FAQ</a>
+      <a href="#kuis">Kuis Seru</a><a href="#ujian">Mode Ujian</a><a href="#fitur">Fitur</a><a href="#harga" data-saas>Harga</a><a href="#faq">FAQ</a><a href="kuis.html">Gabung Kuis</a>
     </nav>
-    <div class="btns">
-      <a class="btn ghost sm" href="app.html" id="btn-login">Masuk</a>
-      <a class="btn sm" href="app.html#daftar" data-saas>Coba Gratis</a>
-    </div>
+    <a class="pill-btn white" href="app.html" id="btn-login">Masuk</a>
   </header>
 
   <main>
-    <!-- Hero -->
-    <section class="lp-hero">
-      <div class="lp-hero-text">
-        <span class="pill pri">✨ Sesuai Kurikulum Merdeka</span>
-        <h1>Asesmen sekolah jadi <span class="grad">rapi, cepat, & otomatis</span></h1>
-        <p class="lead" data-tagline>Asesmen Kurikulum Merdeka, nilai rapor otomatis, dan ujian online dalam satu aplikasi.</p>
-        <div class="btns">
-          <a class="btn lg" href="app.html#daftar" data-saas>🚀 Coba Gratis <span data-trial>14</span> Hari</a>
-          <a class="btn ghost lg" href="app.html">Masuk ke Aplikasi</a>
+    <!-- HERO -->
+    <section class="hero-lp">
+      <div class="hero-copy">
+        <h1 class="display">Belajar &amp; ujian jadi seru!</h1>
+        <p class="lead" data-tagline>Kuis live bergaya permainan, ujian online dengan pengawasan, unggah soal dari PDF, sampai nilai rapor Kurikulum Merdeka — semua otomatis dalam satu aplikasi.</p>
+        <div class="hero-cta">
+          <a class="pill-btn white lg" href="app.html#daftar" data-saas>🚀 Coba Gratis <span data-trial>14</span> Hari</a>
+          <a class="pill-btn dark lg" href="kuis.html">🎮 Gabung Kuis</a>
         </div>
-        <p class="small muted" data-saas>Tanpa kartu kredit. Data sekolah Anda aman & terpisah.</p>
+        <p class="hint" data-saas>Tanpa kartu kredit · data tiap sekolah terpisah & aman</p>
       </div>
-      <div class="lp-hero-visual">
-        <div class="mock tilt">
-          <div class="mock-bar"><i></i><i></i><i></i><span>Rekap Nilai Rapor</span></div>
-          <div class="mock-body">
-            <div class="mock-stats"><div><b>83</b><small>Rata-rata</small></div><div><b>92%</b><small>Tercapai KKTP</small></div><div><b>1</b><small>Remedial</small></div></div>
-            <div class="mock-chart"><i style="height:30%"></i><i style="height:75%"></i><i style="height:55%"></i><i style="height:20%"></i></div>
-            <div class="mock-row"><span>Adinda P.</span><b>88</b><em class="ok">B</em></div>
-            <div class="mock-row"><span>Bagas P.</span><b>91</b><em class="ok">A</em></div>
-            <div class="mock-row"><span>Citra A.</span><b>72</b><em class="warn">C</em></div>
+
+      <div class="hero-scene">
+        <div class="glow"></div>
+        <!-- objek melayang (blur = kedalaman) -->
+        <div class="float f-trophy blur" data-art="trophy"></div>
+        <div class="float f-star" data-art="star"></div>
+        <div class="float f-pencil blur2" data-art="pencil"></div>
+        <div class="float f-bubble" data-art="bubble"></div>
+
+        <!-- monitor -->
+        <div class="monitor">
+          <div class="screen">
+            <div class="app-mini">
+              <div class="am-rail"><i class="on">A</i><i>📚</i><i>🎮</i><i>📄</i><i>🧮</i></div>
+              <div class="am-side"><b>Kuis Seru</b><span># ruang-tunggu</span><span class="on"># papan-peringkat</span><span># hasil</span><span># ketercapaian-soal</span></div>
+              <div class="am-main">
+                <div class="am-head">🏆 Papan Peringkat <em>● Berlangsung</em></div>
+                <div class="am-row"><span>🥇</span><span class="av">🦊</span><b>Adinda</b><div class="pr"><i class="ok"></i><i class="ok"></i><i class="ok"></i><i class="ok"></i></div><strong>4.527</strong></div>
+                <div class="am-row"><span>🥈</span><span class="av">🐼</span><b>Bagas</b><div class="pr"><i class="ok"></i><i class="no"></i><i class="ok"></i><i></i></div><strong>2.906</strong></div>
+                <div class="am-row"><span>🥉</span><span class="av">🦉</span><b>Citra</b><div class="pr"><i class="ok"></i><i class="ok"></i><i class="no"></i><i></i></div><strong>2.110</strong></div>
+                <div class="am-row"><span>4</span><span class="av">🐬</span><b>Dimas</b><div class="pr"><i class="no"></i><i class="ok"></i><i></i><i></i></div><strong>1.204</strong></div>
+              </div>
+            </div>
+          </div>
+          <div class="stand"></div>
+        </div>
+
+        <!-- HP -->
+        <div class="phone">
+          <div class="ph-screen">
+            <div class="ph-top"><span>2 / 10</span><i></i><b>14</b></div>
+            <div class="ph-q">Planet terdekat dengan Matahari adalah …</div>
+            <div class="ph-opts"><span class="c0">Venus</span><span class="c1">Merkurius</span><span class="c2">Bumi</span><span class="c3">Mars</span></div>
           </div>
         </div>
-        <div class="float-cube"><div><span>SLM</span><span>STS</span><span>SAS</span><span>SAT</span><span>AD</span><span>AF</span></div></div>
+
+        <div class="mascot m-left" data-art="kubi" data-o='{"pose":"wave","eyes":"happy"}'></div>
+        <div class="mascot m-right" data-art="kubi" data-o='{"pose":"trophy","c":"#ff6fa8","d":"#c23a77","l":"#ffb3d1","glow":"#fff27e"}'></div>
+        <div class="float f-pad" data-art="pad"></div>
       </div>
     </section>
 
-    <!-- Fitur -->
-    <section id="fitur" class="lp-section">
-      <h2 class="center">Semua yang guru butuhkan untuk asesmen</h2>
-      <p class="center muted">Istilah terbaru Kurikulum Merdeka — bukan lagi UH, UTS, UAS, atau KKM.</p>
-      <div class="grid g3 lp-features">
-        <div class="card tilt"><div class="ico3d">📚</div><h3>Semua jenis asesmen</h3><p>Asesmen Diagnostik, Formatif, Sumatif Lingkup Materi, Sumatif Tengah Semester, Sumatif Akhir Semester, dan Sumatif Akhir Tahun.</p></div>
-        <div class="card tilt"><div class="ico3d">🧮</div><h3>Nilai rapor otomatis</h3><p>Nilai akhir, predikat, ketercapaian KKTP, peringkat, dan deskripsi capaian per Tujuan Pembelajaran tersusun sendiri.</p></div>
-        <div class="card tilt"><div class="ico3d">📄</div><h3>Unggah soal PDF</h3><p>Soal dari PDF format apa pun langsung diubah ke format web: pilihan ganda, benar/salah, isian, dan uraian lengkap dengan kuncinya.</p></div>
-        <div class="card tilt"><div class="ico3d">📱</div><h3>Ujian dari HP murid</h3><p>Bagikan token atau link lewat WhatsApp. Murid mengerjakan dari HP masing-masing, nilai langsung masuk ke daftar nilai.</p></div>
-        <div class="card tilt"><div class="ico3d">🏆</div><h3>Leger & ekspor Excel</h3><p>Rekap semua mapel, rata-rata, dan peringkat kelas. Cetak atau unduh ke Excel/CSV dalam sekali klik.</p></div>
-        <div class="card tilt"><div class="ico3d">🎨</div><h3>Tampilan 3D yang nyaman</h3><p>Pilih warna tema sesuka hati, mode terang/gelap, dan bisa dipakai di laptop maupun HP.</p></div>
-      </div>
-    </section>
-
-    <!-- Kuis Seru -->
-    <section class="lp-section">
-      <div class="card lp-game tilt">
-        <div>
-          <span class="pill ok">🎮 Baru</span>
-          <h2>Kuis Seru — belajar terasa seperti bermain</h2>
-          <p>Tampilkan kode di proyektor, murid bergabung dari HP dengan avatar pilihan. Jawab cepat dapat poin lebih, jawaban beruntun dapat bonus, dan papan peringkat bergerak langsung di layar kelas. Di akhir, juara naik podium dan hasilnya bisa langsung disimpan sebagai nilai.</p>
-          <ul class="checks"><li>Timer per soal & bonus kecepatan</li><li>Papan peringkat langsung + podium juara</li><li>Analisis soal mana yang paling sulit</li><li>Simpan hasil sebagai nilai formatif/sumatif</li></ul>
+    <!-- KUIS SERU -->
+    <section class="row-lp" id="kuis">
+      <div class="row-art">
+        <div class="tiles-demo tilt">
+          <div class="td-q">2 + 3 × 4 = …</div>
+          <div class="td-grid"><span class="c0">20</span><span class="c1">14</span><span class="c2">24</span><span class="c3">11</span></div>
+          <div class="td-fb">🎉 Tepat sekali! <b>+873</b> · 🔥 Beruntun 3</div>
         </div>
-        <div class="lp-game-demo">
-          <div class="demo-q">Planet terdekat dengan Matahari adalah …</div>
-          <div class="demo-opts"><span class="c0">A. Venus</span><span class="c1">B. Merkurius</span><span class="c2">C. Bumi</span><span class="c3">D. Mars</span></div>
-          <div class="demo-board"><div>🥇 🦊 Adinda <b>2.840</b></div><div>🥈 🐼 Bagas <b>2.610</b></div><div>🥉 🦉 Citra <b>2.155</b></div></div>
+        <div class="mascot sm" data-art="kubi" data-o='{"pose":"cheer","c":"#20c997","d":"#0f8a66","l":"#8ff0cf","eyes":"happy"}'></div>
+      </div>
+      <div class="row-copy">
+        <span class="kicker">🎮 Kuis Seru</span>
+        <h2 class="display sm">Satu kode, satu kelas, satu papan peringkat</h2>
+        <p>Tampilkan kode 6 angka di proyektor, murid bergabung dari HP dengan avatar pilihan. Jawab cepat dapat poin lebih, jawaban beruntun dapat bonus, dan papan peringkat bergerak langsung. Di akhir, juara naik podium — hasilnya langsung jadi nilai formatif.</p>
+      </div>
+    </section>
+
+    <!-- MODE UJIAN -->
+    <section class="row-lp rev" id="ujian">
+      <div class="row-art">
+        <div class="exam-demo tilt">
+          <div class="ed-bar"><b>⏱ 58:21</b><span>12/40 dijawab</span><em>Selesai</em></div>
+          <div class="ed-q"><span class="n">13</span> Perhatikan grafik suhu berikut. Apa yang terjadi saat air mendidih?</div>
+          <div class="ed-opt">A. Suhu terus naik</div><div class="ed-opt sel">B. Suhu tetap</div><div class="ed-opt">C. Suhu turun</div>
+          <div class="ed-nav"><i class="d">1</i><i class="d">2</i><i class="f">3</i><i class="d">4</i><i class="c">13</i><i>14</i><i>15</i><i>16</i></div>
         </div>
       </div>
-    </section>
-
-    <!-- Cara kerja -->
-    <section id="cara" class="lp-section">
-      <h2 class="center">Mulai dalam 3 langkah</h2>
-      <div class="grid g3 lp-steps">
-        <div class="card"><span class="step">1</span><h3>Daftarkan sekolah</h3><p>Isi nama sekolah dan email. Masa coba gratis langsung aktif.</p></div>
-        <div class="card"><span class="step">2</span><h3>Isi kelas & soal</h3><p>Tempel daftar murid dari Excel, unggah soal PDF, lalu buat asesmen.</p></div>
-        <div class="card"><span class="step">3</span><h3>Bagikan & lihat nilai</h3><p>Kirim token ke murid, nilai masuk otomatis, rekap rapor langsung jadi.</p></div>
+      <div class="row-copy">
+        <span class="kicker">📝 Mode Ujian</span>
+        <h2 class="display sm">Ujian serius, pengawasan otomatis</h2>
+        <p>Timer total, bebas pindah soal, tanda ragu-ragu, jawaban tersimpan otomatis, dan soal uraian. Setiap kali murid keluar dari halaman ujian tercatat sebagai pelanggaran — guru memantau semuanya langsung dari satu layar.</p>
       </div>
     </section>
 
-    <!-- Harga -->
-    <section id="harga" class="lp-section" data-saas>
-      <h2 class="center">Harga sederhana, per sekolah</h2>
-      <p class="center muted">Semua fitur termasuk di setiap paket. Guru dan murid tanpa batas.</p>
-      <div class="grid g3 lp-pricing" id="pricing"></div>
-      <p class="center small muted">Pembayaran melalui transfer bank. Masa aktif bertambah setelah pembayaran diverifikasi.</p>
+    <!-- FITUR -->
+    <section class="lp-sec" id="fitur">
+      <h2 class="display sm center">Semua yang guru butuhkan</h2>
+      <p class="center sub">Memakai istilah terbaru Kurikulum Merdeka — bukan lagi UH, UTS, UAS, atau KKM.</p>
+      <div class="feat-grid">
+        <div class="feat tilt"><div class="fi">📚</div><h3>Semua jenis asesmen</h3><p>Diagnostik, Formatif, Sumatif Lingkup Materi, STS, SAS, dan SAT.</p></div>
+        <div class="feat tilt"><div class="fi">📄</div><h3>Unggah soal PDF</h3><p>Format apa pun jadi soal web, lengkap dengan kunci & gambar yang utuh.</p></div>
+        <div class="feat tilt"><div class="fi">🧮</div><h3>Nilai rapor otomatis</h3><p>Nilai akhir, predikat, KKTP, peringkat & deskripsi capaian per TP.</p></div>
+        <div class="feat tilt"><div class="fi">🏆</div><h3>Leger & Excel</h3><p>Rekap semua mapel dan ekspor ke Excel dalam sekali klik.</p></div>
+        <div class="feat tilt"><div class="fi">👩‍🏫</div><h3>Banyak guru</h3><p>Admin sekolah mengelola akun guru; tiap guru punya bank soal sendiri.</p></div>
+        <div class="feat tilt"><div class="fi">🎨</div><h3>Tema yang bisa diubah</h3><p>Mode galaksi gelap, terang, dan warna bebas sesuai selera sekolah.</p></div>
+      </div>
+    </section>
+
+    <!-- HARGA -->
+    <section class="lp-sec" id="harga" data-saas>
+      <h2 class="display sm center">Harga sederhana, per sekolah</h2>
+      <p class="center sub">Semua fitur termasuk di setiap paket. Guru dan murid tanpa batas.</p>
+      <div class="price-grid" id="pricing"></div>
+      <p class="center sub small">Masa aktif bertambah setelah pembayaran diverifikasi.</p>
     </section>
 
     <!-- FAQ -->
-    <section id="faq" class="lp-section lp-faq">
-      <h2 class="center">Pertanyaan yang sering diajukan</h2>
-      <details class="card"><summary>Apakah istilahnya sudah sesuai Kurikulum Merdeka?</summary><p>Ya. Aplikasi memakai Sumatif Lingkup Materi (bukan Ulangan Harian), Sumatif Tengah/Akhir Semester (bukan UTS/UAS), Sumatif Akhir Tahun, KKTP (bukan KKM), serta Capaian dan Tujuan Pembelajaran.</p></details>
-      <details class="card"><summary>Bagaimana nilai rapor dihitung?</summary><p>Bawaannya 50% rata-rata Sumatif Lingkup Materi + 25% STS + 25% SAS/SAT. Bobot, KKTP, predikat, dan apakah formatif ikut dihitung bisa diatur sendiri oleh sekolah.</p></details>
-      <details class="card"><summary>Soal PDF saya formatnya berbeda-beda, apakah bisa?</summary><p>Bisa. Penomoran, huruf pilihan, bagian soal, kunci jawaban di akhir, dan PDF dua kolom dikenali otomatis. Hasilnya bisa diperiksa dan diperbaiki sebelum dipakai.</p></details>
-      <details class="card"><summary>Apakah murid perlu membuat akun?</summary><p>Tidak. Murid cukup membuka link ujian, memilih nama, dan memasukkan NIS.</p></details>
-      <details class="card"><summary>Apa yang terjadi kalau masa langganan habis?</summary><p>Data sekolah tetap tersimpan dengan aman. Aplikasi terkunci sementara sampai langganan diperpanjang.</p></details>
-      <details class="card"><summary>Apakah satu sekolah bisa dipakai banyak guru?</summary><p>Bisa. Admin sekolah dapat membuat akun untuk guru lain, dan semuanya memakai data sekolah yang sama.</p></details>
+    <section class="lp-sec faq" id="faq">
+      <h2 class="display sm center">Pertanyaan umum</h2>
+      <details><summary>Apakah murid perlu membuat akun?</summary><p>Tidak. Murid cukup membuka halaman kuis, memasukkan kode, memilih nama, dan (bila diatur) mengisi NIS.</p></details>
+      <details><summary>Apa bedanya Kuis Seru dan Mode Ujian?</summary><p>Kuis Seru bergaya permainan: timer per soal, poin kecepatan, papan peringkat, podium. Mode Ujian untuk penilaian serius: timer total, ragu-ragu, uraian, pengawasan keluar halaman, tanpa papan peringkat.</p></details>
+      <details><summary>Soal PDF saya formatnya berbeda-beda dan ada gambarnya, bisa?</summary><p>Bisa. Penomoran, pilihan, bagian soal, kunci di akhir, PDF dua kolom, dan gambar di soal maupun pilihan dikenali otomatis. Semua bisa diperiksa sebelum dipakai.</p></details>
+      <details><summary>Bagaimana nilai rapor dihitung?</summary><p>Bawaannya 50% rata-rata Sumatif Lingkup Materi + 25% STS + 25% SAS/SAT. Bobot, KKTP, dan predikat bisa diatur sendiri.</p></details>
+      <details><summary>Kalau masa langganan habis?</summary><p>Data sekolah tetap tersimpan aman. Aplikasi terkunci sampai langganan diperpanjang.</p></details>
     </section>
 
-    <section class="lp-section">
-      <div class="card hero lp-cta">
-        <h2>Siap merapikan asesmen di sekolah Anda?</h2>
-        <p>Mulai sekarang — gratis selama masa coba.</p>
-        <div class="btns" style="justify-content:center"><a class="btn ghost lg" href="app.html#daftar" data-saas>🚀 Daftar Sekarang</a><a class="btn ghost lg" href="app.html">Masuk</a></div>
+    <!-- CTA -->
+    <section class="lp-sec">
+      <div class="cta-big">
+        <div class="mascot cta-m" data-art="kubi" data-o='{"pose":"pencil","c":"#ffb02e","d":"#c77700","l":"#ffd88a"}'></div>
+        <h2 class="display">Siap bikin kelas makin seru?</h2>
+        <div class="hero-cta center"><a class="pill-btn white lg" href="app.html#daftar" data-saas>🚀 Daftar Sekarang</a><a class="pill-btn dark lg" href="app.html">Masuk</a></div>
       </div>
     </section>
   </main>
 
-  <footer class="lp-footer">
-    <div><b data-brand>Asesmen Merdeka</b> · <span class="muted">Asesmen Kurikulum Merdeka</span></div>
-    <div class="muted small" id="contact"></div>
-    <div class="small"><a href="ujian.html">Halaman ujian murid</a> · <a href="app.html">Masuk guru</a></div>
+  <footer class="lp-foot">
+    <div><b data-brand>Asesmen Merdeka</b><div class="sub small">Asesmen Kurikulum Merdeka yang seru.</div></div>
+    <div class="small" id="contact"></div>
+    <div class="small"><a href="kuis.html">Gabung Kuis</a> · <a href="ujian.html">Ujian (token)</a> · <a href="app.html">Masuk Guru</a></div>
   </footer>
 
-  <script src="js/landing.js?v=4.3.0"></script>
+  <script src="js/art.js?v=5.0.0"></script>
+  <script src="js/landing.js?v=5.0.0"></script>
 </body>
 </html>

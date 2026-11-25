@@ -5,6 +5,7 @@
   const C = window.Calc;
 
   const PRESETS = [
+    { id: 'galaksi', name: 'Galaksi', h: 244, s: 78, mode: 'dark' },
     { id: 'samudra', name: 'Samudra', h: 228, s: 72 },
     { id: 'toska', name: 'Toska', h: 178, s: 62 },
     { id: 'hutan', name: 'Hutan', h: 148, s: 52 },
@@ -29,7 +30,7 @@
         schoolName: 'Nama Sekolah', teacherName: '', tahunAjaran: tahunAjaranNow(),
         semester: new Date().getMonth() >= 6 ? 'ganjil' : 'genap'
       }),
-      theme: { preset: 'samudra', h: 228, s: 72, mode: 'light', depth: 1, motion: 'on' },
+      theme: { preset: 'galaksi', h: 244, s: 78, mode: 'dark', depth: 1, motion: 'on' },
       classes: [], subjects: [], assessments: [], scores: {}, questionSets: [], submissions: {},
       ui: { classId: null, subjectId: null }
     };

@@ -149,3 +149,6 @@
 .ex-legend i.done { background: var(--primary-soft); border-color: var(--primary); }
 .ex-legend i.flag { background: hsl(45 95% 60%); }
 @media (max-width: 760px) { .exam-grid { grid-template-columns: 1fr; } .exam-bar { top: 58px; } }
+
+.kz-mascot { width: 130px; margin: -10px auto 6px; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .35)); animation: kubiHop 3s ease-in-out infinite; }
+.kz-title { font-family: var(--font-display, 'Unbounded'), sans-serif; text-transform: uppercase; letter-spacing: -.01em; }
