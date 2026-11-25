@@ -75,6 +75,13 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 - **Service worker** (`sw.js`) menyimpan kerangka aplikasi supaya tetap terbuka saat sinyal lemah. Data dari `/api/` tidak pernah disimpan di cache dan selalu diambil langsung dari server. Kalau tidak ada koneksi, tampil `offline.html`.
 - PWA membutuhkan **HTTPS**. Di cPanel biasanya sudah otomatis lewat AutoSSL.
 
+## Mode Siang & Malam
+- **Tombol ☀️/🌙** ada di aplikasi guru (pojok kanan atas dan layar masuk), halaman utama, halaman Kuis Seru, dan halaman ujian murid.
+- **Mode Siang**: langit biru dengan matahari dan awan, kartu putih, teks gelap. **Mode Malam**: galaksi berbintang.
+- **🌗 Otomatis** di *Pengaturan & Tema* mengikuti pengaturan terang/gelap HP atau laptop.
+- Pilihan diingat di perangkat (`localStorage`). Untuk guru, pilihan juga **tersimpan di akun**, jadi ikut terpakai saat login di perangkat lain. Akun yang belum pernah memilih memakai pilihan yang dibuat di layar masuk.
+- Ada preset tema baru **Langit Siang**.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.

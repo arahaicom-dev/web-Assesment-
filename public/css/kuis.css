@@ -152,3 +152,9 @@
 
 .kz-mascot { width: 130px; margin: -10px auto 6px; filter: drop-shadow(0 14px 18px rgba(0, 0, 0, .35)); animation: kubiHop 3s ease-in-out infinite; }
 .kz-title { font-family: var(--font-display, 'Unbounded'), sans-serif; text-transform: uppercase; letter-spacing: -.01em; }
+
+/* Mode Siang untuk halaman murid */
+.kz-top .mode-toggle { margin-left: 4px; }
+[data-mode="light"] .kz-top { background: hsl(0 0% 100% / .8); }
+[data-mode="light"] .kz-card { box-shadow: 0 4px 0 hsl(var(--h) 40% 88%), 0 18px 40px hsl(var(--h) 55% 35% / .16); }
+[data-mode="light"] .kz-chip { background: #fff; }

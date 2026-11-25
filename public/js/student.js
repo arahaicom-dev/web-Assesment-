@@ -185,7 +185,7 @@
   // Tema dari pengaturan guru di perangkat ini (bila ada)
   try {
     const t = JSON.parse(localStorage.getItem('asesmen-merdeka-v1') || '{}').theme;
-    if (t) { document.documentElement.style.setProperty('--h', t.h); document.documentElement.style.setProperty('--s', t.s); document.documentElement.dataset.mode = t.mode; }
+    if (t) { document.documentElement.style.setProperty('--h', t.h); document.documentElement.style.setProperty('--s', t.s); }
   } catch (e) { /* */ }
   window.addEventListener('beforeunload', e => { if (S.startedAt && S.questions.length && !sending && $('#timer, .qnav')) { e.preventDefault(); e.returnValue = ''; } });
 

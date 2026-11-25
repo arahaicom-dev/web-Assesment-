@@ -88,14 +88,21 @@
   function gradeBadge(b) { return b ? `<span class="grade ${esc(b.label)}" title="${esc(b.name)}">${esc(b.label)}</span>` : '–'; }
 
   /* ================= Tema ================= */
-  function applyTheme() {
+  function applyTheme(keepMode) {
     const t = st().theme, r = document.documentElement;
     r.style.setProperty('--h', t.h); r.style.setProperty('--s', t.s); r.style.setProperty('--depth', t.depth);
-    r.dataset.mode = t.mode; r.dataset.motion = t.motion;
-    let meta = $('meta[name=theme-color]');
-    if (!meta) { meta = document.createElement('meta'); meta.name = 'theme-color'; document.head.appendChild(meta); }
-    meta.content = `hsl(${t.h} ${t.s}% 52%)`;
+    r.dataset.motion = t.motion;
+    if (keepMode) return; // sebelum login: pakai pilihan ☀️/🌙 yang tersimpan di perangkat
+    if (window.ThemeMode) ThemeMode.set(t.mode || 'dark', true); else r.dataset.mode = t.mode === 'light' ? 'light' : 'dark';
   }
+  // Tombol ☀️/🌙: simpan pilihan ke tema akun guru
+  window.addEventListener('modechange', e => {
+    const t = st().theme; if (t.mode === e.detail.mode) return;
+    t.mode = e.detail.mode;
+    if (S.mode === 'server' && !S.user) return; // belum login: cukup disimpan di perangkat
+    S.save();
+    if (/^#\/pengaturan/.test(location.hash)) keepScroll();
+  });
 
   /* ================= Navigasi ================= */
   const NAV = [
@@ -1433,7 +1440,7 @@
             <label class="field"><span>Kedalaman efek 3D</span><input type="range" min="0" max="1.6" step="0.1" id="th-d" value="${t.depth}"></label>
           </div>
           <div class="row">
-            <label class="field"><span>Mode</span><select id="th-mode"><option value="light" ${t.mode === 'light' ? 'selected' : ''}>☀️ Terang</option><option value="dark" ${t.mode === 'dark' ? 'selected' : ''}>🌙 Gelap</option></select></label>
+            <label class="field"><span>Mode</span><select id="th-mode"><option value="light" ${t.mode === 'light' ? 'selected' : ''}>☀️ Siang (terang)</option><option value="dark" ${t.mode === 'dark' ? 'selected' : ''}>🌙 Malam (gelap)</option><option value="auto" ${t.mode === 'auto' ? 'selected' : ''}>🌗 Otomatis (ikut HP/laptop)</option></select></label>
             <label class="field"><span>Animasi 3D</span><select id="th-motion"><option value="on" ${t.motion === 'on' ? 'selected' : ''}>Aktif</option><option value="off" ${t.motion === 'off' ? 'selected' : ''}>Nonaktif (hemat baterai)</option></select></label>
           </div>
           <p class="small muted" style="margin:0">Warna kedua, latar, bayangan, dan kontras teks menyesuaikan otomatis sehingga tetap nyaman dipandang.</p>
@@ -1594,6 +1601,7 @@
   function configScreen() {
     document.body.classList.add('auth-mode');
     let el = $('#auth');
+    setTimeout(() => window.ThemeMode && ThemeMode.paint(), 0);
     if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
     el.innerHTML = `<div class="card auth-card" style="width:min(520px,100%)">
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:12px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
@@ -1627,10 +1635,11 @@
     if (mode === 'register' && !S.saas) mode = 'login';
     document.body.classList.add('auth-mode');
     let el = $('#auth');
+    setTimeout(() => window.ThemeMode && ThemeMode.paint(), 0);
     if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
     const sub = { setup: S.saas ? 'Pemasangan pertama — buat akun pemilik platform' : 'Pemasangan pertama — buat akun admin', register: 'Daftar sekolah baru — coba gratis', login: 'Masuk ke akun sekolah' }[mode];
     const userLabel = S.saas ? 'Email' : 'Username';
-    el.innerHTML = `<div class="card auth-card tilt"><div class="z1">
+    el.innerHTML = `<button class="mode-toggle auth-mode-btn" type="button" aria-label="Ganti mode">☀️</button><div class="card auth-card tilt"><div class="z1">
       ${window.Art ? `<div class="auth-mascot">${Art.kubi({ pose: mode === 'register' ? 'cheer' : 'wave', eyes: 'happy' })}</div>` : ''}
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
       <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${sub}</div></div></div>
@@ -2125,6 +2134,7 @@
 
   let started = false;
   function startApp() {
+    if (S.mode === 'server' && !S.themeSaved && window.ThemeMode) st().theme.mode = ThemeMode.get();
     applyTheme();
     route();
     if (started) return;
@@ -2146,7 +2156,7 @@
   window.App = { toast, route };
   S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
   S.onLocked = () => { renderUserBox(); if (!/^#\/(langganan|akun|pemilik)/.test(location.hash)) { toast('Masa langganan sekolah berakhir — data hanya bisa dilihat. Perpanjang di menu Langganan.', 'bad'); location.hash = '#/langganan'; } };
-  applyTheme();
+  applyTheme(true);
   S.init().then(r => {
     if (r.needsConfig) configScreen();
     else if (r.needsSetup) authScreen(true);

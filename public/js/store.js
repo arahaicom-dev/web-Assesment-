@@ -6,6 +6,7 @@
 
   const PRESETS = [
     { id: 'galaksi', name: 'Galaksi', h: 244, s: 78, mode: 'dark' },
+    { id: 'siang', name: 'Langit Siang', h: 214, s: 82, mode: 'light' },
     { id: 'samudra', name: 'Samudra', h: 228, s: 72 },
     { id: 'toska', name: 'Toska', h: 178, s: 62 },
     { id: 'hutan', name: 'Hutan', h: 148, s: 52 },
@@ -168,6 +169,7 @@
       const r = await api('state');
       this.user = r.user;
       this.subscription = r.subscription || null;
+      this.themeSaved = !!(r.state && r.state.theme);
       let ui = {};
       try { ui = JSON.parse(localStorage.getItem(UI_KEY) || '{}'); } catch (e) { /* */ }
       const next = normalize(Object.assign(r.state, { ui: Object.assign({ classId: null, subjectId: null }, ui) }));
