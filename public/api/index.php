@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.2.0');
+define('APP_VERSION', '5.3.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -455,6 +455,7 @@ try {
       if (!$questions) bad(400, $mode === 'exam' ? 'Paket soal ini belum punya soal yang bisa dipakai.' : 'Paket soal ini tidak punya soal yang bisa dipakai untuk kuis (butuh pilihan ganda, benar/salah, atau isian yang sudah ada kuncinya).');
       $settings = array(
         'mode' => $mode,
+        'music' => substr(preg_replace('/[^a-z]/', '', (string)prop($body, 'music', '')), 0, 16),
         'duration' => max(0, min(600, (int)prop($body, 'duration', 60))),
         'showResult' => (bool)prop($body, 'showResult', true),
         'maxViolations' => max(0, min(20, (int)prop($body, 'maxViolations', 0))),
@@ -565,7 +566,7 @@ try {
 
     if ($act === '' && $method === 'GET') {
       $info = array('title' => $g['title'], 'status' => $g['status'], 'count' => count($qsAll), 'time' => $set['time'], 'players' => $count(), 'needName' => !$g['class_id'],
-        'mode' => isset($set['mode']) ? $set['mode'] : 'game', 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0, 'maxViolations' => isset($set['maxViolations']) ? (int)$set['maxViolations'] : 0);
+        'mode' => isset($set['mode']) ? $set['mode'] : 'game', 'music' => isset($set['music']) ? $set['music'] : '', 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0, 'maxViolations' => isset($set['maxViolations']) ? (int)$set['maxViolations'] : 0);
       $st = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'settings', 'main'));
       $info['schoolName'] = $st ? prop(json_decode($st['data']), 'schoolName', '') : '';
       $r = $roster();

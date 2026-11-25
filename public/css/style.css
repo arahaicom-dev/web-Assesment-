@@ -655,3 +655,17 @@ html.standalone input, html.standalone textarea, html.standalone [contenteditabl
   .topbar .mode-toggle { width: 38px; height: 38px; font-size: 17px; }
   [data-mode="light"] .tabbar a .ti { filter: grayscale(.3); }
 }
+
+/* Musik & suara */
+.snd-item { width: 100%; display: flex; align-items: center; gap: 12px; padding: 11px 12px; margin: 0 0 8px; border-radius: 14px; border: 2px solid var(--border); background: var(--surface-solid); color: var(--text); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, transform .1s; }
+.snd-item:active { transform: scale(.98); }
+.snd-item.on { border-color: var(--primary); background: var(--primary-soft); }
+.snd-e { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 22px; background: var(--surface-2); flex: none; }
+.snd-n { flex: 1; min-width: 0; } .snd-n b { display: block; } .snd-n small { color: var(--muted); }
+.snd-k { font-size: .66rem; font-weight: 800; padding: 3px 8px; border-radius: 99px; background: var(--surface-2); color: var(--muted); }
+.snd-k.ujian { background: var(--primary-soft); color: var(--primary); } .snd-k.main { background: var(--ok-soft); color: var(--ok); }
+.snd-vol { display: flex; align-items: center; gap: 10px; margin: 12px 4px 6px; } .snd-vol input { flex: 1; }
+.snd-fx { display: flex; align-items: center; gap: 8px; margin: 8px 4px; font-weight: 600; }
+.snd-list { max-height: 52vh; overflow-y: auto; }
+#mute.playing { animation: sndGlow 1.6s ease-in-out infinite; border-color: var(--primary); }
+@keyframes sndGlow { 50% { box-shadow: 0 0 0 4px hsl(var(--h) 80% 65% / .35), 0 0 18px hsl(var(--h) 80% 65% / .55); } }

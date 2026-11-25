@@ -250,7 +250,7 @@
       console.error(e);
       out = { html: `<div class="card"><h2>Terjadi kesalahan</h2><pre class="small">${esc(e.stack || e)}</pre></div>` };
     }
-    if (gamePoll && !/^kuis\/\d+/.test(hash)) { clearInterval(gamePoll); gamePoll = null; document.body.classList.remove('fs-mode'); }
+    if (gamePoll && !/^kuis\/\d+/.test(hash)) { clearInterval(gamePoll); gamePoll = null; document.body.classList.remove('fs-mode'); if (window.Music) Music.stop(); }
     current = out;
     const onHosting = S.mode === 'local' && /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
     let banner = onHosting ? `<div class="note warn no-print" style="margin-bottom:16px"><b>⚠️ Aplikasi berjalan dalam MODE LOKAL (server tidak terdeteksi).</b> Data hanya tersimpan di browser ini, tidak ada login, dan murid tidak bisa ujian dari HP masing-masing (tidak ada token).
@@ -1805,9 +1805,18 @@
       </div>
       <label class="field only-exam" style="margin-top:10px"><span>Pengawasan: jika murid keluar dari halaman ujian (pindah aplikasi/tab)…</span><select id="g-viol">
         <option value="0">Catat saja sebagai pelanggaran</option><option value="3" selected>Kumpulkan otomatis setelah 3 pelanggaran</option><option value="5">Kumpulkan otomatis setelah 5 pelanggaran</option><option value="1">Kumpulkan otomatis pada pelanggaran pertama</option></select></label>
+      <label class="field" style="margin-top:10px"><span>🎵 Musik latar di HP murid (murid tetap bisa mengganti/mematikan)</span><select id="g-music"></select></label>
       <p class="small muted" id="g-note"></p>
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="g-ok">Buat & Buka Layar Kuis</button></div>`);
+    let musicTouched = !!preset.music;
+    const fillMusic = () => {
+      const T2 = window.Music ? Music.TRACKS : [], mine = mode === 'exam' ? 'ujian' : 'main';
+      const sel = $('#g-music', m), keep = musicTouched ? sel.value || preset.music || '' : (mode === 'exam' ? 'fokus' : 'semangat');
+      sel.innerHTML = `<option value="">🔇 Tanpa musik</option><optgroup label="${mode === 'exam' ? 'Cocok untuk ujian' : 'Untuk permainan'}">${T2.filter(t => t.kind === mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup><optgroup label="Lainnya">${T2.filter(t => t.kind !== mine).map(t => `<option value="${t.id}">${t.emoji} ${t.name} — ${t.desc}</option>`).join('')}</optgroup>`;
+      sel.value = keep;
+    };
     const paint = () => {
+      fillMusic();
       $$('.mode-card', m).forEach(c => c.classList.toggle('on', c.dataset.mode === mode));
       $$('.only-game', m).forEach(x => x.classList.toggle('hidden', mode !== 'game'));
       $$('.only-exam', m).forEach(x => x.classList.toggle('hidden', mode !== 'exam'));
@@ -1819,12 +1828,14 @@
       if (mode === 'exam' && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
     };
     $$('.mode-card', m).forEach(c => c.onclick = () => { mode = c.dataset.mode; paint(); });
+    $('#g-music', m).onchange = e => { musicTouched = true; if (window.Music) { Music.unlock(); Music.setVolume(0.45); if (e.target.value) { Music.play(e.target.value); clearTimeout(window.__mp); window.__mp = setTimeout(() => Music.stop(), 6000); } else Music.stop(); } };
     $('#g-qs', m).onchange = paint;
     paint();
     $('#g-ok', m).onclick = async () => {
       const b = $('#g-ok', m); b.disabled = true;
       try {
-        const r = await S.api('games', { body: { mode, qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+        if (window.Music) Music.stop();
+        const r = await S.api('games', { body: { mode, music: $('#g-music', m).value, qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
           duration: +$('#g-dur', m).value, showResult: $('#g-sr', m).checked, maxViolations: +$('#g-viol', m).value,
           shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
         closeModal();
@@ -1860,7 +1871,8 @@
         fs: () => { document.body.classList.toggle('fs-mode'); if (document.body.classList.contains('fs-mode') && document.documentElement.requestFullscreen) document.documentElement.requestFullscreen().catch(() => {}); else if (document.fullscreenElement) document.exitFullscreen(); },
         save: () => saveGameScores(out.data),
         xls: () => exportTable($('#res-table'), 'Kuis_' + out.data.game.title.replace(/[^\w\s-]/g, '')),
-        again: () => { const g = out.data.game; newGameModal({ mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
+        music: () => hostMusic(),
+        again: () => { const g = out.data.game; newGameModal({ music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
         reset: async el => { if (!await confirmBox(`Ulang ujian untuk <b>${esc(el.dataset.n)}</b>? Jawaban, nilai, dan catatan pelanggarannya dihapus sehingga ia bisa mengerjakan dari awal.`, 'Ulang Ujian')) return; try { await S.api('games/' + id + '/reset', { body: { playerId: +el.dataset.id } }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
         review: el => examReviewModal(out, +el.dataset.id)
       }
@@ -1874,7 +1886,7 @@
     if (g.settings.mode === 'exam') return renderExamHost(d, box);
     setTitle('🎮 ' + esc(g.title), `${total} soal · ${g.settings.time} detik/soal${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ' · nama bebas'}`);
     const link = playLink(g.code);
-    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>`;
+    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><button class="btn ghost sm" data-act="music">${window.Music && Music.current() ? '🎵 Musik: ' + esc((Music.TRACKS.find(x => x.id === Music.current()) || {}).name || '') : '🎵 Musik'}</button><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>`;
     const finished = ps.filter(p => p.finished).length;
     const acc = p => p.answered ? Math.round(p.correct / p.answered * 100) : 0;
     if (g.status === 'lobby') {
@@ -1920,7 +1932,7 @@
     const g = d.game, ps = d.players, total = d.questions.length, set = g.settings;
     setTitle('📝 ' + esc(g.title), `Mode Ujian · ${total} soal · ${set.duration ? set.duration + ' menit' : 'tanpa batas waktu'}${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ''}`);
     const link = playLink(g.code);
-    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><span class="pill ${GAME_STATUS[g.status][0]}">${g.status === 'running' ? '● Ujian berlangsung' : g.status === 'lobby' ? 'Menunggu peserta' : 'Selesai'}</span></div>`;
+    const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><button class="btn ghost sm" data-act="music">${window.Music && Music.current() ? '🎵 Musik: ' + esc((Music.TRACKS.find(x => x.id === Music.current()) || {}).name || '') : '🎵 Musik'}</button><span class="pill ${GAME_STATUS[g.status][0]}">${g.status === 'running' ? '● Ujian berlangsung' : g.status === 'lobby' ? 'Menunggu peserta' : 'Selesai'}</span></div>`;
     const st0 = p => p.finished ? ['ok', '✔ Selesai'] : p.started_ms ? ['pri', '✍ Mengerjakan'] : ['', 'Belum mulai'];
     const stat = (ic, num, lbl) => `<div class="card stat"><div class="blob"><span>${ic}</span></div><div class="num">${num}</div><div class="lbl">${lbl}</div></div>`;
     const done = ps.filter(p => p.finished), work = ps.filter(p => p.started_ms && !p.finished);
@@ -1990,6 +2002,20 @@
       try { const r = await S.api('games/' + d.game.id + '/grade', { body: { playerId: pid, manual: man } }); closeModal(); toast('Koreksi tersimpan. Nilai: ' + fmt(r.score, 1)); out.load(); }
       catch (e) { toast(e.message, 'bad'); }
     };
+  }
+
+  /* Musik di layar guru (proyektor) */
+  function hostMusic() {
+    if (!window.Music) return;
+    const cur = Music.current(), vol = +(localStorage.getItem('host-vol') || 0.5);
+    const m = modal(`<h2>🎵 Musik di Layar Guru</h2><p class="small muted" style="margin-top:0">Diputar dari perangkat ini (mis. laptop yang tersambung ke proyektor/speaker kelas).</p>
+      <div class="snd-list"><button class="snd-item ${!cur ? 'on' : ''}" data-t=""><span class="snd-e">🔇</span><span class="snd-n"><b>Tanpa musik</b><small>Hening</small></span></button>
+      ${Music.TRACKS.map(t => `<button class="snd-item ${t.id === cur ? 'on' : ''}" data-t="${t.id}"><span class="snd-e">${t.emoji}</span><span class="snd-n"><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></span><span class="snd-k ${t.kind}">${t.kind === 'ujian' ? 'Ujian' : 'Main'}</span></button>`).join('')}</div>
+      <label class="snd-vol">🔈 <input type="range" min="0" max="1" step="0.05" value="${vol}" id="hv"> 🔊</label>
+      <div class="foot"><button class="btn" data-close>Selesai</button></div>`, { noFocus: true });
+    $$('.snd-item', m).forEach(b => b.onclick = () => { $$('.snd-item', m).forEach(x => x.classList.toggle('on', x === b)); Music.unlock(); Music.setVolume(vol); if (b.dataset.t) Music.play(b.dataset.t); else Music.stop(); });
+    $('#hv', m).oninput = e => { localStorage.setItem('host-vol', e.target.value); Music.setVolume(+e.target.value); };
+    $$('[data-close]', m).forEach(b => b.addEventListener('click', () => { const g = current && current.data; if (g) renderHost(g); }));
   }
 
   function saveGameScores(d) {

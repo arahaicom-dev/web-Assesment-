@@ -16,9 +16,43 @@
   /* ---------- suara sederhana (dibuat langsung, tanpa file) ---------- */
   let muted = localStorage.getItem('kuis-mute') === '1', actx = null;
   const muteBtn = $('#mute');
-  const paintMute = () => { muteBtn.textContent = muted ? '🔇' : '🔊'; };
+  /* ---------- musik latar (dipilih guru, bisa diganti/dimatikan murid) ---------- */
+  const SND = {
+    pref() { try { return Object.assign({ set: false, track: '', vol: 0.45 }, JSON.parse(localStorage.getItem('kuis-musik') || '{}')); } catch (e) { return { set: false, track: '', vol: 0.45 }; } },
+    save(p) { localStorage.setItem('kuis-musik', JSON.stringify(p)); },
+    want() { const p = this.pref(); return p.set ? p.track : ((G.info && G.info.music) || ''); },
+    start() { if (!window.Music) return; const p = this.pref(), id = this.want(); Music.setVolume(p.vol); if (id) Music.play(id); else Music.stop(); paintMute(); },
+    stop() { if (window.Music) Music.stop(); paintMute(); }
+  };
+  const paintMute = () => { const on = window.Music && Music.current(); muteBtn.textContent = on ? '🎵' : (muted ? '🔇' : '🔈'); muteBtn.classList.toggle('playing', !!on); };
   paintMute();
-  muteBtn.onclick = () => { muted = !muted; localStorage.setItem('kuis-mute', muted ? '1' : '0'); paintMute(); };
+  document.addEventListener('pointerdown', () => { if (window.Music && Music.current()) Music.unlock(); }, { passive: true });
+  muteBtn.onclick = () => soundPanel();
+  function soundPanel() {
+    const exam = G.info && G.info.mode === 'exam';
+    const p = SND.pref(), cur = SND.want(), list = (window.Music ? Music.TRACKS : []).slice().sort((a, b) => (a.kind === (exam ? 'ujian' : 'main') ? -1 : 1) - (b.kind === (exam ? 'ujian' : 'main') ? -1 : 1));
+    const bg = document.createElement('div'); bg.className = 'sheet-bg';
+    const row = t => `<button class="snd-item ${t.id === cur ? 'on' : ''}" data-t="${t.id}"><span class="snd-e">${t.emoji}</span><span class="snd-n"><b>${esc(t.name)}</b><small>${esc(t.desc)}</small></span><span class="snd-k ${t.kind}">${t.kind === 'ujian' ? 'Ujian' : 'Main'}</span></button>`;
+    bg.innerHTML = `<div class="sheet snd-sheet"><div class="sheet-grip"></div><h3 class="sheet-title">🎵 Musik & Suara</h3>
+      <button class="snd-item ${!cur ? 'on' : ''}" data-t=""><span class="snd-e">🔇</span><span class="snd-n"><b>Tanpa musik</b><small>Hening</small></span></button>
+      <div class="sheet-group">${exam ? 'Cocok untuk ujian' : 'Untuk permainan'}</div>${list.filter(t => t.kind === (exam ? 'ujian' : 'main')).map(row).join('')}
+      <div class="sheet-group">${exam ? 'Lainnya' : 'Tenang / fokus'}</div>${list.filter(t => t.kind !== (exam ? 'ujian' : 'main')).map(row).join('')}
+      <label class="snd-vol">🔈 <input type="range" min="0" max="1" step="0.05" value="${p.vol}" id="snd-v"> 🔊</label>
+      ${exam ? '' : `<label class="snd-fx"><input type="checkbox" id="snd-fx" ${muted ? '' : 'checked'}> Efek suara benar/salah</label>`}
+      <button class="btn lg" style="width:100%;margin-top:12px" id="snd-ok">Selesai</button></div>`;
+    document.body.appendChild(bg);
+    const close = () => bg.remove();
+    bg.addEventListener('click', e => { if (e.target === bg) close(); });
+    bg.querySelectorAll('.snd-item').forEach(b => b.onclick = () => {
+      const q = SND.pref(); q.set = true; q.track = b.dataset.t; SND.save(q);
+      bg.querySelectorAll('.snd-item').forEach(x => x.classList.toggle('on', x === b));
+      if (window.Music) { Music.unlock(); Music.setVolume(q.vol); if (q.track) Music.play(q.track); else Music.stop(); }
+      paintMute();
+    });
+    bg.querySelector('#snd-v').oninput = e => { const q = SND.pref(); q.vol = +e.target.value; SND.save(q); if (window.Music) Music.setVolume(q.vol); };
+    const fx = bg.querySelector('#snd-fx'); if (fx) fx.onchange = () => { muted = !fx.checked; localStorage.setItem('kuis-mute', muted ? '1' : '0'); };
+    bg.querySelector('#snd-ok').onclick = close;
+  }
   function tone(freqs, dur, type) {
     if (muted || (G.info && G.info.mode === 'exam')) return;
     try {
@@ -53,7 +87,8 @@
 
   /* ---------- 1. Masukkan kode ---------- */
   function stepCode(msg) {
-    stopAll(); G.me = null; setHud();
+    stopAll();
+    SND.stop(); G.me = null; setHud();
     view.innerHTML = `<div class="kz-card pop" style="max-width:460px;margin:6vh auto 0;text-align:center">
       <div class="kz-mascot">${window.Art ? Art.kubi({ pose: 'wave', eyes: 'happy' }) : '🎮'}</div><h1 class="kz-title">Gabung Kuis</h1><p class="muted">Masukkan kode yang ditampilkan guru di layar.</p>
       ${msg ? `<div class="note warn" style="text-align:left;margin-bottom:12px">${esc(msg)}</div>` : ''}
@@ -129,6 +164,7 @@
   /* ---------- 3. Ruang tunggu ---------- */
   function lobby(s) {
     stopAll();
+    SND.start();
     const draw = st => {
       view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:720px;margin:3vh auto 0">
         <div class="kz-big-ico bounce">${esc(G.me.avatar || '🙂')}</div>
@@ -145,6 +181,7 @@
   }
 
   function countdown() {
+    SND.start();
     let n = 3;
     const show = () => { view.innerHTML = `<div class="kz-count"><div class="kz-count-n">${n}</div><div class="muted">Bersiap…</div></div>`; sfx.tick(); };
     show();
@@ -220,7 +257,8 @@
     G.poll = setInterval(async () => { try { const s = await api('state'); G.me = s.me; setHud(); if (s.status === 'ended') { stopAll(); final(s); } else draw(s.me); } catch (e) { /* */ } }, 3000);
   }
   function final(s) {
-    stopAll(); const me = s.me; G.me = me; setHud();
+    stopAll();
+    SND.stop(); const me = s.me; G.me = me; setHud();
     const top = s.top || [];
     const podium = [1, 0, 2].filter(k => top[k]).map(k => `<div class="kz-pod p${k + 1}"><div class="kz-av lg">${esc(top[k].avatar || '🙂')}</div><div class="kz-pod-name">${esc(top[k].nickname)}</div><div class="kz-pod-box"><b>${k + 1}</b><small>${fmt(top[k].score)}</small></div></div>`).join('');
     view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:640px;margin:3vh auto 0">
@@ -261,6 +299,7 @@
 
   async function examStart() {
     stopAll();
+    SND.start();
     let d;
     try { d = await api('exam-start', {}); } catch (e) { if (e.status === 409) return lobby({ players: 0, lobby: [] }); return toast(e.message, 'bad'); }
     if (d.finished) return examDone(d.me);
@@ -355,7 +394,8 @@
     });
   }
   function examDone(me) {
-    stopAll(); E.active = false; G.me = me; setHud();
+    stopAll();
+    SND.stop(); E.active = false; G.me = me; setHud();
     try { localStorage.removeItem(ebKey()); } catch (e) { /* */ }
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
     const r = me.result;

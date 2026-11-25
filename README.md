@@ -82,6 +82,15 @@ Penilaian otomatis: pilihan ganda dan benar/salah dicocokkan langsung. Isian sin
 - Pilihan diingat di perangkat (`localStorage`). Untuk guru, pilihan juga **tersimpan di akun**, jadi ikut terpakai saat login di perangkat lain. Akun yang belum pernah memilih memakai pilihan yang dibuat di layar masuk.
 - Ada preset tema baru **Langit Siang**.
 
+## Musik & suara (Kuis Seru / Mode Ujian)
+- **9 musik latar orisinal** yang dibangkitkan langsung di browser (Web Audio, `public/js/music.js`). Tidak ada file musik dan tidak memakai lagu pihak lain.
+  - **Cocok untuk ujian**: 🧘 Fokus Tenang · 🎧 Lo-fi Belajar · 🎹 Piano Pagi · 🌧️ Hujan Rintik · 🌿 Pagi di Hutan · 🪐 Luar Angkasa.
+  - **Untuk permainan**: 🏆 Semangat Juara · 🕹️ Arkade Ceria · 🎸 Santai Ceria.
+- **Guru** memilih musik bawaan saat membuat kuis/ujian (bisa *Tanpa musik*). Bawaannya *Fokus Tenang* untuk ujian dan *Semangat Juara* untuk permainan.
+- **Murid** bisa mengganti musik, mengatur volume, atau mematikannya lewat tombol **🎵** di HP-nya. Pilihannya diingat. Efek suara benar/salah (mode permainan) juga bisa dimatikan.
+- **Layar guru/proyektor**: tombol **🎵 Musik** memutar musik dari laptop guru, misalnya saat menunggu murid bergabung.
+- Musik mulai setelah murid menekan tombol (aturan browser) dan berhenti otomatis saat kuis/ujian selesai.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.
