@@ -135,6 +135,7 @@
       if (!health || health.mode !== 'server') { this.mode = 'local'; return { ok: true }; }
       this.mode = 'server';
       this.backend = health.backend || 'node';
+      this.version = health.version || '';
       this.saas = !!health.saas;
       if (health.needsConfig) return { needsConfig: true };
       if (health.dbError) throw new Error(health.dbError);

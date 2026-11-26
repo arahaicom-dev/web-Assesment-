@@ -2028,8 +2028,9 @@
         <label class="field"><span>Password${mode !== 'login' ? ' (min. 6 karakter)' : ''}</span><input id="au-pw" type="password" required autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>
         <button class="btn lg" style="width:100%" type="submit">${mode === 'setup' ? 'Buat Akun & Mulai' : mode === 'register' ? 'Daftar & Mulai Coba Gratis' : 'Masuk'}</button>
       </form>
-      ${mode === 'login' && S.backend === 'php' ? '<div style="margin-top:12px;text-align:center"><a href="#lupa" id="forgot-link" class="small" style="font-weight:700">🔑 Lupa password?</a></div>' : ''}
+      ${mode === 'login' && S.mode === 'server' ? '<div style="margin-top:12px;text-align:center"><a href="#lupa" id="forgot-link" class="small" style="font-weight:700">🔑 Lupa password?</a></div>' : ''}
       <div class="small muted" style="margin-top:14px;text-align:center">${S.saas ? '<a href="index.html">← Halaman utama</a> · ' : ''}Murid? <a href="ujian.html">Masuk ke halaman ujian →</a></div>
+      <div class="small muted" style="margin-top:8px;text-align:center;opacity:.6">versi ${esc(S.version || '?')}</div>
     </div></div>`;
     bindTilt(el);
     $$('[data-m]', el).forEach(b => b.onclick = () => { history.replaceState(null, '', b.dataset.m === 'register' ? '#daftar' : '#masuk'); authScreen(b.dataset.m); });
@@ -2603,7 +2604,7 @@
   S.init().then(r => {
     if (r.needsConfig) configScreen();
     else if (resetTok) resetScreen(resetTok);
-    else if (r.needLogin && location.hash === '#lupa') forgotScreen();
+    else if (location.hash === '#lupa') forgotScreen();
     else if (r.needsSetup) authScreen(true);
     else if (r.needLogin) authScreen(location.hash === '#daftar' ? 'register' : 'login');
     else startApp();
