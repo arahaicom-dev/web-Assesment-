@@ -483,6 +483,163 @@
   }
 
   /* ================= Data Master ================= */
+  /* ================= Impor daftar murid (Excel / CSV / tempel) ================= */
+  let xlsxLoading = null;
+  function loadXLSX() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+    if (!xlsxLoading) xlsxLoading = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'lib/xlsx/xlsx.full.min.js'; sc.onload = () => res(window.XLSX); sc.onerror = () => { xlsxLoading = null; rej(new Error('Gagal memuat pembaca Excel. Periksa koneksi lalu coba lagi.')); }; document.head.appendChild(sc); });
+    return xlsxLoading;
+  }
+  /** Baca file Excel/ODS/CSV → [{ name, rows }] (angka panjang & nol di depan dipertahankan). */
+  async function readSheets(file) {
+    const X = await loadXLSX();
+    const wb = X.read(new Uint8Array(await file.arrayBuffer()), { type: 'array', cellDates: false, cellNF: true, codepage: 65001 });
+    return wb.SheetNames.map(name => {
+      const ws = wb.Sheets[name]; if (!ws || !ws['!ref']) return { name, rows: [] };
+      const rg = X.utils.decode_range(ws['!ref']), rows = [];
+      for (let r = rg.s.r; r <= Math.min(rg.e.r, rg.s.r + 5000); r++) {
+        const row = [];
+        for (let c = rg.s.c; c <= Math.min(rg.e.c, rg.s.c + 60); c++) {
+          const cell = ws[X.utils.encode_cell({ r, c })]; let v = '';
+          if (cell) {
+            if (cell.t === 'n' && Number.isInteger(cell.v) && Math.abs(cell.v) < 1e17) { v = String(cell.v); if (cell.w && /^0\d+$/.test(cell.w.trim())) v = cell.w.trim(); }
+            else v = cell.w != null && cell.t !== 's' ? cell.w : (cell.v == null ? '' : String(cell.v));
+          }
+          row.push(v);
+        }
+        rows.push(row);
+      }
+      // sel gabungan (merge): salin nilai ke seluruh area agar header bertingkat terbaca
+      (ws['!merges'] || []).forEach(m => { const v = (rows[m.s.r - rg.s.r] || [])[m.s.c - rg.s.c]; if (!v) return; for (let r = m.s.r; r <= m.e.r; r++) for (let c = m.s.c; c <= m.e.c; c++) { const rr = rows[r - rg.s.r]; if (rr && !rr[c - rg.s.c] && r === m.s.r) rr[c - rg.s.c] = v; } });
+      return { name, rows };
+    });
+  }
+  const clsKey = n => String(n || '').toUpperCase().replace(/^KELAS\s*/, '').replace(/[^A-Z0-9]/g, '');
+  const colName = i => { let s = ''; i++; while (i) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  async function pickRosterFile(defaultCls) {
+    const f = await pickFile('.xlsx,.xls,.xlsm,.ods,.csv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel,text/csv');
+    if (!f) return;
+    toast('Membaca ' + f.name + '…');
+    try {
+      const sheets = await readSheets(f);
+      rosterModal(sheets, f.name.replace(/\.[^.]+$/, ''), defaultCls);
+    } catch (e) { toast('File tidak bisa dibaca: ' + e.message, 'bad'); }
+  }
+  function pasteRoster(defaultCls) {
+    const m = modal(`<h2>Tempel Daftar Murid</h2><p class="small muted" style="margin-top:0">Salin tabel dari Excel / Google Sheets / Word / Dapodik (boleh beserta judul kolomnya), lalu tempel di sini. Kolom nama, NIS/NISN, dan kelas dikenali otomatis. Bisa juga satu nama per baris.</p>
+      <textarea id="rp-text" style="min-height:220px" placeholder="No	Nama	NISN&#10;1	Adinda Putri	0123456789&#10;2	Bagas Pratama	0123456790"></textarea>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="rp-ok">Lanjut → Periksa</button></div>`);
+    $('#rp-ok', m).onclick = () => {
+      const t = $('#rp-text', m).value; if (!t.trim()) return toast('Tempel daftar murid dulu.', 'bad');
+      let rows = SiswaImport.textToRows(t);
+      if (rows.every(r => r.length === 1)) rows = rows.map(r => [r[0].replace(/^\s*\d+\s*[.)]\s+/, '')]).map(r => { const mm = r[0].match(/^\s*(\d{4,})\s*[;,\-]?\s+(.+)$/); return mm ? [mm[1], mm[2]] : r; });
+      if (rows.filter(r => r.some(c => c.trim())).length && rows.every(r => r.length <= 2) && !SiswaImport.parseSheet(rows).rows.length) rows = [['Nama']].concat(rows.map(r => [r[r.length - 1]]));
+      closeModal(); rosterModal([{ name: 'Tempelan', rows }], 'Kelas Baru', defaultCls);
+    };
+  }
+  /** Pratinjau & penyesuaian hasil baca, lalu impor. */
+  function rosterModal(sheets, fileTitle, defaultCls) {
+    const s = st();
+    const maps = {}; // pengaturan kolom manual per sheet
+    let w = SiswaImport.parseWorkbook(sheets, maps);
+    if (!w.total) {
+      modal(`<h2>Daftar murid tidak ditemukan</h2><div class="note warn">Kami tidak menemukan kolom nama murid di file ini.</div><p class="small">Pastikan ada kolom berisi nama murid (judul kolom seperti <b>Nama</b>, <b>Nama Siswa</b>, atau <b>Nama Peserta Didik</b> akan membantu). Sheet yang dibaca: ${sheets.map(x => esc(x.name)).join(', ')}.</p><div class="foot"><button class="btn" data-close>Tutup</button></div>`);
+      return;
+    }
+    const oneOther = w.classes.length === 1 && (!defaultCls || clsKey(w.classes[0]) !== clsKey(defaultCls.name));
+    const opt = { target: w.suggest === 'column' || oneOther ? 'column' : w.suggest === 'sheets' ? 'sheets' : defaultCls ? 'cur' : 'new', newName: w.classes.length === 1 ? w.classes[0] : fileTitle, idField: 'auto', title: null, skipDup: true, sheet: w.used[0].name };
+    const allCaps = () => { const a = [].concat(...w.used.map(x => x.rows)); return a.filter(x => x.name === x.name.toUpperCase() && /[A-Z]/.test(x.name)).length >= a.length / 2; };
+    if (opt.title === null) opt.title = allCaps();
+    const idOf = x => opt.idField === 'nisn' ? (x.nisn || x.nis) : opt.idField === 'nis' ? (x.nis || x.nisn) : (x.nis || x.nisn);
+    const hasBoth = () => w.used.some(sh => sh.map.nis !== undefined && sh.map.nisn !== undefined);
+    // daftar rencana impor
+    const plan = () => {
+      const out = [];
+      w.used.forEach(sh => sh.rows.forEach(x => {
+        let cname;
+        if (opt.target === 'cur') cname = defaultCls ? defaultCls.name : opt.newName;
+        else if (opt.target === 'new') cname = opt.newName.trim() || 'Kelas Baru';
+        else if (opt.target === 'column') cname = x.kelas || (defaultCls ? defaultCls.name : opt.newName);
+        else cname = sh.name;
+        out.push({ name: opt.title ? SiswaImport.titleCase(x.name) : x.name, nis: idOf(x), cname, jk: x.jk });
+      }));
+      const byKey = {}; s.classes.forEach(c => { byKey[clsKey(c.name)] = c; });
+      out.forEach(x => {
+        const c = opt.target === 'cur' && defaultCls ? defaultCls : byKey[clsKey(x.cname)];
+        x.cls = c || null; x.isNewCls = !c;
+        const dup = c && c.students.find(y => (x.nis && y.nis && y.nis === x.nis) || y.name.toLowerCase().replace(/\s+/g, ' ') === x.name.toLowerCase());
+        x.dup = !!dup; x.dupRef = dup || null;
+      });
+      // duplikat di dalam file
+      const seen = {}; out.forEach(x => { const k = clsKey(x.cname) + '|' + (x.nis || x.name.toLowerCase()); if (seen[k]) x.dupFile = true; seen[k] = 1; });
+      return out;
+    };
+    const m = modal('<div id="rm"></div>', { wide: true, noFocus: true, sticky: true });
+    const draw = () => {
+      const p = plan(), sh = w.used.find(x => x.name === opt.sheet) || w.used[0];
+      const add = p.filter(x => !(opt.skipDup && (x.dup || x.dupFile)));
+      const newCls = [...new Set(add.filter(x => x.isNewCls).map(x => x.cname))];
+      const width = Math.max(...(sheets.find(x => x.name === sh.name).rows.slice(0, 50).map(r => r.length)), 1);
+      const colOpts = (f) => `<option value="">— tidak ada —</option>${Array.from({ length: width }, (_, i) => `<option value="${i}" ${sh.map[f] === i ? 'selected' : ''}>Kolom ${colName(i)}${sh.headers[i] ? ' · ' + esc(sh.headers[i].slice(0, 24)) : ''}</option>`).join('')}`;
+      $('#rm', m).innerHTML = `<h2>📥 Impor Daftar Murid</h2>
+        <div class="note ok" style="margin-bottom:10px">✅ Ditemukan <b>${w.total} murid</b>${w.used.length > 1 ? ` dari <b>${w.used.length} sheet</b>` : ''}${w.classes.length ? ` · kolom kelas: <b>${w.classes.map(esc).join(', ')}</b>` : ''}. Kolom dikenali otomatis — ubah di bawah bila ada yang tertukar.</div>
+        ${[].concat(...w.used.map(x => x.warnings)).filter((x, i, a) => a.indexOf(x) === i).map(x => `<div class="note warn small" style="margin-bottom:6px">${esc(x)}</div>`).join('')}
+        <div class="grid g2" style="gap:14px;align-items:start">
+          <div>
+            <h3 style="margin:6px 0">1. Kolom yang dibaca${w.used.length > 1 ? ` <select id="rm-sheet" style="width:auto;font-size:.85rem">${w.used.map(x => `<option ${x.name === sh.name ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select>` : ''}</h3>
+            <div class="row"><label class="field"><span>Nama murid</span><select data-col="name">${colOpts('name')}</select></label><label class="field"><span>NIS / NIPD</span><select data-col="nis">${colOpts('nis')}</select></label></div>
+            <div class="row"><label class="field"><span>NISN</span><select data-col="nisn">${colOpts('nisn')}</select></label><label class="field"><span>Kelas / Rombel</span><select data-col="kelas">${colOpts('kelas')}</select></label></div>
+            ${hasBoth() ? `<label class="field"><span>Nomor yang disimpan sebagai NIS/NISN (dipakai murid saat masuk ujian)</span><select id="rm-id"><option value="auto" ${opt.idField === 'auto' ? 'selected' : ''}>NIS (bila kosong pakai NISN)</option><option value="nisn" ${opt.idField === 'nisn' ? 'selected' : ''}>NISN</option></select></label>` : ''}
+            <h3 style="margin:10px 0 6px">2. Masukkan ke kelas</h3>
+            <div class="rm-targets">
+              ${defaultCls ? `<label class="radio-row"><input type="radio" name="rm-t" value="cur" ${opt.target === 'cur' ? 'checked' : ''}> Kelas yang sedang dibuka: <b>${esc(defaultCls.name)}</b></label>` : ''}
+              ${w.classes.length ? `<label class="radio-row"><input type="radio" name="rm-t" value="column" ${opt.target === 'column' ? 'checked' : ''}> Sesuai kolom <b>Kelas/Rombel</b> di file (${w.classes.length} kelas; kelas yang belum ada dibuat otomatis)</label>` : ''}
+              ${w.used.length > 1 ? `<label class="radio-row"><input type="radio" name="rm-t" value="sheets" ${opt.target === 'sheets' ? 'checked' : ''}> Satu kelas per sheet (${w.used.map(x => esc(x.name)).join(', ')})</label>` : ''}
+              <label class="radio-row"><input type="radio" name="rm-t" value="new" ${opt.target === 'new' ? 'checked' : ''}> Kelas baru / kelas bernama: <input id="rm-new" value="${esc(opt.newName)}" style="width:150px;padding:6px 8px"></label>
+            </div>
+            <label class="switch-row" style="margin-top:10px"><input type="checkbox" id="rm-title" ${opt.title ? 'checked' : ''}><span class="sw"></span><span><b>Rapikan NAMA KAPITAL</b><small>ADINDA PUTRI → Adinda Putri</small></span></label>
+            <label class="switch-row" style="margin-top:8px"><input type="checkbox" id="rm-dup" ${opt.skipDup ? 'checked' : ''}><span class="sw"></span><span><b>Lewati murid yang sudah ada</b><small>Dicocokkan dengan NIS atau nama. NIS yang masih kosong akan dilengkapi.</small></span></label>
+          </div>
+          <div>
+            <h3 style="margin:6px 0">3. Pratinjau</h3>
+            <div class="table-wrap" style="max-height:340px;overflow:auto"><table><thead><tr><th class="num">No</th><th>NIS/NISN</th><th>Nama</th><th>Kelas</th><th></th></tr></thead><tbody>
+              ${p.slice(0, 200).map((x, i) => `<tr style="${opt.skipDup && (x.dup || x.dupFile) ? 'opacity:.45' : ''}"><td class="num">${i + 1}</td><td>${esc(x.nis || '–')}</td><td>${esc(x.name)}</td><td>${esc(x.cname)}${x.isNewCls ? ' <span class="pill pri">baru</span>' : ''}</td><td>${x.dup ? '<span class="pill">sudah ada</span>' : x.dupFile ? '<span class="pill">ganda</span>' : ''}</td></tr>`).join('')}
+            </tbody></table></div>${p.length > 200 ? `<p class="small muted">…dan ${p.length - 200} lainnya</p>` : ''}
+          </div>
+        </div>
+        <div class="foot"><span class="small muted" style="margin-right:auto">${add.length} murid akan ditambahkan${newCls.length ? ` · ${newCls.length} kelas baru: ${newCls.map(esc).join(', ')}` : ''}</span><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="rm-ok" ${add.length ? '' : 'disabled'}>📥 Impor ${add.length} Murid</button></div>`;
+      $$('[data-close]', m).forEach(b => b.onclick = closeModal);
+      const sel = $('#rm-sheet', m); if (sel) sel.onchange = () => { opt.sheet = sel.value; draw(); };
+      $$('[data-col]', m).forEach(se => se.onchange = () => {
+        const map = Object.assign({}, sh.map); if (se.value === '') delete map[se.dataset.col]; else map[se.dataset.col] = +se.value;
+        if (map.name === undefined) { toast('Kolom nama wajib dipilih.', 'bad'); return draw(); }
+        maps[sh.name] = { map, headerRow: sh.headerRow };
+        w = SiswaImport.parseWorkbook(sheets, maps); if (!w.used.length) { delete maps[sh.name]; w = SiswaImport.parseWorkbook(sheets, maps); toast('Kolom itu tidak berisi nama.', 'bad'); }
+        draw();
+      });
+      const idSel = $('#rm-id', m); if (idSel) idSel.onchange = () => { opt.idField = idSel.value; draw(); };
+      $$('input[name=rm-t]', m).forEach(r => r.onchange = () => { opt.target = r.value; draw(); });
+      $('#rm-new', m).oninput = e => { opt.newName = e.target.value; }; $('#rm-new', m).onchange = () => { if (opt.target !== 'new') opt.target = 'new'; draw(); };
+      $('#rm-title', m).onchange = e => { opt.title = e.target.checked; draw(); };
+      $('#rm-dup', m).onchange = e => { opt.skipDup = e.target.checked; draw(); };
+      $('#rm-ok', m).onclick = () => {
+        const p2 = plan(); let n = 0, filled = 0; const made = {};
+        p2.forEach(x => {
+          if (opt.skipDup && x.dupFile) return;
+          if (opt.skipDup && x.dup) { if (x.dupRef && !x.dupRef.nis && x.nis) { x.dupRef.nis = x.nis; filled++; } return; }
+          let c = x.cls || made[clsKey(x.cname)];
+          if (!c) { c = { id: S.uid('c'), name: x.cname, fase: SiswaImport.faseOf(x.cname) || (defaultCls && defaultCls.fase) || 'D', students: [] }; s.classes.push(c); made[clsKey(x.cname)] = c; }
+          c.students.push({ id: S.uid('s'), nis: x.nis || '', name: x.name }); n++;
+        });
+        const first = Object.values(made)[0] || (opt.target === 'cur' ? defaultCls : (p2.find(x => x.cls) || {}).cls);
+        if (first) s.ui.classId = first.id;
+        S.save(); closeModal(); route();
+        toast(`${n} murid diimpor${Object.keys(made).length ? ', ' + Object.keys(made).length + ' kelas baru dibuat' : ''}${filled ? ', ' + filled + ' NIS dilengkapi' : ''}.`);
+      };
+    };
+    draw();
+  }
+
   function viewData(tab) {
     tab = tab || 'kelas';
     setTitle('Kelas, Murid & Mata Pelajaran', 'Data dasar yang dipakai semua asesmen');
@@ -495,17 +652,18 @@
     let html = tabs;
     if (tab === 'kelas') {
       html += `<div class="grid" style="grid-template-columns: 280px 1fr; align-items:start" id="data-grid">
-        <div class="card"><div class="card-head"><h3>Daftar Kelas</h3><button class="btn sm" data-act="add-class">+ Kelas</button></div>
+        <div class="card"><div class="card-head"><h3>Daftar Kelas</h3><div class="btns"><button class="btn sm" data-act="add-class">+ Kelas</button></div></div>
+          <button class="btn soft sm" style="width:100%;margin-bottom:6px" data-act="xls-new" title="Buat kelas & murid sekaligus dari file Excel">📥 Impor Kelas & Murid dari Excel</button>
           ${s.classes.map(c => `<div class="btns" style="margin:6px 0"><button class="btn ${c.id === s.ui.classId ? '' : 'ghost'}" style="flex:1;justify-content:space-between" data-act="pick-class" data-id="${c.id}"><span>${esc(c.name)}</span><span class="small">${c.students.length} murid</span></button></div>`).join('') || '<p class="muted small">Belum ada kelas.</p>'}
           ${!s.classes.length ? '<button class="btn soft sm" data-act="demo">Muat data contoh</button>' : ''}
         </div>
         <div class="card">${cls ? `
           <div class="card-head"><h3>Murid ${esc(cls.name)} <span class="pill">Fase ${esc(cls.fase || '-')}</span></h3>
-            <div class="btns"><button class="btn sm" data-act="add-student">+ Murid</button><button class="btn soft sm" data-act="bulk-student">📋 Tempel Daftar</button>
+            <div class="btns"><button class="btn sm" data-act="add-student">+ Murid</button><button class="btn ok sm" data-act="xls-student">📥 Unggah Excel</button><button class="btn soft sm" data-act="bulk-student">📋 Tempel Daftar</button>
             <button class="btn ghost sm" data-act="edit-class">✏️ Kelas</button><button class="btn danger sm" data-act="del-class">Hapus Kelas</button></div></div>
           <div class="table-wrap"><table><thead><tr><th class="num">No</th><th>NIS/NISN</th><th>Nama Murid</th><th></th></tr></thead><tbody>
           ${cls.students.map((m, i) => `<tr><td class="num">${i + 1}</td><td><input value="${esc(m.nis)}" data-f="nis" data-id="${m.id}" style="width:120px"></td><td><input value="${esc(m.name)}" data-f="name" data-id="${m.id}" style="width:100%"></td>
-            <td><button class="btn ghost sm" data-act="del-student" data-id="${m.id}">🗑</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty">Belum ada murid. Klik “Tempel Daftar” untuk menambah banyak sekaligus.</td></tr>'}
+            <td><button class="btn ghost sm" data-act="del-student" data-id="${m.id}">🗑</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty"><div style="padding:10px 0"><div style="font-size:34px">📥</div><b>Belum ada murid.</b><br>Klik <b>Unggah Excel</b> (format apa pun: Dapodik, daftar hadir, rekap nilai…) atau seret file Excel ke sini.<br><button class="btn ok" style="margin-top:10px" data-act="xls-student">📥 Unggah File Excel</button></div></td></tr>`}
           </tbody></table></div>` : '<div class="empty">Pilih atau buat kelas.</div>'}
         </div></div>`;
     } else {
@@ -540,6 +698,17 @@
     return {
       html,
       mount(v) {
+        const dg = $('#data-grid', v);
+        if (dg && tab !== 'mapel') {
+          dg.addEventListener('dragover', e => { e.preventDefault(); dg.classList.add('drop-on'); });
+          dg.addEventListener('dragleave', e => { if (!dg.contains(e.relatedTarget)) dg.classList.remove('drop-on'); });
+          dg.addEventListener('drop', async e => {
+            e.preventDefault(); dg.classList.remove('drop-on');
+            const f = e.dataTransfer.files && e.dataTransfer.files[0]; if (!f) return;
+            if (!/\.(xlsx|xls|xlsm|ods|csv|txt)$/i.test(f.name)) return toast('Gunakan file Excel (.xlsx/.xls), ODS, atau CSV.', 'bad');
+            try { rosterModal(await readSheets(f), f.name.replace(/\.[^.]+$/, ''), S.cls(st().ui.classId)); } catch (err) { toast('File tidak bisa dibaca: ' + err.message, 'bad'); }
+          });
+        }
         $$('input[data-f]', v).forEach(inp => inp.addEventListener('change', () => {
           const m = cls.students.find(x => x.id === inp.dataset.id); m[inp.dataset.f] = inp.value.trim(); S.save();
         }));
@@ -553,7 +722,7 @@
         'pick-class': el => { s.ui.classId = el.dataset.id; S.save(); route(); },
         'pick-subj': el => { s.ui.subjectId = el.dataset.id; S.save(); route(); },
         'add-class': () => nameModal('Kelas Baru', [{ k: 'name', label: 'Nama kelas', ph: 'mis. VII A' }, { k: 'fase', label: 'Fase', type: 'select', options: FASE, v: 'D' }], v => {
-          if (!v.name) return false; const c = { id: S.uid('c'), name: v.name, fase: v.fase, students: [] }; s.classes.push(c); s.ui.classId = c.id;
+          if (!v.name) return false; const g = SiswaImport.faseOf(v.name); const c = { id: S.uid('c'), name: v.name, fase: v.fase === 'D' && g ? g : v.fase, students: [] }; s.classes.push(c); s.ui.classId = c.id;
         }),
         'edit-class': () => nameModal('Ubah Kelas', [{ k: 'name', label: 'Nama kelas', v: cls.name }, { k: 'fase', label: 'Fase', type: 'select', options: FASE, v: cls.fase }], v => { cls.name = v.name || cls.name; cls.fase = v.fase; }),
         'del-class': async () => {
@@ -562,10 +731,9 @@
           s.classes = s.classes.filter(c => c !== cls); S.save(); route();
         },
         'add-student': () => nameModal('Murid Baru', [{ k: 'nis', label: 'NIS/NISN' }, { k: 'name', label: 'Nama lengkap' }], v => { if (!v.name) return false; cls.students.push({ id: S.uid('s'), nis: v.nis, name: v.name }); }),
-        'bulk-student': () => bulk('Tempel Daftar Murid', 'Satu murid per baris. Format: <span class="kbd">Nama</span> atau <span class="kbd">NIS;Nama</span> / <span class="kbd">NIS[Tab]Nama</span> (bisa langsung salin dari Excel).', lines => {
-          lines.forEach(l => { const p = l.split(/\t|;|,(?=\s*\D)/); let nis = '', name = l; if (p.length >= 2) { if (/\d/.test(p[0])) { nis = p[0].trim(); name = p.slice(1).join(' ').trim(); } else { name = p[0].trim(); nis = (p[1] || '').trim(); } } cls.students.push({ id: S.uid('s'), nis, name: name.replace(/^\d+[.)]\s*/, '') }); });
-          return lines.length;
-        }),
+        'bulk-student': () => pasteRoster(cls),
+        'xls-student': () => pickRosterFile(cls),
+        'xls-new': () => pickRosterFile(null),
         'del-student': async el => { if (!await confirmBox('Hapus murid ini?', 'Hapus')) return; cls.students = cls.students.filter(x => x.id !== el.dataset.id); S.save(); route(); },
         'add-subj': () => nameModal('Mata Pelajaran Baru', [{ k: 'name', label: 'Nama mapel', ph: 'mis. Matematika' }], v => { if (!v.name) return false; const m = { id: S.uid('m'), name: v.name, tps: [] }; s.subjects.push(m); s.ui.subjectId = m.id; }),
         'edit-subj': () => nameModal('Ubah Mapel', [{ k: 'name', label: 'Nama mapel', v: subj.name }], v => { subj.name = v.name || subj.name; }),

@@ -124,6 +124,16 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Impor murid dari Excel, format apa pun (v5.7)
+
+Menu **Kelas, Murid & Mapel** → **📥 Unggah Excel** (ke kelas yang dibuka) atau **📥 Impor Kelas & Murid dari Excel** (sekaligus membuat kelas). File juga bisa diseret ke halaman. **📋 Tempel Daftar** memakai pendeteksi yang sama.
+
+- File: `.xlsx`, `.xls` (Excel lama), `.xlsm`, `.ods`, `.csv`, `.txt`.
+- Otomatis mengenali: kop/judul di atas tabel, baris judul kolom di baris mana pun (termasuk judul 2 baris & sel gabungan), urutan kolom bebas, ekspor **Dapodik** (Nama, NIPD, NISN, JK, Rombel), judul kolom yang berulang, baris tanda tangan/"Mengetahui"/jumlah di bawah, kolom nama ayah/ibu/wali (tidak tertukar), NIS yang tersimpan sebagai angka (termasuk `1,23E+09`) dan nol di depan NISN. Tanpa judul kolom pun, kolom nama & NIS ditebak dari isinya.
+- Murid bisa dimasukkan ke kelas yang dibuka, **dibagi per kolom Kelas/Rombel** (kelas yang belum ada dibuat otomatis, lengkap dengan fasenya), atau **satu kelas per sheet**.
+- Pratinjau sebelum impor; kolom bisa diganti manual bila ada yang tertukar; NAMA KAPITAL bisa dirapikan; murid yang sudah ada dilewati (dan NIS yang masih kosong dilengkapi).
+- Pembaca Excel: SheetJS Community 0.18.5 (Apache-2.0, `public/lib/xlsx/`), hanya dimuat saat mengunggah dan diproses di browser — file tidak dikirim ke server.
+
 ## Lupa password lewat email (v5.6, versi PHP)
 
 - Di halaman masuk ada tautan **🔑 Lupa password?**. Pengguna menulis email/username, lalu menerima email berisi tombol **Buat Password Baru**. Tautannya berlaku **60 menit** dan hanya bisa dipakai **sekali**.
@@ -300,6 +310,7 @@ public/js/student.js halaman ujian murid
 public/js/art.js     ilustrasi SVG orisinal (maskot Kubi, objek 3D)
 public/fonts/        font Unbounded & Plus Jakarta Sans (OFL)
 public/lib/pdfjs/    pdf.js (Apache-2.0) untuk membaca PDF
+public/lib/xlsx/     SheetJS 0.18.5 (Apache-2.0) untuk membaca Excel/ODS/CSV
 public/contoh-soal/  contoh file PDF soal untuk dicoba
 tests/run-tests.js   pengujian parser & penghitungan (npm test)
 ```

@@ -276,5 +276,35 @@ t('peringkat & statistik', () => {
   assert.strictEqual(s.tuntas, 2); assert.strictEqual(s.avg, 80);
 });
 
+const SI = require('../public/js/siswa-import.js');
+console.log('\nImpor daftar murid (Excel)');
+t('format Dapodik: kop, header di tengah, header berulang, kaki tanda tangan', () => {
+  const rows = [['DAFTAR PESERTA DIDIK'], ['SMP NEGERI 1 CONTOH'], ['Kecamatan Maju, Kabupaten Jaya'], [],
+    ['No', 'Nama', 'NIPD', 'JK', 'NISN', 'Tempat Lahir', 'Tanggal Lahir', 'NIK', 'Agama', 'Alamat', 'Rombel Saat Ini'],
+    ['1', 'ADINDA PUTRI LESTARI', '2401', 'P', '0123456789', 'Bandung', '2012-01-02', '3273', 'Islam', 'Jl. Mawar', 'Kelas VII-A'],
+    ['2', "MUHAMMAD RIZKY AL-FARIZI", '2402', 'L', '0123456790', 'Bandung', '', '', '', '', 'Kelas VII-A'],
+    ['No', 'Nama', 'NIPD', 'JK', 'NISN', '', '', '', '', '', 'Rombel Saat Ini'],
+    ['3', 'Citra Ayu', '2403', 'P', '0123456791', '', '', '', '', '', 'VII B'], [],
+    ['', 'Mengetahui,'], ['', 'Kepala Sekolah'], ['', 'Drs. Budi Santoso'], ['', 'NIP. 1970']];
+  const r = SI.parseSheet(rows);
+  assert.strictEqual(r.rows.length, 3, JSON.stringify(r.rows.map(x => x.name)));
+  assert.deepStrictEqual(r.rows.map(x => [x.nis, x.nisn, x.jk, x.kelas]), [['2401', '0123456789', 'P', 'VII A'], ['2402', '0123456790', 'L', 'VII A'], ['2403', '0123456791', 'P', 'VII B']]);
+  assert.strictEqual(SI.titleCase(r.rows[1].name), 'Muhammad Rizky Al-Farizi');
+  const w = SI.parseWorkbook([{ name: 'Sheet1', rows }]); assert.strictEqual(w.suggest, 'column'); assert.deepStrictEqual(w.classes, ['VII A', 'VII B']);
+});
+t('tanpa header: kolom ditebak dari isi', () => {
+  const r = SI.parseSheet([['1', 'Adinda Putri', '2401'], ['2', 'Bagas Pratama', '2402'], ['3', 'Citra Ayu', '2403']]);
+  assert.deepStrictEqual(r.rows.map(x => x.nis + ':' + x.name), ['2401:Adinda Putri', '2402:Bagas Pratama', '2403:Citra Ayu']);
+});
+t('header dua baris, kolom acak, NIS bentuk angka ilmiah', () => {
+  const r = SI.parseSheet([['DATA SISWA KELAS XI'], ['No', 'Identitas', '', 'Keterangan'], ['', 'Nama Lengkap Siswa', 'NIS', ''], ['1', 'Dewi Sartika', '1.23456789E+9', ''], ['2', 'Eko', "'000123", '']]);
+  assert.deepStrictEqual(r.rows.map(x => x.name + '/' + x.nis), ['Dewi Sartika/1234567890', 'Eko/000123']);
+  assert.strictEqual(SI.faseOf('XI IPA 1'), 'F'); assert.strictEqual(SI.faseOf('Kelas 7B'), 'D'); assert.strictEqual(SI.faseOf('X'), 'E'); assert.strictEqual(SI.faseOf('IV'), 'B');
+});
+t('banyak sheet = banyak kelas; kolom nama ayah/ibu tidak tertukar', () => {
+  const w = SI.parseWorkbook([{ name: 'VII A', rows: [['Nama Siswa', 'Nama Ayah', 'NISN'], ['Ani', 'Pak Ahmad', '0011223344']] }, { name: 'VII B', rows: [['Nama Siswa', 'Nama Ibu'], ['Budi', 'Bu Siti']] }, { name: 'Petunjuk', rows: [['Isi data di sheet kelas']] }]);
+  assert.strictEqual(w.total, 2); assert.strictEqual(w.suggest, 'sheets'); assert.strictEqual(w.sheets[0].rows[0].nisn, '0011223344'); assert.strictEqual(w.sheets[1].rows[0].name, 'Budi');
+});
+
 console.log(`\n${pass} lulus, ${fail} gagal`);
 process.exit(fail ? 1 : 0);
