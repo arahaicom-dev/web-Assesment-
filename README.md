@@ -2,6 +2,10 @@
 
 Aplikasi web untuk mengelola **semua jenis asesmen sekolah sesuai Kurikulum Merdeka**: input nilai, ujian online dari soal PDF, sampai **nilai rapor yang dihitung otomatis**. Tampilannya 3D dan warnanya bisa diganti.
 
+## Unduh file siap unggah
+
+**[dist/asesmen-siap-unggah.zip](dist/asesmen-siap-unggah.zip)** — isi folder `asesmen/` untuk diekstrak di `public_html`. Panduan: [dist/CARA-PASANG.md](dist/CARA-PASANG.md).
+
 ## Fitur
 
 | Menu | Istilah lama | Keterangan |
