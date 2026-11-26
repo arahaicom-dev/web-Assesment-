@@ -76,8 +76,17 @@ function schema() {
       role VARCHAR(16) NOT NULL DEFAULT 'guru',
       is_super TINYINT NOT NULL DEFAULT 0,
       theme TEXT NULL,
+      email VARCHAR(150) NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX (tenant_id)
+    )$e",
+    "CREATE TABLE IF NOT EXISTS pw_resets (
+      token_hash CHAR(64) NOT NULL PRIMARY KEY,
+      user_id INT UNSIGNED NOT NULL,
+      expires INT NOT NULL,
+      used TINYINT NOT NULL DEFAULT 0,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      INDEX (user_id)
     )$e",
     "CREATE TABLE IF NOT EXISTS sessions (
       token CHAR(64) NOT NULL PRIMARY KEY,
@@ -207,6 +216,7 @@ function migrate($pdo = null) {
   if ($hadPlayers && !has_column($pdo, 'game_players', 'violations')) {
     $pdo->exec('ALTER TABLE game_players ADD exam_score DECIMAL(6,2) NULL, ADD violations INT NOT NULL DEFAULT 0, ADD started_ms BIGINT NOT NULL DEFAULT 0, ADD flags TEXT NULL, ADD extra LONGTEXT NULL');
   }
+  if (!has_column($pdo, 'users', 'email')) $pdo->exec('ALTER TABLE users ADD email VARCHAR(150) NULL AFTER theme');
   if ($hadUsers && !has_column($pdo, 'users', 'tenant_id')) {
     $pdo->exec('ALTER TABLE users ADD tenant_id INT UNSIGNED NULL AFTER id, ADD is_super TINYINT NOT NULL DEFAULT 0 AFTER role, MODIFY username VARCHAR(150) NOT NULL');
     foreach (array('docs' => 'kind, id', 'scores' => 'assessment_id, student_id', 'submissions' => 'assessment_id, student_id') as $t => $pk) {
@@ -286,7 +296,7 @@ function valid_password($p) { return is_string($p) && strlen($p) >= 6 && strlen(
 function valid_username($u) { return is_string($u) && preg_match('/^[a-zA-Z0-9._@+-]{3,150}$/', $u); }
 function valid_email($e) { return is_string($e) && filter_var($e, FILTER_VALIDATE_EMAIL) && strlen($e) <= 150; }
 function public_user($u) {
-  return array('id' => (int)$u['id'], 'username' => $u['username'], 'name' => $u['name'], 'role' => $u['role'], 'super' => !empty($u['is_super']), 'tenantId' => $u['tenant_id'] === null ? null : (int)$u['tenant_id']);
+  return array('id' => (int)$u['id'], 'username' => $u['username'], 'name' => $u['name'], 'email' => isset($u['email']) ? $u['email'] : null, 'role' => $u['role'], 'super' => !empty($u['is_super']), 'tenantId' => $u['tenant_id'] === null ? null : (int)$u['tenant_id']);
 }
 function new_session($uid) {
   $token = bin2hex(random_bytes(32));
@@ -616,4 +626,144 @@ function exam_finish_player($questionsArr, $p) {
   q('UPDATE game_players SET exam_score = ?, correct = ?, extra = ?, finished_at = COALESCE(finished_at, NOW()), cur_open = 0 WHERE id = ?',
     array($r['score'], $correct, jenc(array('manual' => (object)$manual, 'result' => $r)), $p['id']));
   return $r;
+}
+
+/* ================= Email (lupa password & pemberitahuan) ================= */
+/** Pengaturan pengiriman email; password SMTP tidak pernah dikirim ke browser. */
+function mail_config() {
+  $d = array('fromEmail' => '', 'fromName' => '', 'smtpHost' => '', 'smtpPort' => 465, 'smtpSecure' => 'ssl', 'smtpUser' => '', 'smtpPass' => '');
+  $r = one('SELECT v FROM platform WHERE k = ?', array('mail'));
+  if ($r) { $v = json_decode($r['v'], true); if (is_array($v)) $d = array_merge($d, $v); }
+  return $d;
+}
+function mail_config_public() {
+  $c = mail_config(); $c['hasPass'] = $c['smtpPass'] !== ''; unset($c['smtpPass']);
+  $c['defaultFrom'] = default_from_email();
+  return $c;
+}
+function site_host() {
+  $h = isset($_SERVER['HTTP_HOST']) ? strtolower($_SERVER['HTTP_HOST']) : 'localhost';
+  return preg_replace('/[^a-z0-9.\-]/', '', preg_replace('/:\d+$/', '', $h));
+}
+function default_from_email() { return 'no-reply@' . preg_replace('/^www\./', '', site_host()); }
+/** URL folder aplikasi, mis. https://arahai.com/asesmen/ */
+function app_base_url() {
+  $https = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') || (isset($_SERVER['HTTP_X_FORWARDED_PROTO']) && $_SERVER['HTTP_X_FORWARDED_PROTO'] === 'https') || (isset($_SERVER['SERVER_PORT']) && (int)$_SERVER['SERVER_PORT'] === 443);
+  $dir = dirname(dirname(isset($_SERVER['SCRIPT_NAME']) ? $_SERVER['SCRIPT_NAME'] : '/api/index.php'));
+  $dir = rtrim(str_replace('\\', '/', $dir), '/') . '/';
+  $port = isset($_SERVER['HTTP_HOST']) && preg_match('/:(\d+)$/', $_SERVER['HTTP_HOST'], $m) ? ':' . $m[1] : '';
+  return ($https ? 'https' : 'http') . '://' . site_host() . $port . $dir;
+}
+function mime_header($s) { return preg_match('/[^\x20-\x7e]/', $s) ? '=?UTF-8?B?' . base64_encode($s) . '?=' : $s; }
+function build_message($fromEmail, $fromName, $to, $subject, $text, $html) {
+  $b = 'b' . bin2hex(random_bytes(8));
+  $host = preg_replace('/^.*@/', '', $fromEmail);
+  $h = array(
+    'Date: ' . date('r'),
+    'From: ' . mime_header($fromName) . ' <' . $fromEmail . '>',
+    'To: <' . $to . '>',
+    'Subject: ' . mime_header($subject),
+    'Message-ID: <' . bin2hex(random_bytes(10)) . '@' . $host . '>',
+    'MIME-Version: 1.0',
+    'Content-Type: multipart/alternative; boundary="' . $b . '"'
+  );
+  $body = "--$b\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($text)) .
+    "--$b\r\nContent-Type: text/html; charset=UTF-8\r\nContent-Transfer-Encoding: base64\r\n\r\n" . chunk_split(base64_encode($html)) . "--$b--\r\n";
+  return array($h, $body);
+}
+function smtp_read($fp) {
+  $out = '';
+  while (($line = fgets($fp, 1024)) !== false) { $out .= $line; if (strlen($line) < 4 || $line[3] !== '-') break; }
+  return $out;
+}
+function smtp_cmd($fp, $cmd, $expect) {
+  if ($cmd !== null) fwrite($fp, $cmd . "\r\n");
+  $r = smtp_read($fp);
+  if (!in_array((int)substr($r, 0, 3), (array)$expect, true)) throw new Exception('SMTP: ' . trim($r ?: 'tidak ada jawaban') . ($cmd !== null && stripos($cmd, 'AUTH') === false && strpos($cmd, '=') === false ? ' (' . $cmd . ')' : ''));
+  return $r;
+}
+function smtp_send($c, $to, $headers, $body) {
+  $secure = $c['smtpSecure'];
+  $ctx = stream_context_create(array('ssl' => array('verify_peer' => true, 'verify_peer_name' => true, 'SNI_enabled' => true, 'peer_name' => $c['smtpHost'])));
+  $fp = @stream_socket_client(($secure === 'ssl' ? 'ssl://' : 'tcp://') . $c['smtpHost'] . ':' . (int)$c['smtpPort'], $no, $err, 15, STREAM_CLIENT_CONNECT, $ctx);
+  if (!$fp) throw new Exception('Tidak bisa terhubung ke server SMTP ' . $c['smtpHost'] . ':' . $c['smtpPort'] . ' — ' . $err);
+  stream_set_timeout($fp, 20);
+  try {
+    smtp_cmd($fp, null, 220);
+    $ehlo = 'EHLO ' . (site_host() ?: 'localhost');
+    smtp_cmd($fp, $ehlo, 250);
+    if ($secure === 'tls') {
+      smtp_cmd($fp, 'STARTTLS', 220);
+      if (!stream_socket_enable_crypto($fp, true, STREAM_CRYPTO_METHOD_TLS_CLIENT)) throw new Exception('SMTP: gagal memulai TLS.');
+      smtp_cmd($fp, $ehlo, 250);
+    }
+    if ($c['smtpUser'] !== '') {
+      smtp_cmd($fp, 'AUTH LOGIN', 334);
+      smtp_cmd($fp, base64_encode($c['smtpUser']), 334);
+      smtp_cmd($fp, base64_encode($c['smtpPass']), 235);
+    }
+    smtp_cmd($fp, 'MAIL FROM:<' . $c['fromEmail'] . '>', 250);
+    smtp_cmd($fp, 'RCPT TO:<' . $to . '>', array(250, 251));
+    smtp_cmd($fp, 'DATA', 354);
+    $msg = implode("\r\n", $headers) . "\r\n\r\n" . $body;
+    $msg = preg_replace('/^\./m', '..', str_replace("\n", "\r\n", str_replace("\r\n", "\n", $msg)));
+    fwrite($fp, $msg . "\r\n.\r\n");
+    smtp_cmd($fp, null, 250);
+    fwrite($fp, "QUIT\r\n");
+  } finally { fclose($fp); }
+  return true;
+}
+/** Kirim email. Memakai SMTP bila diatur di Panel Pemilik, selain itu fungsi mail() bawaan hosting. */
+function send_mail($to, $subject, $text, $html) {
+  if (!valid_email($to)) throw new Exception('Alamat email tujuan tidak valid.');
+  $c = mail_config();
+  $p = platform();
+  if ($c['fromEmail'] === '') $c['fromEmail'] = $c['smtpHost'] !== '' && valid_email($c['smtpUser']) ? $c['smtpUser'] : default_from_email();
+  if ($c['fromName'] === '') $c['fromName'] = $p['brand'];
+  list($headers, $body) = build_message($c['fromEmail'], $c['fromName'], $to, $subject, $text, $html);
+  if ($c['smtpHost'] !== '') return smtp_send($c, $to, $headers, $body);
+  if (!function_exists('mail')) throw new Exception('Fungsi mail() tidak tersedia di hosting ini. Atur SMTP di Panel Pemilik.');
+  $hdr = array(); foreach ($headers as $line) if (stripos($line, 'To:') !== 0 && stripos($line, 'Subject:') !== 0) $hdr[] = $line;
+  $ok = @mail($to, mime_header($subject), $body, implode("\r\n", $hdr), '-f' . $c['fromEmail']);
+  if (!$ok) $ok = @mail($to, mime_header($subject), $body, implode("\r\n", $hdr));
+  if (!$ok) throw new Exception('Hosting menolak mengirim email lewat mail(). Atur SMTP di Panel Pemilik.');
+  return true;
+}
+/** Email berdesain sederhana (teks + HTML). */
+function mail_layout($title, $paras, $button = null, $foot = '') {
+  $brand = platform()['brand'];
+  $e = function ($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
+  $html = '<div style="background:#f3f1ff;padding:24px 12px;font-family:Arial,Helvetica,sans-serif"><div style="max-width:520px;margin:0 auto;background:#fff;border-radius:16px;padding:28px;color:#1d1b3a">'
+    . '<div style="font-weight:800;font-size:18px;color:#6d4aff;margin-bottom:14px">' . $e($brand) . '</div>'
+    . '<h2 style="margin:0 0 12px;font-size:20px">' . $e($title) . '</h2>';
+  foreach ($paras as $p) $html .= '<p style="line-height:1.6;margin:0 0 12px">' . $p . '</p>';
+  if ($button) $html .= '<p style="margin:22px 0"><a href="' . $e($button[1]) . '" style="background:#6d4aff;color:#fff;text-decoration:none;padding:13px 22px;border-radius:12px;font-weight:700;display:inline-block">' . $e($button[0]) . '</a></p><p style="font-size:12px;color:#6b6889;word-break:break-all">Jika tombol tidak bisa diklik, salin tautan ini ke browser:<br>' . $e($button[1]) . '</p>';
+  if ($foot) $html .= '<p style="font-size:12px;color:#6b6889;border-top:1px solid #eee;padding-top:12px;margin-top:18px">' . $foot . '</p>';
+  $html .= '</div></div>';
+  $text = $title . "\n\n" . implode("\n\n", array_map(function ($p) { return html_entity_decode(strip_tags($p), ENT_QUOTES, 'UTF-8'); }, $paras));
+  if ($button) $text .= "\n\n" . $button[0] . ":\n" . $button[1];
+  if ($foot) $text .= "\n\n--\n" . html_entity_decode(strip_tags($foot), ENT_QUOTES, 'UTF-8');
+  return array($text, $html);
+}
+/** Alamat email akun: kolom email, atau username bila berbentuk email. */
+function user_email($u) {
+  if (!empty($u['email']) && valid_email($u['email'])) return $u['email'];
+  return valid_email($u['username']) ? strtolower($u['username']) : null;
+}
+function mask_email($e) {
+  list($a, $d) = explode('@', $e, 2);
+  return substr($a, 0, 1) . str_repeat('*', max(2, min(6, strlen($a) - 1))) . '@' . $d;
+}
+/** Pemberitahuan bahwa password akun telah diubah (tidak menghentikan proses bila gagal). */
+function notify_password_changed($u, $how) {
+  $to = user_email($u); if (!$to) return;
+  try {
+    $e = function ($s) { return htmlspecialchars($s, ENT_QUOTES, 'UTF-8'); };
+    list($t, $h) = mail_layout('Password Anda telah diubah', array(
+      'Halo ' . $e($u['name']) . ',',
+      'Password akun <b>' . $e($u['username']) . '</b> baru saja diubah (' . $e($how) . ') pada ' . date('d-m-Y H:i') . ' dari alamat IP ' . $e(client_ip()) . '. Semua perangkat lain otomatis dikeluarkan.',
+      'Jika ini bukan Anda, segera gunakan <b>Lupa password</b> di halaman masuk, atau hubungi admin sekolah.'
+    ), array('Buka aplikasi', app_base_url() . 'app.html'));
+    send_mail($to, 'Password akun Anda telah diubah', $t, $h);
+  } catch (Exception $ex) { log_error('notify_password_changed: ' . $ex->getMessage()); }
 }

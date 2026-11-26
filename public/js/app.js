@@ -1664,6 +1664,11 @@
       html: `<div class="grid g2" style="align-items:start" id="acc-grid">
         <div class="card"><h2>Akun Saya</h2>
           <p><b>${esc(me.name)}</b> <span class="pill pri">${me.role === 'admin' ? 'Admin' : 'Guru'}</span><br><span class="muted small">Username: ${esc(me.username)}</span></p>
+          <h3>📧 Email untuk Lupa Password</h3>
+          ${me.email || /@/.test(me.username) ? `<p class="small" style="margin-top:0">Tautan atur ulang password dikirim ke <b>${esc(me.email || me.username)}</b>.</p>` : '<div class="note warn small" style="margin-bottom:10px">Akun ini belum punya email. Tambahkan agar Anda bisa memakai <b>Lupa password</b>.</div>'}
+          <div class="row"><label class="field" style="flex:2"><span>Email</span><input type="email" id="em-new" value="${esc(me.email || '')}" placeholder="${esc(/@/.test(me.username) ? me.username : 'nama@email.com')}" autocomplete="email"></label>
+          <label class="field" style="flex:1;min-width:140px"><span>Password saat ini</span><input type="password" id="em-pw" autocomplete="current-password"></label></div>
+          <div class="btns" style="margin-bottom:6px"><button class="btn soft" data-act="em">Simpan Email</button></div>
           <h3>Ganti Password</h3>
           <label class="field"><span>Password lama</span><input type="password" id="pw-old" autocomplete="current-password"></label>
           <label class="field"><span>Password baru (min. 6 karakter)</span><input type="password" id="pw-new" autocomplete="new-password"></label>
@@ -1678,24 +1683,33 @@
         const list = $('#user-list', v); if (!list) return;
         try {
           const r = await S.api('users');
-          list.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Username</th><th>Peran</th><th></th></tr></thead><tbody>${r.users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td><span class="pill ${u.role === 'admin' ? 'pri' : ''}">${u.role}</span></td>
-            <td class="btns"><button class="btn ghost sm" data-act="reset-pw" data-id="${u.id}" data-n="${esc(u.name)}">🔑</button>${u.id === me.id ? '' : `<button class="btn ghost sm" data-act="del-user" data-id="${u.id}" data-n="${esc(u.name)}">🗑</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+          list.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Peran</th><th></th></tr></thead><tbody>${r.users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td class="small">${u.email ? esc(u.email) : /@/.test(u.username) ? '<span class="muted">(username)</span>' : '<span class="pill warn">belum ada</span>'}</td><td><span class="pill ${u.role === 'admin' ? 'pri' : ''}">${u.role}</span></td>
+            <td class="btns"><button class="btn ghost sm" data-act="user-email" data-id="${u.id}" data-n="${esc(u.name)}" data-e="${esc(u.email || '')}" title="Atur email">✉️</button><button class="btn ghost sm" data-act="reset-pw" data-id="${u.id}" data-n="${esc(u.name)}" title="Atur ulang password">🔑</button>${u.id === me.id ? '' : `<button class="btn ghost sm" data-act="del-user" data-id="${u.id}" data-n="${esc(u.name)}">🗑</button>`}</td></tr>`).join('')}</tbody></table></div>`;
         } catch (e) { list.textContent = e.message; }
       },
       actions: {
         logout: () => S.logout(),
+        em: async () => {
+          try { const r = await S.api('me/email', { method: 'PUT', body: { email: $('#em-new').value.trim(), password: $('#em-pw').value } }); S.user = r.user; toast('Email disimpan.'); route(); }
+          catch (e) { toast(e.message, 'bad'); }
+        },
         pw: async () => {
           try { await S.api('me/password', { method: 'PUT', body: { oldPassword: $('#pw-old').value, newPassword: $('#pw-new').value } }); toast('Password diganti.'); $('#pw-old').value = $('#pw-new').value = ''; }
           catch (e) { toast(e.message, 'bad'); }
+        },
+        'user-email': async el => {
+          const m = modal(`<h2>Email ${esc(el.dataset.n)}</h2><p class="small muted" style="margin-top:0">Dipakai untuk mengirim tautan <b>Lupa password</b> ke guru ini.</p><label class="field"><span>Email</span><input type="email" id="ue" value="${esc(el.dataset.e || '')}"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="ue-ok">Simpan</button></div>`);
+          $('#ue-ok', m).onclick = async () => { try { await S.api('users/' + el.dataset.id + '/email', { method: 'PUT', body: { email: $('#ue', m).value.trim() } }); closeModal(); toast('Email disimpan.'); route(); } catch (e) { toast(e.message, 'bad'); } };
         },
         'add-user': () => {
           const m = modal(`<h2>Akun Guru Baru</h2>
             <label class="field"><span>Nama lengkap</span><input id="nu-name"></label>
             <div class="row"><label class="field"><span>Username</span><input id="nu-user" autocomplete="off"></label><label class="field"><span>Password awal</span><input id="nu-pw" type="text" autocomplete="off"></label></div>
+            <label class="field"><span>Email (untuk lupa password, opsional)</span><input id="nu-email" type="email" autocomplete="off" placeholder="guru@email.com"></label>
             <label class="field"><span>Peran</span><select id="nu-role"><option value="guru">Guru</option><option value="admin">Admin</option></select></label>
             <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="nu-ok">Buat Akun</button></div>`);
           $('#nu-ok', m).onclick = async () => {
-            try { await S.api('users', { body: { name: $('#nu-name', m).value.trim(), username: $('#nu-user', m).value.trim(), password: $('#nu-pw', m).value, role: $('#nu-role', m).value } }); closeModal(); toast('Akun dibuat.'); route(); }
+            try { await S.api('users', { body: { name: $('#nu-name', m).value.trim(), username: $('#nu-user', m).value.trim(), password: $('#nu-pw', m).value, role: $('#nu-role', m).value, email: $('#nu-email', m).value.trim() } }); closeModal(); toast('Akun dibuat.'); route(); }
             catch (e) { toast(e.message, 'bad'); }
           };
         },
@@ -1742,8 +1756,86 @@
     };
   }
 
+  /* ---- Lupa password & atur ulang lewat email ---- */
+  function authShell(sub, inner) {
+    document.body.classList.add('auth-mode');
+    let el = $('#auth');
+    if (!el) { el = document.createElement('div'); el.id = 'auth'; el.className = 'auth'; document.body.appendChild(el); }
+    el.innerHTML = `<button class="mode-toggle auth-mode-btn" type="button" aria-label="Ganti mode">☀️</button><div class="card auth-card tilt"><div class="z1">
+      ${window.Art ? `<div class="auth-mascot">${Art.kubi({ pose: 'wave', eyes: 'happy' })}</div>` : ''}
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
+      <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${sub}</div></div></div>${inner}</div></div>`;
+    setTimeout(() => window.ThemeMode && ThemeMode.paint(), 0);
+    bindTilt(el);
+    return el;
+  }
+  const pwEye = id => `<button type="button" class="pw-eye" data-eye="${id}" aria-label="Lihat password">👁</button>`;
+  function bindEyes(el) { $$('[data-eye]', el).forEach(b => b.onclick = () => { const i = $('#' + b.dataset.eye, el); i.type = i.type === 'password' ? 'text' : 'password'; b.textContent = i.type === 'password' ? '👁' : '🙈'; }); }
+  function forgotScreen(prefill) {
+    history.replaceState(null, '', '#lupa');
+    const el = authShell('Lupa password', `
+      <p class="small muted" style="margin-top:0">Tulis <b>email atau username</b> akun Anda. Kami akan mengirim <b>tautan untuk membuat password baru</b> ke email yang terdaftar pada akun tersebut.</p>
+      <form id="fg-form">
+        <label class="field"><span>Email atau username</span><input id="fg-login" required autocapitalize="off" autocomplete="username" value="${esc(prefill || '')}"></label>
+        <button class="btn lg" style="width:100%" type="submit">📧 Kirim Tautan ke Email</button>
+      </form>
+      <div id="fg-res"></div>
+      <div class="small" style="margin-top:14px;text-align:center"><a href="#masuk" id="fg-back">← Kembali ke halaman masuk</a></div>`);
+    $('#fg-login', el).focus();
+    $('#fg-back', el).onclick = e => { e.preventDefault(); history.replaceState(null, '', '#masuk'); authScreen('login'); };
+    $('#fg-form', el).onsubmit = async e => {
+      e.preventDefault();
+      const btn = $('button[type=submit]', el); btn.disabled = true; btn.textContent = 'Mengirim…';
+      try {
+        const r = await S.api('password/forgot', { body: { login: $('#fg-login', el).value.trim() }, noAuthEvent: true });
+        $('#fg-form', el).classList.add('hidden');
+        $('#fg-res', el).innerHTML = r.noEmail
+          ? `<div class="note warn">${esc(r.message)}</div>`
+          : `<div class="note ok" style="text-align:center"><div style="font-size:42px">📬</div><b>Periksa email Anda${r.sentTo ? ` (${esc(r.sentTo)})` : ''}</b><p class="small" style="margin:6px 0 0">${esc(r.message)}</p></div>
+             <button class="btn ghost" style="width:100%;margin-top:10px" id="fg-again">Kirim ulang</button>`;
+        const ag = $('#fg-again', el); if (ag) ag.onclick = () => forgotScreen($('#fg-login', el).value);
+      } catch (err) { btn.disabled = false; btn.textContent = '📧 Kirim Tautan ke Email'; toast(err.message, 'bad'); }
+    };
+  }
+  async function resetScreen(token) {
+    const el = authShell('Buat password baru', '<p class="muted">Memeriksa tautan…</p>');
+    let info;
+    try { info = await S.api('password/check', { body: { token }, noAuthEvent: true }); }
+    catch (err) {
+      authShell('Buat password baru', `<div class="note warn">${esc(err.message)}</div><button class="btn lg" style="width:100%;margin-top:12px" id="rs-new">🔑 Minta Tautan Baru</button><div class="small" style="margin-top:14px;text-align:center"><a href="#masuk" id="rs-login">← Kembali ke halaman masuk</a></div>`);
+      $('#rs-new').onclick = () => forgotScreen();
+      $('#rs-login').onclick = e => { e.preventDefault(); history.replaceState(null, '', '#masuk'); authScreen('login'); };
+      return;
+    }
+    const el2 = authShell('Buat password baru', `
+      <p class="small" style="margin-top:0">Halo <b>${esc(info.name)}</b>, buat password baru untuk akun <span class="kbd">${esc(info.username)}</span>.</p>
+      <form id="rs-form">
+        <label class="field"><span>Password baru (min. 6 karakter)</span><div class="pw-wrap"><input id="rs-pw" type="password" required minlength="6" autocomplete="new-password">${pwEye('rs-pw')}</div></label>
+        <label class="field"><span>Ulangi password baru</span><div class="pw-wrap"><input id="rs-pw2" type="password" required autocomplete="new-password">${pwEye('rs-pw2')}</div></label>
+        <div class="small" id="rs-hint" style="min-height:1.2em;margin:-4px 0 8px"></div>
+        <button class="btn lg" style="width:100%" type="submit">💾 Simpan Password Baru</button>
+      </form>`);
+    bindEyes(el2);
+    const hint = () => { const a = $('#rs-pw', el2).value, b = $('#rs-pw2', el2).value, h = $('#rs-hint', el2); h.innerHTML = !a ? '' : a.length < 6 ? '<span style="color:var(--bad)">Minimal 6 karakter.</span>' : b && a !== b ? '<span style="color:var(--bad)">Password belum sama.</span>' : b ? '<span style="color:var(--ok)">✓ Password cocok.</span>' : ''; };
+    $('#rs-pw', el2).oninput = hint; $('#rs-pw2', el2).oninput = hint; $('#rs-pw', el2).focus();
+    $('#rs-form', el2).onsubmit = async e => {
+      e.preventDefault();
+      const a = $('#rs-pw', el2).value;
+      if (a.length < 6) return toast('Password minimal 6 karakter.', 'bad');
+      if (a !== $('#rs-pw2', el2).value) return toast('Ulangi password dengan sama persis.', 'bad');
+      const btn = $('button[type=submit]', el2); btn.disabled = true;
+      try {
+        const r = await S.api('password/reset', { body: { token, password: a }, noAuthEvent: true });
+        localStorage.removeItem('asesmen-token');
+        history.replaceState(null, '', '#masuk');
+        authScreen('login', null, { ok: 'Password berhasil diganti. Email konfirmasi sudah dikirim. Silakan masuk dengan password baru.', user: r.username });
+      } catch (err) { btn.disabled = false; toast(err.message, 'bad'); }
+    };
+  }
+
   /* Layar login / daftar sekolah / pemasangan pertama */
-  function authScreen(mode, msg) {
+  function authScreen(mode, msg, extra) {
+    extra = extra || {};
     // mode: true = pemasangan pertama (pemilik), 'register' = daftar sekolah, lainnya = login
     if (mode === true) mode = 'setup';
     if (!mode) mode = 'login';
@@ -1759,7 +1851,7 @@
       <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px"><div class="logo-wrap"><div class="logo-cube"><span>A</span><span>M</span><span>A</span><span>M</span><span></span><span></span></div></div>
       <div><h2 style="margin:0">Asesmen Merdeka</h2><div class="small muted">${sub}</div></div></div>
       ${S.saas && mode !== 'setup' ? `<div class="tabs" style="width:100%"><button type="button" class="${mode === 'login' ? 'on' : ''}" style="flex:1" data-m="login">Masuk</button><button type="button" class="${mode === 'register' ? 'on' : ''}" style="flex:1" data-m="register">Daftar Sekolah</button></div>` : ''}
-      ${msg ? `<div class="note warn" style="margin-bottom:12px">${esc(msg)}</div>` : ''}
+      ${msg ? `<div class="note warn" style="margin-bottom:12px">${esc(msg)}</div>` : ''}${extra.ok ? `<div class="note ok" style="margin-bottom:12px">✅ ${esc(extra.ok)}</div>` : ''}
       ${mode === 'setup' && S.saas ? '<p class="small muted" style="margin-top:0">Akun ini adalah <b>pemilik platform</b>: bisa memakai aplikasi untuk sekolah Anda sendiri sekaligus mengelola sekolah lain yang berlangganan, pembayaran, dan harga.</p>' : ''}
       <form id="auth-form">
         ${mode === 'setup' || mode === 'register' ? '<label class="field"><span>Nama sekolah</span><input id="au-school" required placeholder="SMP Negeri 1 ..."></label><label class="field"><span>Nama Anda</span><input id="au-name" required autocomplete="name"></label>' : ''}
@@ -1768,12 +1860,14 @@
         <label class="field"><span>Password${mode !== 'login' ? ' (min. 6 karakter)' : ''}</span><input id="au-pw" type="password" required autocomplete="${mode === 'login' ? 'current-password' : 'new-password'}"></label>
         <button class="btn lg" style="width:100%" type="submit">${mode === 'setup' ? 'Buat Akun & Mulai' : mode === 'register' ? 'Daftar & Mulai Coba Gratis' : 'Masuk'}</button>
       </form>
-      ${mode === 'login' && S.saas ? '<div class="small muted" style="margin-top:10px;text-align:center">Lupa password? Minta admin sekolah Anda mengatur ulang di menu Akun Guru.</div>' : ''}
+      ${mode === 'login' && S.backend === 'php' ? '<div style="margin-top:12px;text-align:center"><a href="#lupa" id="forgot-link" class="small" style="font-weight:700">🔑 Lupa password?</a></div>' : ''}
       <div class="small muted" style="margin-top:14px;text-align:center">${S.saas ? '<a href="index.html">← Halaman utama</a> · ' : ''}Murid? <a href="ujian.html">Masuk ke halaman ujian →</a></div>
     </div></div>`;
     bindTilt(el);
     $$('[data-m]', el).forEach(b => b.onclick = () => { history.replaceState(null, '', b.dataset.m === 'register' ? '#daftar' : '#masuk'); authScreen(b.dataset.m); });
-    ($('#au-school', el) || $('#au-user', el)).focus();
+    const fl = $('#forgot-link', el); if (fl) fl.onclick = e => { e.preventDefault(); forgotScreen($('#au-user', el).value.trim()); };
+    if (extra.user && $('#au-user', el)) { $('#au-user', el).value = extra.user; $('#au-pw', el).focus(); }
+    else ($('#au-school', el) || $('#au-user', el)).focus();
     $('#auth-form', el).onsubmit = async e => {
       e.preventDefault();
       const btn = $('button[type=submit]', el); btn.disabled = true;
@@ -2231,7 +2325,16 @@
             <div class="card"><div class="card-head"><h3>Paket & Harga</h3><button class="btn soft sm" data-act="add-plan">+ Paket</button></div>
               <div id="plans">${p.plans.map(planRow).join('')}</div>
               <p class="small muted">Kode paket hanya huruf kecil/angka (mis. <span class="kbd">tahunan</span>). Harga dalam rupiah.</p></div></div>
-            <div class="btns"><button class="btn lg" data-act="save-config">💾 Simpan Pengaturan</button></div>`;
+            <div class="btns"><button class="btn lg" data-act="save-config">💾 Simpan Pengaturan</button></div>
+            <div class="card" style="margin-top:18px"><div class="card-head"><h3>📧 Pengiriman Email (Lupa Password)</h3></div>
+              <p class="small muted" style="margin-top:0">Tanpa SMTP, email dikirim dengan fungsi bawaan hosting dari <b>${esc(d.mail.defaultFrom)}</b> — sering masuk Spam. Lebih andal: buat akun email di <b>cPanel → Email Accounts</b> (mis. <span class="kbd">no-reply@${esc(d.mail.defaultFrom.split('@')[1])}</span>), lalu isi SMTP di bawah (lihat <b>Connect Devices</b> di cPanel untuk host & port).</p>
+              <div class="row"><label class="field"><span>Nama pengirim</span><input id="ml-name" value="${esc(d.mail.fromName)}" placeholder="${esc(p.brand)}"></label><label class="field"><span>Email pengirim</span><input id="ml-from" value="${esc(d.mail.fromEmail)}" placeholder="${esc(d.mail.defaultFrom)}"></label></div>
+              <div class="row"><label class="field" style="flex:2"><span>SMTP host (kosongkan = fungsi bawaan hosting)</span><input id="ml-host" value="${esc(d.mail.smtpHost)}" placeholder="mail.${esc(d.mail.defaultFrom.split('@')[1])}"></label>
+                <label class="field" style="max-width:110px"><span>Port</span><input id="ml-port" inputmode="numeric" value="${d.mail.smtpPort}"></label>
+                <label class="field" style="max-width:150px"><span>Keamanan</span><select id="ml-sec">${[['ssl', 'SSL (465)'], ['tls', 'STARTTLS (587)'], ['none', 'Tanpa']].map(([v, l]) => `<option value="${v}" ${d.mail.smtpSecure === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+              <div class="row"><label class="field"><span>Username SMTP (alamat email)</span><input id="ml-user" value="${esc(d.mail.smtpUser)}" autocomplete="off"></label>
+                <label class="field"><span>Password SMTP</span><input id="ml-pass" type="password" autocomplete="new-password" placeholder="${d.mail.hasPass ? '•••••• (tersimpan — isi untuk mengganti)' : ''}"></label></div>
+              <div class="btns"><button class="btn" data-act="save-mail">💾 Simpan Pengaturan Email</button><input id="ml-to" type="email" placeholder="email tujuan uji" style="max-width:240px" value="${esc(S.user.email || (/@/.test(S.user.username) ? S.user.username : ''))}"><button class="btn soft" data-act="test-mail">📨 Kirim Email Uji</button></div></div>`;
         }
         bindTilt(box);
       },
@@ -2270,6 +2373,18 @@
         },
         'add-plan': () => { $('#plans').insertAdjacentHTML('beforeend', planRow({ id: '', name: '', price: 0, months: 1, desc: '' })); },
         'del-plan': el => { el.closest('.plan-row').remove(); },
+        'save-mail': async () => {
+          try {
+            await S.api('owner/mail', { method: 'PUT', body: { fromName: $('#ml-name').value.trim(), fromEmail: $('#ml-from').value.trim(), smtpHost: $('#ml-host').value.trim(), smtpPort: +$('#ml-port').value || 465, smtpSecure: $('#ml-sec').value, smtpUser: $('#ml-user').value.trim(), smtpPass: $('#ml-pass').value } });
+            toast('Pengaturan email tersimpan. Coba tombol Kirim Email Uji.'); $('#ml-pass').value = '';
+          } catch (e) { toast(e.message, 'bad'); }
+        },
+        'test-mail': async el => {
+          el.disabled = true; el.textContent = 'Mengirim…';
+          try { await S.api('owner/mail-test', { body: { to: $('#ml-to').value.trim() } }); toast('Email uji terkirim. Periksa kotak masuk / Spam.'); }
+          catch (e) { modal(`<h2>Email uji gagal</h2><div class="note warn">${esc(e.message)}</div><p class="small muted">Periksa host, port, keamanan, username & password SMTP (sama dengan pengaturan aplikasi email di cPanel → Email Accounts → Connect Devices).</p><div class="foot"><button class="btn" data-close>Tutup</button></div>`); }
+          el.disabled = false; el.textContent = '📨 Kirim Email Uji';
+        },
         'save-config': async () => {
           const plans = $$('.plan-row').map(r => ({ id: $('[data-k=id]', r).value.trim(), name: $('[data-k=name]', r).value.trim(), price: +$('[data-k=price]', r).value || 0, months: +$('[data-k=months]', r).value || 1, desc: $('[data-k=desc]', r).value.trim() }));
           try {
@@ -2316,8 +2431,11 @@
   S.onAuthLost = () => { if (!$('#auth')) authScreen(false, 'Sesi berakhir. Silakan login kembali.'); };
   S.onLocked = () => { renderUserBox(); if (!/^#\/(langganan|akun|pemilik)/.test(location.hash)) { toast('Masa langganan sekolah berakhir — data hanya bisa dilihat. Perpanjang di menu Langganan.', 'bad'); location.hash = '#/langganan'; } };
   applyTheme(true);
+  const resetTok = (location.hash.match(/^#reset=([a-f0-9]{64})$/) || [])[1];
   S.init().then(r => {
     if (r.needsConfig) configScreen();
+    else if (resetTok) resetScreen(resetTok);
+    else if (r.needLogin && location.hash === '#lupa') forgotScreen();
     else if (r.needsSetup) authScreen(true);
     else if (r.needLogin) authScreen(location.hash === '#daftar' ? 'register' : 'login');
     else startApp();

@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.5.2');
+define('APP_VERSION', '5.6.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -38,7 +38,7 @@ try {
     $base = array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'saas' => true, 'version' => APP_VERSION);
     if (!$CFG) out(array_merge($base, array('needsConfig' => true)));
     try {
-      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id') || !has_table(db(), 'media')) migrate();
+      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id') || !has_table(db(), 'media') || !has_table(db(), 'pw_resets') || !has_column(db(), 'users', 'email')) migrate();
       $n = (int)one('SELECT COUNT(*) AS n FROM users')['n'];
       out(array_merge($base, array('needsSetup' => $n === 0)));
     } catch (PDOException $e) {
@@ -126,6 +126,54 @@ try {
     out(array('token' => new_session((int)$u['id']), 'user' => public_user($u)));
   }
 
+  /* ---------- lupa password: tautan atur ulang lewat email ---------- */
+  if ($route === 'password/forgot' && $method === 'POST') {
+    $login = trim((string)prop($body, 'login', ''));
+    $generic = array('ok' => true, 'message' => 'Jika akun tersebut terdaftar dan memiliki email, tautan untuk mengatur ulang password sudah kami kirim. Periksa kotak masuk dan folder Spam. Tautan berlaku 60 menit.');
+    if ($login === '' || strlen($login) > 150) bad(400, 'Isi email atau username akun Anda.');
+    $kip = lock_key('forgot-ip'); $kac = lock_key('forgot:' . strtolower($login));
+    if (is_locked($kip, 10) || is_locked($kac, 3)) bad(429, 'Terlalu banyak permintaan. Coba lagi 10 menit lagi.');
+    add_fail($kip); add_fail($kac);
+    $u = one('SELECT * FROM users WHERE LOWER(username) = ?', array(strtolower($login)));
+    if (!$u && valid_email($login)) $u = one('SELECT * FROM users WHERE LOWER(email) = ? ORDER BY id LIMIT 1', array(strtolower($login)));
+    if (!$u) out($generic);
+    $to = user_email($u);
+    if (!$to) out(array_merge($generic, array('noEmail' => true, 'message' => 'Akun ini belum memiliki email, jadi tautan tidak bisa dikirim. Minta admin sekolah mengatur ulang password Anda di menu Akun Guru, lalu tambahkan email di menu Akun Guru agar fitur ini bisa dipakai.')));
+    $tok = bin2hex(random_bytes(32));
+    q('DELETE FROM pw_resets WHERE user_id = ? OR expires < ?', array($u['id'], time() - 86400));
+    q('INSERT INTO pw_resets (token_hash, user_id, expires) VALUES (?,?,?)', array(hash('sha256', $tok), $u['id'], time() + 3600));
+    $link = app_base_url() . 'app.html#reset=' . $tok;
+    $e = function ($x) { return htmlspecialchars($x, ENT_QUOTES, 'UTF-8'); };
+    list($t, $h) = mail_layout('Atur ulang password', array(
+      'Halo ' . $e($u['name']) . ',',
+      'Kami menerima permintaan untuk mengatur ulang password akun <b>' . $e($u['username']) . '</b>. Klik tombol di bawah untuk membuat password baru. Tautan ini hanya berlaku <b>60 menit</b> dan hanya bisa dipakai sekali.'
+    ), array('Buat Password Baru', $link), 'Jika Anda tidak meminta ini, abaikan email ini — password Anda tidak berubah. Permintaan dari IP ' . $e(client_ip()) . '.');
+    try { send_mail($to, 'Atur ulang password ' . platform()['brand'], $t, $h); }
+    catch (Exception $ex) { log_error('forgot: ' . $ex->getMessage()); bad(500, 'Email gagal dikirim. Hubungi admin sekolah atau pengelola layanan.'); }
+    out(array_merge($generic, array('sentTo' => mask_email($to))));
+  }
+  if ($route === 'password/check' && $method === 'POST') {
+    $r = one('SELECT r.*, u.name, u.username FROM pw_resets r JOIN users u ON u.id = r.user_id WHERE r.token_hash = ?', array(hash('sha256', (string)prop($body, 'token', ''))));
+    if (!$r || $r['used'] || $r['expires'] < time()) bad(410, 'Tautan sudah kedaluwarsa atau sudah dipakai. Silakan minta tautan baru lewat "Lupa password".');
+    out(array('ok' => true, 'name' => $r['name'], 'username' => $r['username']));
+  }
+  if ($route === 'password/reset' && $method === 'POST') {
+    $k = lock_key('reset');
+    if (is_locked($k, 10)) bad(429, 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.');
+    $th = hash('sha256', (string)prop($body, 'token', ''));
+    $r = one('SELECT * FROM pw_resets WHERE token_hash = ?', array($th));
+    if (!$r || $r['used'] || $r['expires'] < time()) { add_fail($k); bad(410, 'Tautan sudah kedaluwarsa atau sudah dipakai. Silakan minta tautan baru lewat "Lupa password".'); }
+    $np = prop($body, 'password');
+    if (!valid_password($np)) bad(400, 'Password baru minimal 6 karakter.');
+    if (!q('UPDATE pw_resets SET used = 1 WHERE token_hash = ? AND used = 0', array($th))->rowCount()) bad(410, 'Tautan ini sudah dipakai.');
+    q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($np, PASSWORD_DEFAULT), $r['user_id']));
+    q('DELETE FROM pw_resets WHERE user_id = ?', array($r['user_id']));
+    q('DELETE FROM sessions WHERE user_id = ?', array($r['user_id']));
+    $u = one('SELECT * FROM users WHERE id = ?', array($r['user_id']));
+    notify_password_changed($u, 'lewat tautan lupa password');
+    out(array('ok' => true, 'username' => $u['username']));
+  }
+
   if ($route === 'logout') { auth(); q('DELETE FROM sessions WHERE token = ?', array($GLOBALS['TOKEN'])); out(array('ok' => true)); }
   if ($route === 'me') { $u = auth(); out(array('user' => public_user($u), 'subscription' => tenant_info(tenant_of($u)))); }
 
@@ -136,14 +184,23 @@ try {
     if (!valid_password($np)) bad(400, 'Password baru minimal 6 karakter.');
     q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($np, PASSWORD_DEFAULT), $u['id']));
     q('DELETE FROM sessions WHERE user_id = ? AND token <> ?', array($u['id'], $GLOBALS['TOKEN']));
+    notify_password_changed($u, 'dari menu Akun Guru');
     out(array('ok' => true));
+  }
+  if ($route === 'me/email' && $method === 'PUT') {
+    $u = auth();
+    if (!password_verify((string)prop($body, 'password', ''), $u['pass_hash'])) bad(400, 'Password salah.');
+    $em = strtolower(trim((string)prop($body, 'email', '')));
+    if ($em !== '' && !valid_email($em)) bad(400, 'Alamat email tidak valid.');
+    q('UPDATE users SET email = ? WHERE id = ?', array($em === '' ? null : $em, $u['id']));
+    out(array('ok' => true, 'user' => public_user(one('SELECT * FROM users WHERE id = ?', array($u['id'])))));
   }
 
   /* ---------- akun guru dalam sekolah (admin sekolah) ---------- */
   if ($seg && $seg[0] === 'users') {
     $u = auth(); admin_only($u); $tid = tenant_of($u);
     if (count($seg) === 1 && $method === 'GET') {
-      $list = rows('SELECT id, username, name, role, created_at FROM users WHERE tenant_id = ? ORDER BY id', array($tid));
+      $list = rows('SELECT id, username, name, role, email, created_at FROM users WHERE tenant_id = ? ORDER BY id', array($tid));
       foreach ($list as &$x) $x['id'] = (int)$x['id'];
       out(array('users' => $list));
     }
@@ -154,7 +211,9 @@ try {
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
       if (one('SELECT id FROM users WHERE username = ?', array($un))) bad(409, 'Username sudah dipakai.');
       $nm = str_cut(prop($body, 'name', ''), 150) ?: $un;
-      q('INSERT INTO users (tenant_id, username, name, pass_hash, role) VALUES (?,?,?,?,?)', array($tid, $un, $nm, password_hash($pw, PASSWORD_DEFAULT), prop($body, 'role') === 'admin' ? 'admin' : 'guru'));
+      $em = strtolower(trim((string)prop($body, 'email', '')));
+      if ($em !== '' && !valid_email($em)) bad(400, 'Alamat email tidak valid.');
+      q('INSERT INTO users (tenant_id, username, name, pass_hash, role, email) VALUES (?,?,?,?,?,?)', array($tid, $un, $nm, password_hash($pw, PASSWORD_DEFAULT), prop($body, 'role') === 'admin' ? 'admin' : 'guru', $em === '' ? null : $em));
       out(array('ok' => true));
     }
     $id = isset($seg[1]) ? (int)$seg[1] : 0;
@@ -164,6 +223,12 @@ try {
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
       q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($pw, PASSWORD_DEFAULT), $id));
       q('DELETE FROM sessions WHERE user_id = ?', array($id));
+      out(array('ok' => true));
+    }
+    if (count($seg) === 3 && $seg[2] === 'email' && $method === 'PUT') {
+      $em = strtolower(trim((string)prop($body, 'email', '')));
+      if ($em !== '' && !valid_email($em)) bad(400, 'Alamat email tidak valid.');
+      q('UPDATE users SET email = ? WHERE id = ? AND tenant_id = ?', array($em === '' ? null : $em, $id, $tid));
       out(array('ok' => true));
     }
     if (count($seg) === 2 && $method === 'DELETE') {
@@ -343,7 +408,7 @@ try {
       $pending = (int)one("SELECT COUNT(*) n FROM payments WHERE status = 'pending'")['n'];
       $revenue = (int)one("SELECT COALESCE(SUM(amount),0) s FROM payments WHERE status = 'approved'")['s'];
       $month = (int)one("SELECT COALESCE(SUM(amount),0) s FROM payments WHERE status = 'approved' AND decided_at >= ?", array(date('Y-m-01 00:00:00')))['s'];
-      out(array('tenants' => $list, 'pending' => $pending, 'revenue' => $revenue, 'revenueMonth' => $month, 'platform' => platform()));
+      out(array('tenants' => $list, 'pending' => $pending, 'revenue' => $revenue, 'revenueMonth' => $month, 'platform' => platform(), 'mail' => mail_config_public()));
     }
 
     if ($sub === 'tenants' && isset($seg[2]) && $method === 'PUT') {
@@ -393,6 +458,31 @@ try {
         $pdo->commit();
       } catch (Exception $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
       out(array('ok' => true, 'tenant' => tenant_info((int)$p['tenant_id'])));
+    }
+
+    if ($sub === 'mail' && $method === 'PUT') {
+      $cur = mail_config();
+      $sec = (string)prop($body, 'smtpSecure', 'ssl');
+      $new = array(
+        'fromEmail' => strtolower(trim((string)prop($body, 'fromEmail', ''))),
+        'fromName' => str_cut(prop($body, 'fromName', ''), 80),
+        'smtpHost' => preg_replace('/[^a-z0-9.\-]/', '', strtolower(trim((string)prop($body, 'smtpHost', '')))),
+        'smtpPort' => max(1, min(65535, (int)prop($body, 'smtpPort', 465))),
+        'smtpSecure' => in_array($sec, array('ssl', 'tls', 'none'), true) ? $sec : 'ssl',
+        'smtpUser' => str_cut(prop($body, 'smtpUser', ''), 150),
+        'smtpPass' => prop($body, 'smtpPass', '') !== '' ? (string)prop($body, 'smtpPass') : ($cur['smtpHost'] !== '' ? $cur['smtpPass'] : '')
+      );
+      if (prop($body, 'clearPass')) $new['smtpPass'] = '';
+      if ($new['fromEmail'] !== '' && !valid_email($new['fromEmail'])) bad(400, 'Email pengirim tidak valid.');
+      q('REPLACE INTO platform (k, v) VALUES (?,?)', array('mail', jenc($new)));
+      out(array('ok' => true, 'mail' => mail_config_public()));
+    }
+    if ($sub === 'mail-test' && $method === 'POST') {
+      $to = strtolower(trim((string)prop($body, 'to', '')));
+      if (!valid_email($to)) bad(400, 'Isi alamat email tujuan uji.');
+      list($t, $h) = mail_layout('Email uji berhasil 🎉', array('Pengiriman email dari ' . htmlspecialchars(platform()['brand']) . ' sudah berfungsi. Fitur <b>Lupa password</b> siap dipakai.'));
+      try { send_mail($to, 'Email uji ' . platform()['brand'], $t, $h); } catch (Exception $ex) { bad(500, $ex->getMessage()); }
+      out(array('ok' => true));
     }
 
     if ($sub === 'config' && $method === 'PUT') {

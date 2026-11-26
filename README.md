@@ -124,6 +124,14 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Lupa password lewat email (v5.6, versi PHP)
+
+- Di halaman masuk ada tautan **🔑 Lupa password?**. Pengguna menulis email/username, lalu menerima email berisi tombol **Buat Password Baru**. Tautannya berlaku **60 menit** dan hanya bisa dipakai **sekali**.
+- Setelah password diganti, **email konfirmasi** dikirim dan semua perangkat lain otomatis dikeluarkan. Email konfirmasi juga dikirim bila password diganti dari menu Akun Guru.
+- Email tujuan: kolom **Email** akun (diatur di **Akun Guru**, atau oleh admin sekolah lewat tombol ✉️ di daftar guru); bila kosong dan username berupa email, username yang dipakai. Akun tanpa email diminta menghubungi admin sekolah.
+- Pengirim email diatur di **Panel Pemilik → Harga & Rekening → Pengiriman Email**. Tanpa SMTP, aplikasi memakai `mail()` bawaan hosting (sering masuk Spam). Disarankan: buat akun email `no-reply@domain-anda` di cPanel → Email Accounts, lalu isi host/port/username/password SMTP-nya, dan tekan **Kirim Email Uji**. Password SMTP disimpan di database dan tidak pernah dikirim ke browser.
+- Keamanan: token acak 256-bit disimpan dalam bentuk hash, pembatasan permintaan per IP & per akun, dan pesan yang sama untuk akun yang tidak terdaftar.
+
 ## Soal bergambar
 - Saat PDF diunggah, **gambar di dalam soal ikut diambil otomatis**. Gambar dipotong langsung dari halaman PDF dalam resolusi tinggi sehingga utuh dan tajam, lalu ditempel ke soal tempat gambar itu berada. Kop/logo sekolah di atas soal pertama dilewati.
 - Soal yang **pilihan jawabannya berupa gambar** (baris hanya berisi `A. B. C. D.`) dikenali sebagai pilihan ganda, dan gambar pilihannya diambil sekaligus.
