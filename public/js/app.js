@@ -35,7 +35,7 @@
     return `${showPass ? QT.passageHTML(x, { note: pn.length ? 'untuk soal no. ' + numsText(pn) : '' }) : ''}<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${QT.TYPES[x.type].icon} ${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span>${x.passage && !showPass ? '<span class="pill">📖 teks di atas</span>' : ''}</div>
       ${x.image && x.type !== 'titik' && x.type !== 'label' ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}${x.type === 'seret' || x.type === 'dropdown' ? '' : `<div class="q-text">${QT.rich(x.text)}</div>`}
       <div class="pv-mount" data-pv="${i}"></div>
-      ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
+      ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted pv-key" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
   }
   /** Galeri 17 jenis soal (tombol). act: aksi saat diklik (mk = buat paket baru, addq = tambah ke paket). */
   function typeGallery(act) {
@@ -278,9 +278,11 @@ B. VII B</pre></div></div></div>
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
     { href: 'kuis', ic: '🎮', label: 'Kuis Seru (Live)', tag: 'Baru' },
-    { href: 'pantau', ic: '📡', label: 'Ujian Berjalan & Hasil', server: true },
+    { href: 'pantau', ic: '📡', label: 'Ujian Berjalan', server: true },
+    { href: 'hasil', ic: '📊', label: 'Hasil Ujian', tag: 'Baru' },
     { group: 'Soal' },
-    { href: 'bank-soal', ic: '📚', label: 'Bank Soal (Perpustakaan)' },
+    { href: 'perpustakaan', ic: '📚', label: 'Perpustakaan Soal', tag: 'Baru' },
+    { href: 'bank-soal', ic: '⬆️', label: 'Unggah & Buat Soal' },
     { href: 'panduan-soal', ic: '📘', label: 'Panduan Jenis Soal', tag: '17' },
     { group: 'Nilai Akhir' },
     { href: 'rekap', ic: '🧮', label: 'Rekap Nilai Rapor', tag: 'Total' },
@@ -301,6 +303,7 @@ B. VII B</pre></div></div></div>
   }
   function renderNav(route) {
     const groups = navGroups();
+    route = String(route).replace(/\?.*$/, '');
     const isActive = n => route === n.href || route.startsWith(n.href + '/');
     let cur = groups.find(g => g.items.some(isActive)) || groups[0];
     const school = st().settings.schoolName || 'Asesmen Merdeka';
@@ -322,8 +325,8 @@ B. VII B</pre></div></div></div>
     const tabs = [
       { key: 'Utama', ic: '🏠', lbl: 'Beranda', href: 'beranda' },
       { key: 'Asesmen', ic: '📚', lbl: 'Asesmen', sheet: 'Asesmen' },
-      { key: 'Kuis Interaktif', ic: '🎮', lbl: 'Kuis', href: 'kuis' },
-      { key: 'Soal', ic: '📄', lbl: 'Soal', href: 'bank-soal' },
+      { key: 'Kuis Interaktif', ic: '🎮', lbl: 'Kuis', sheet: 'Kuis Interaktif' },
+      { key: 'Soal', ic: '📚', lbl: 'Soal', sheet: 'Soal' },
       { key: 'more', ic: '☰', lbl: 'Lainnya', sheet: 'more' }
     ].filter(t => t.key === 'more' || G(t.key));
     const hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
@@ -338,7 +341,7 @@ B. VII B</pre></div></div></div>
     const user = S.mode === 'server' && S.user ? `<div class="sheet-user"><div class="avatar">${esc((S.user.name || '?').charAt(0).toUpperCase())}</div><div style="flex:1;min-width:0"><b class="ellipsis">${esc(S.user.name)}</b><small class="muted ellipsis">${esc(st().settings.schoolName || '')}</small>${S.saas && S.subscription ? `<a href="#/langganan" class="sub-badge ${S.subscription.active ? S.subscription.status : 'expired'}">${subLabel(S.subscription)}</a>` : ''}</div><button class="btn ghost sm" id="sheet-logout">Keluar</button></div>` : '';
     const bg = document.createElement('div'); bg.className = 'sheet-bg'; bg.id = 'menu-sheet';
     bg.innerHTML = `<div class="sheet" role="dialog"><div class="sheet-grip"></div>
-      ${which === 'more' ? user : `<h3 class="sheet-title">${esc(which === 'Asesmen' ? 'Jenis Asesmen' : which)}</h3>`}
+      ${which === 'more' ? user : `<h3 class="sheet-title">${esc(which === 'Asesmen' ? 'Jenis Asesmen' : which === 'Kuis Interaktif' ? 'Kuis & Hasil' : which === 'Soal' ? 'Soal' : which)}</h3>`}
       ${list.map(g => `${which === 'more' ? `<div class="sheet-group">${esc(g.name)}</div>` : ''}<div class="sheet-list">${g.items.map(row).join('')}</div>`).join('')}
       ${which === 'more' && window.PWA && PWA.canInstall() ? '<button class="btn soft" style="width:100%;margin-top:12px" id="sheet-install">📲 Pasang aplikasi di HP</button>' : ''}
     </div>`;
@@ -399,7 +402,7 @@ B. VII B</pre></div></div></div>
   function route() {
     let hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
     if (S.locked() && !/^(langganan|akun|pemilik)/.test(hash)) { hash = 'langganan'; history.replaceState(null, '', '#/langganan'); }
-    const parts = hash.split('/');
+    const parts = hash.replace(/\?.*$/, '').split('/');
     const r = parts[0] || 'beranda';
     renderNav(hash);
     const hashChanged = hash !== lastHash; lastHash = hash;
@@ -425,6 +428,8 @@ B. VII B</pre></div></div></div>
       else if (r === 'langganan' && S.saas) out = viewBilling();
       else if (r === 'kuis') out = parts[1] ? viewGameHost(parts[1]) : viewGames();
       else if (r === 'pantau' && S.mode === 'server') out = viewMonitor();
+      else if (r === 'perpustakaan') out = viewLibrary(parts[1]);
+      else if (r === 'hasil' || /^hasil\?/.test(r)) out = viewReports(parts[1], parts[2]);
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
       else { location.hash = '#/beranda'; return; }
     } catch (e) {
@@ -1364,7 +1369,7 @@ B. VII B</pre></div></div></div>
   /* ================= Bank soal & unggah PDF ================= */
   let importDraft = null, bankFilter = 'all';
   function viewBank() {
-    setTitle('📚 Bank Soal (Perpustakaan Soal)', 'Semua paket soal sekolah yang sudah diunggah/dibuat — cari, lihat, pakai, atau perbaiki');
+    setTitle('⬆️ Unggah & Buat Soal', 'Unggah PDF/teks soal atau buat langsung — hasilnya tersimpan di Perpustakaan Soal');
     renderCtx(false);
     const s = st();
     const multiUser = S.mode === 'server' && !!S.user;
@@ -2686,6 +2691,359 @@ B. VII B</pre></div></div></div>
     };
   }
 
+  /* ================= Menu kecil (popover) ================= */
+  function popMenu(anchor, items) {
+    closePop();
+    const r = anchor.getBoundingClientRect();
+    const el = document.createElement('div'); el.className = 'pop-menu'; el.id = 'pop-menu';
+    el.innerHTML = items.filter(Boolean).map((it, k) => it === '-' ? '<hr>' : `<button data-k="${k}" class="${it.danger ? 'danger' : ''}"><span>${it.ic || ''}</span>${esc(it.label)}${it.sub ? `<small>${esc(it.sub)}</small>` : ''}</button>`).join('');
+    document.body.appendChild(el);
+    const w = el.offsetWidth, h = el.offsetHeight;
+    el.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, r.right - w)) + 'px';
+    el.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
+    const list = items.filter(Boolean);
+    $$('button[data-k]', el).forEach(b => b.onclick = e => { e.stopPropagation(); const it = list[+b.dataset.k]; closePop(); it.run && it.run(); });
+    setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
+  }
+  function closePop() { const p = $('#pop-menu'); if (p) p.remove(); }
+  window.addEventListener('hashchange', closePop);
+
+  /* ================= Perpustakaan soal ================= */
+  const lib = { q: '', owner: 'all', folder: '', sort: 'new', view: 'grid', usage: null, usageAt: 0 };
+  const SUBJ_EMOJI = [[/matemat|mtk|hitung|bilangan|pecahan|geometri/i, '🔢'], [/ipa|sains|fisika|kimia|biologi|tumbuh|hewan|energi|listrik/i, '🔬'], [/ips|sejarah|geografi|ekonomi|peta/i, '🌏'], [/inggris|english/i, '🇬🇧'], [/arab/i, '🕌'], [/agama|fiqih|akidah|quran|islam|kristen|katolik|hindu|buddha/i, '🕌'],
+    [/pancasila|pkn|ppkn|kewarga/i, '🦅'], [/bahasa|indonesia|teks|cerpen|puisi|membaca/i, '📖'], [/seni|budaya|musik|tari|rupa/i, '🎨'], [/pjok|olahraga|jasmani/i, '⚽'], [/informatika|tik|komputer|koding/i, '💻'], [/jawa|sunda|daerah|mulok/i, '🏮']];
+  const coverEmoji = q => { const t = q.title + ' ' + (q.questions[0] ? q.questions[0].text : ''); const m = SUBJ_EMOJI.find(x => x[0].test(t)); return m ? m[1] : '📝'; };
+  const coverHue = q => { let h = 0; for (const c of String(q.title)) h = (h * 31 + c.charCodeAt(0)) >>> 0; return h % 360; };
+  const coverImg = q => { const x = q.questions.find(y => y.image) || q.questions.find(y => y.passage && y.passage.image); return x ? (x.image || x.passage.image) : null; };
+  function coverHTML(q, big) {
+    const img = coverImg(q), hue = coverHue(q);
+    return `<div class="lib-cover ${big ? 'big' : ''}" style="--ch:${hue}">${img ? `<img src="${img}" alt="">` : `<span class="lib-em">${coverEmoji(q)}</span>`}<span class="lib-n">${q.questions.length} soal</span></div>`;
+  }
+  async function libUsage() {
+    if (S.mode !== 'server') return {};
+    if (lib.usage && Date.now() - lib.usageAt < 60000) return lib.usage;
+    try { const d = await S.api('monitor'); const u = {}; d.games.forEach(g => { if (g.qsetId) { (u[g.qsetId] = u[g.qsetId] || { games: 0, players: 0, last: '' }); u[g.qsetId].games++; u[g.qsetId].players += g.players; if (String(g.createdAt) > u[g.qsetId].last) u[g.qsetId].last = g.createdAt; } }); lib.usage = u; lib.usageAt = Date.now(); return u; } catch (e) { return {}; }
+  }
+  const usedAsm = q => st().assessments.filter(a => a.qsetId === q.id);
+  function startMenu(anchor, q) {
+    popMenu(anchor, [
+      { ic: '🎮', label: 'Kuis Permainan', sub: 'poin, peringkat, podium', run: () => gameAvailable() ? newGameModal({ qsetId: q.id, mode: 'game' }) : toast('Kuis Seru butuh versi server.', 'bad') },
+      { ic: '📝', label: 'Ujian (Kuis Mode Ujian)', sub: 'timer, pengawasan, semua jenis soal', run: () => gameAvailable() ? newGameModal({ qsetId: q.id, mode: 'exam' }) : toast('Kuis Seru butuh versi server.', 'bad') },
+      { ic: '🔑', label: 'Asesmen + Token', sub: 'SLM/STS/SAS… nilai masuk rapor', run: () => useQset(q.id) },
+      '-',
+      { ic: '👁', label: 'Pratinjau', run: () => previewQset(q) }
+    ]);
+  }
+  function moreMenu(anchor, q, after) {
+    const can = canEditQset(q);
+    popMenu(anchor, [
+      { ic: '📄', label: 'Buka detail', run: () => { location.hash = '#/perpustakaan/' + q.id; } },
+      can && { ic: '✏️', label: 'Edit soal', run: () => { location.hash = '#/bank-soal/' + q.id; } },
+      { ic: '⧉', label: 'Duplikat', sub: can ? '' : 'salinan jadi milik Anda', run: () => { const c = dupQset(q); toast('Salinan dibuat.'); location.hash = '#/perpustakaan/' + c.id; } },
+      can && { ic: '📁', label: 'Pindahkan ke folder', run: () => folderModal(q, after) },
+      { ic: '📊', label: 'Lihat hasil ujiannya', run: () => { location.hash = '#/hasil?qs=' + q.id; } },
+      can && '-',
+      can && { ic: '🗑', label: 'Hapus', danger: true, run: async () => {
+        if (!await confirmBox(`Hapus paket soal <b>${esc(q.title)}</b>? Asesmen yang memakainya tetap ada, tetapi tidak bisa dikerjakan online lagi.`, 'Hapus')) return;
+        st().questionSets = st().questionSets.filter(x => x !== q); st().assessments.forEach(a => { if (a.qsetId === q.id) a.qsetId = ''; }); S.save(); location.hash = '#/perpustakaan'; route();
+      } }
+    ]);
+  }
+  function folderModal(q, after) {
+    const folders = [...new Set(st().questionSets.map(x => x.folder).filter(Boolean))].sort();
+    const m = modal(`<h2>📁 Pindahkan ke folder</h2><p class="small muted" style="margin-top:0">"${esc(q.title)}"</p>
+      <div class="pz-nums">${['', ...folders].map(f => `<label class="pz-num"><input type="radio" name="fd" value="${esc(f)}" ${(q.folder || '') === f ? 'checked' : ''}><span style="padding:0 12px">${f ? '📁 ' + esc(f) : 'Tanpa folder'}</span></label>`).join('')}</div>
+      <label class="field" style="margin-top:12px"><span>…atau folder baru</span><input id="fd-new" placeholder="mis. Kelas 7 · Semester Genap"></label>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="fd-ok">Pindahkan</button></div>`);
+    $('#fd-ok', m).onclick = () => { const nv = $('#fd-new', m).value.trim(); const pick = ($('input[name=fd]:checked', m) || {}).value || ''; q.folder = (nv || pick).slice(0, 60) || undefined; if (!q.folder) delete q.folder; S.save(); closeModal(); toast(q.folder ? 'Dipindahkan ke folder ' + q.folder + '.' : 'Dikeluarkan dari folder.'); after ? after() : route(); };
+  }
+  function viewLibrary(id) {
+    if (id) return viewLibraryItem(id);
+    setTitle('📚 Perpustakaan Soal', 'Semua paket soal sekolah — cari, pratinjau, mulai kuis/ujian, atau atur dalam folder');
+    renderCtx(false);
+    const s = st(), me = S.mode === 'server' && S.user ? S.user.id : null;
+    const all = s.questionSets;
+    const folders = [...new Set(all.map(x => x.folder).filter(Boolean))].sort();
+    const cnt = f => all.filter(f).length;
+    const side = `<div class="card lib-side">
+        <button class="btn" style="width:100%" data-act="lib-new">＋ Buat Paket Soal</button>
+        <a class="btn soft" style="width:100%;margin-top:8px" href="#/bank-soal">⬆ Unggah PDF / Teks</a>
+        <div class="lib-nav">
+          <button class="${lib.owner === 'all' && !lib.folder ? 'on' : ''}" data-act="lib-f" data-o="all" data-f="">📚 Semua <span>${all.length}</span></button>
+          ${me ? `<button class="${lib.owner === 'mine' && !lib.folder ? 'on' : ''}" data-act="lib-f" data-o="mine" data-f="">👤 Milik saya <span>${cnt(q => q.ownerId === me)}</span></button>
+          <button class="${lib.owner === 'others' && !lib.folder ? 'on' : ''}" data-act="lib-f" data-o="others" data-f="">👥 Guru lain <span>${cnt(q => q.ownerId !== me)}</span></button>` : ''}
+          <div class="lib-nav-h">📁 Folder</div>
+          ${folders.map(f => `<button class="${lib.folder === f ? 'on' : ''}" data-act="lib-f" data-o="all" data-f="${esc(f)}">📁 ${esc(f)} <span>${cnt(q => q.folder === f)}</span></button>`).join('') || '<div class="small muted" style="padding:4px 10px">Belum ada folder. Pakai menu ⋯ → Pindahkan ke folder.</div>'}
+        </div></div>`;
+    const html = `<div class="lib-wrap">${side}<div class="lib-main">
+        <div class="lib-tools"><input id="lb-q" type="search" placeholder="🔎 Cari judul, isi soal, guru…" value="${esc(lib.q)}">
+          <select id="lb-sort">${[['new', 'Terbaru'], ['az', 'Judul A–Z'], ['used', 'Paling sering dipakai'], ['many', 'Soal terbanyak']].map(([v, l]) => `<option value="${v}" ${lib.sort === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+          <div class="tabs" style="margin:0"><button class="${lib.view === 'grid' ? 'on' : ''}" data-act="lib-v" data-v="grid" title="Kartu">▦</button><button class="${lib.view === 'list' ? 'on' : ''}" data-act="lib-v" data-v="list" title="Daftar">☰</button></div></div>
+        <div id="lb-list"></div></div></div>`;
+    const draw = (usage) => {
+      const words = lib.q.toLowerCase().split(/\s+/).filter(Boolean);
+      let list = all.filter(q => (lib.owner !== 'mine' || q.ownerId === me) && (lib.owner !== 'others' || q.ownerId !== me) && (!lib.folder || q.folder === lib.folder));
+      if (words.length) list = list.filter(q => { const hay = [q.title, q.ownerName, q.folder].concat(q.questions.map(x => x.text)).join(' ').toLowerCase(); return words.every(w => hay.indexOf(w) >= 0); });
+      const used = q => usedAsm(q).length + ((usage[q.id] || {}).games || 0);
+      list = list.slice().sort((a, b) => lib.sort === 'az' ? a.title.localeCompare(b.title) : lib.sort === 'used' ? used(b) - used(a) : lib.sort === 'many' ? b.questions.length - a.questions.length : (b.created || 0) - (a.created || 0));
+      const types = q => [...new Set(q.questions.map(x => x.type))];
+      const box = $('#lb-list'); if (!box) return;
+      if (!list.length) { box.innerHTML = `<div class="card empty"><div class="big">📭</div>${all.length ? 'Tidak ada paket soal yang cocok.' : 'Perpustakaan masih kosong. Buat paket soal baru atau unggah PDF soal.'}</div>`; return; }
+      box.innerHTML = lib.view === 'grid'
+        ? `<div class="lib-grid">${list.map(q => `<div class="lib-card" data-open="${q.id}">${coverHTML(q)}
+            <div class="lib-body"><b class="lib-title">${esc(q.title)}</b>
+              <div class="lib-meta">${types(q).slice(0, 5).map(t => `<span title="${esc(TYPE_LABEL[t])}">${QT.TYPES[t].icon}</span>`).join('')}${types(q).length > 5 ? `<span>+${types(q).length - 5}</span>` : ''}</div>
+              <div class="lib-sub">${q.ownerName ? '👤 ' + esc(q.ownerName) + ' · ' : ''}${q.created ? new Date(q.created).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : ''}${used(q) ? ` · ▶ ${used(q)}× dipakai` : ''}${q.folder ? ' · 📁 ' + esc(q.folder) : ''}</div>
+              <div class="lib-act"><button class="btn sm" data-start="${q.id}">▶ Mulai</button><button class="btn ghost sm" data-prev="${q.id}" title="Pratinjau">👁</button><button class="btn ghost sm" data-more="${q.id}" title="Lainnya">⋯</button></div></div></div>`).join('')}</div>`
+        : `<div class="card"><div class="lib-rows">${list.map(q => `<div class="lib-row" data-open="${q.id}">${coverHTML(q)}<div style="flex:1;min-width:0"><b class="lib-title">${esc(q.title)}</b><div class="lib-sub">${q.questions.length} soal · ${types(q).map(t => QT.TYPES[t].icon).join(' ')}${q.ownerName ? ' · 👤 ' + esc(q.ownerName) : ''}${used(q) ? ` · ▶ ${used(q)}×` : ''}${q.folder ? ' · 📁 ' + esc(q.folder) : ''}</div></div>
+            <div class="lib-act"><button class="btn sm" data-start="${q.id}">▶ Mulai</button><button class="btn ghost sm" data-more="${q.id}">⋯</button></div></div>`).join('')}</div></div>`;
+      $$('[data-open]', box).forEach(c => c.onclick = e => { if (e.target.closest('button')) return; location.hash = '#/perpustakaan/' + c.dataset.open; });
+      $$('[data-start]', box).forEach(b => b.onclick = e => { e.stopPropagation(); startMenu(b, S.qset(b.dataset.start)); });
+      $$('[data-prev]', box).forEach(b => b.onclick = e => { e.stopPropagation(); previewQset(S.qset(b.dataset.prev)); });
+      $$('[data-more]', box).forEach(b => b.onclick = e => { e.stopPropagation(); moreMenu(b, S.qset(b.dataset.more)); });
+    };
+    return {
+      html,
+      async mount(v) {
+        draw({});
+        $('#lb-q', v).oninput = e => { lib.q = e.target.value; draw(lib.usage || {}); };
+        $('#lb-sort', v).onchange = e => { lib.sort = e.target.value; draw(lib.usage || {}); };
+        const u = await libUsage(); if ($('#lb-list')) draw(u);
+      },
+      actions: {
+        'lib-f': el => { lib.owner = el.dataset.o; lib.folder = el.dataset.f; route(); },
+        'lib-v': el => { lib.view = el.dataset.v; route(); },
+        'lib-new': () => { location.hash = '#/bank-soal'; setTimeout(() => { const g = $('.qt-picker'); if (g) g.scrollIntoView({ behavior: 'smooth' }); }, 300); }
+      }
+    };
+  }
+  function viewLibraryItem(id) {
+    const q = S.qset(id);
+    if (!q) { location.hash = '#/perpustakaan'; return { html: '' }; }
+    setTitle('📚 ' + esc(q.title), 'Perpustakaan Soal');
+    renderCtx(false);
+    const can = canEditQset(q), pts = q.questions.reduce((t, x) => t + (+x.points || 0), 0);
+    const asms = usedAsm(q);
+    return {
+      html: `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/perpustakaan">← Perpustakaan</a></div>
+        <div class="card lib-hero">${coverHTML(q, true)}<div style="flex:1;min-width:0">
+          <h2 style="margin:0 0 6px">${esc(q.title)}</h2>
+          <div class="btns" style="gap:6px">${[...new Set(q.questions.map(x => x.type))].map(t => `<span class="pill">${QT.TYPES[t].icon} ${TYPE_LABEL[t]} ${q.questions.filter(x => x.type === t).length}</span>`).join('')}</div>
+          <p class="small muted" style="margin:8px 0">${q.questions.length} soal · ${fmt(pts)} poin${q.ownerName ? ' · 👤 ' + esc(q.ownerName) : ''}${q.created ? ' · dibuat ' + new Date(q.created).toLocaleDateString('id-ID') : ''}${q.folder ? ' · 📁 ' + esc(q.folder) : ''}${q.source ? ' · 📄 ' + esc(q.source) : ''}</p>
+          <div class="btns"><button class="btn lg" data-act="li-start">▶ Mulai</button>${can ? `<a class="btn soft" href="#/bank-soal/${q.id}">✏️ Edit</a>` : ''}<button class="btn ghost" data-act="li-dup">⧉ Duplikat</button><button class="btn ghost" data-act="li-more">⋯</button></div>
+        </div></div>
+        <div class="grid" style="grid-template-columns:minmax(0,1fr) 320px;align-items:start" id="li-grid">
+          <div><div class="card-head" style="margin:6px 0 10px"><h3 style="margin:0">❓ Daftar Soal</h3><label class="small" style="display:flex;gap:6px;align-items:center;margin-left:auto"><input type="checkbox" id="li-key" checked> Tampilkan kunci</label></div>
+            ${q.instructions ? QT.instructionsHTML(q.instructions, []) : ''}
+            <div id="li-qs">${q.questions.map((x, k) => previewCard(x, k, q.questions)).join('')}</div></div>
+          <div><div class="card"><h3>📊 Riwayat pemakaian</h3><div id="li-use" class="small muted">Memuat…</div></div></div>
+        </div>`,
+      async mount(v) {
+        if (window.innerWidth < 1000) $('#li-grid', v).style.gridTemplateColumns = '1fr';
+        mountPreviews(v, q.questions);
+        $('#li-key', v).onchange = e => v.classList.toggle('hide-keys', !e.target.checked);
+        const usage = S.mode === 'server' ? await S.api('monitor').catch(() => null) : null;
+        const games = usage ? usage.games.filter(g => g.qsetId === q.id) : [];
+        const items = asms.map(a => ({ t: a.title, sub: (T[a.type] ? T[a.type].short : '') + ' · ' + ((S.cls(a.classId) || {}).name || '–'), when: a.date || '', href: '#/hasil/a/' + a.id }))
+          .concat(games.map(g => ({ t: g.title, sub: (g.mode === 'exam' ? '📝 Mode Ujian' : '🎮 Permainan') + ' · ' + g.players + ' peserta', when: String(g.createdAt || '').slice(0, 10), href: '#/hasil/g/' + g.id })))
+          .sort((a, b) => String(b.when).localeCompare(String(a.when)));
+        const box = $('#li-use', v); if (!box) return;
+        box.classList.remove('muted');
+        box.innerHTML = items.length ? items.map(x => `<a class="lib-use" href="${x.href}"><b>${esc(x.t)}</b><span>${esc(x.sub)}${x.when ? ' · ' + esc(x.when) : ''}</span></a>`).join('') : '<p class="muted">Belum pernah dipakai. Tekan ▶ Mulai untuk memakainya.</p>';
+      },
+      actions: {
+        'li-start': el => startMenu(el, q),
+        'li-dup': () => { const c = dupQset(q); toast('Salinan dibuat.'); location.hash = '#/perpustakaan/' + c.id; },
+        'li-more': el => moreMenu(el, q)
+      }
+    };
+  }
+
+  /* ================= Hasil ujian (laporan) ================= */
+  const rep = { q: '', kind: '', cls: '', subj: '', days: '0', mine: false, qs: '' };
+  const scoreClass2 = (v, kktp) => !C.isNum(v) ? '' : v >= 85 ? 'ok' : v >= kktp ? 'pri' : v >= kktp - 15 ? 'warn' : 'bad';
+  function reportItems(d) {
+    const s = st();
+    if (d) {
+      const tokGroups = [], seen = {};
+      d.tokens.forEach(t => { const k = t.linkId ? 'L' + t.linkId : 'A' + t.id; if (seen[k]) { const g = seen[k]; g.classes = g.classes.concat(t.classes); g.classIds.push(t.classId); g.finished += t.finished; g.expected += t.expected; if (t.avg !== null) { g._s += t.avg * t.finished; g._n += t.finished; } if (String(t.lastAt || '') > String(g.lastAt || '')) g.lastAt = t.lastAt; return; } const g = Object.assign({}, t, { classIds: [t.classId], _s: t.avg !== null ? t.avg * t.finished : 0, _n: t.avg !== null ? t.finished : 0 }); seen[k] = g; tokGroups.push(g); });
+      tokGroups.forEach(g => { g.avg = g._n ? Math.round(g._s / g._n * 10) / 10 : null; });
+      return d.games.map(g => ({ kind: 'g', id: g.id, title: g.title, mode: g.mode, live: g.status !== 'ended', when: g.endedAt || g.startedAt || g.createdAt, classes: g.classes, classIds: g.classIds || [], subjectId: g.subjectId, qsetId: g.qsetId, n: g.players, done: g.finished, expected: g.expected, score: g.mode === 'exam' ? g.avg : g.acc, owner: g.owner, ownerId: g.ownerId, code: g.code }))
+        .concat(tokGroups.filter(t => t.finished > 0 || t.open).map(t => ({ kind: 'a', id: t.id, title: t.title, mode: 'token', type: t.type, live: t.open, when: t.lastAt || t.date, classes: t.classes, classIds: t.classIds, subjectId: t.subjectId, qsetId: t.qsetId, n: t.finished, done: t.finished, expected: t.expected, score: t.avg, owner: t.owner, ownerId: t.ownerId, code: t.code })));
+    }
+    // mode lokal: dari data di browser
+    return s.assessments.filter(a => Object.keys(s.submissions[a.id] || {}).length).map(a => { const sb = Object.values(s.submissions[a.id]); return { kind: 'a', id: a.id, title: a.title, mode: 'token', type: a.type, live: false, when: a.date, classes: [(S.cls(a.classId) || {}).name || ''], classIds: [a.classId], subjectId: a.subjectId, qsetId: a.qsetId, n: sb.length, done: sb.length, expected: (S.cls(a.classId) || { students: [] }).students.length, score: C.mean(sb.map(x => x.result.score)) }; });
+  }
+  function viewReports(sub, id) {
+    if (sub === 'g' || sub === 'a') return viewReport(sub, id);
+    const qsParam = (location.hash.match(/[?&]qs=([^&]+)/) || [])[1]; rep.qs = qsParam || '';
+    setTitle('📊 Hasil Ujian', 'Laporan setiap ujian & kuis: nilai murid, peringkat, dan analisis tiap soal');
+    renderCtx(false);
+    const s = st();
+    const html = `<div class="card rep-filters no-print">
+        <input id="rp-q" type="search" placeholder="🔎 Cari judul…" value="${esc(rep.q)}">
+        <select id="rp-kind"><option value="">Semua jenis</option><option value="token" ${rep.kind === 'token' ? 'selected' : ''}>🔑 Ujian token / asesmen</option><option value="exam" ${rep.kind === 'exam' ? 'selected' : ''}>📝 Kuis Mode Ujian</option><option value="game" ${rep.kind === 'game' ? 'selected' : ''}>🎮 Kuis Permainan</option></select>
+        <select id="rp-cls"><option value="">Semua kelas</option>${s.classes.map(c => `<option value="${c.id}" ${rep.cls === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+        <select id="rp-subj"><option value="">Semua mapel</option>${s.subjects.map(c => `<option value="${c.id}" ${rep.subj === c.id ? 'selected' : ''}>${esc(c.name)}</option>`).join('')}</select>
+        <select id="rp-days">${[['0', 'Semua waktu'], ['7', '7 hari terakhir'], ['30', '30 hari terakhir'], ['90', '3 bulan terakhir']].map(([v, l]) => `<option value="${v}" ${rep.days === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
+        ${S.mode === 'server' ? `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="rp-mine" ${rep.mine ? 'checked' : ''}> Milik saya</label>` : ''}
+        ${rep.qs && S.qset(rep.qs) ? `<span class="pill pri">📚 ${esc(S.qset(rep.qs).title)} <a href="#/hasil" style="margin-left:6px">✕</a></span>` : ''}
+      </div><div id="rp-list" class="muted">Memuat…</div>`;
+    let items = [];
+    const draw = () => {
+      const words = rep.q.toLowerCase().split(/\s+/).filter(Boolean), cut = +rep.days ? Date.now() - rep.days * 86400000 : 0;
+      const list = items.filter(x => (!words.length || words.every(w => x.title.toLowerCase().indexOf(w) >= 0)) && (!rep.kind || x.mode === rep.kind) && (!rep.cls || x.classIds.indexOf(rep.cls) >= 0) && (!rep.subj || x.subjectId === rep.subj)
+        && (!cut || new Date(String(x.when).replace(' ', 'T')).getTime() >= cut) && (!rep.mine || +x.ownerId === +(S.user || {}).id) && (!rep.qs || x.qsetId === rep.qs))
+        .sort((a, b) => (b.live - a.live) || String(b.when || '').localeCompare(String(a.when || '')));
+      const box = $('#rp-list'); if (!box) return;
+      box.classList.remove('muted');
+      const kktp = st().settings.kktp;
+      box.innerHTML = list.length ? `<div class="small muted" style="margin:4px 0 8px">${list.length} laporan</div>` + list.map(x => {
+        const sc = C.isNum(x.score) ? x.score : null;
+        return `<a class="rep-row" href="#/hasil/${x.kind}/${x.id}">
+          <div class="rep-ring ${scoreClass2(sc, kktp)}" style="--p:${sc || 0}"><span>${sc !== null ? Math.round(sc) + (x.mode === 'game' ? '%' : '') : '–'}</span></div>
+          <div style="flex:1;min-width:0"><b class="ellipsis" style="display:block">${esc(x.title)}</b>
+            <div class="small muted">${x.mode === 'token' ? '🔑 ' + (T[x.type] ? T[x.type].short : 'Token') : x.mode === 'exam' ? '📝 Mode Ujian' : '🎮 Permainan'} · ${x.when ? tgl(x.when) : '–'} · 🏫 ${esc(x.classes.filter(Boolean).join(', ') || 'nama bebas')}${x.owner ? ' · 👤 ' + esc(x.owner) : ''}</div></div>
+          <div class="rep-cnt"><b>${x.done}${x.expected ? '/' + x.expected : ''}</b><small>${x.mode === 'game' ? 'selesai' : 'mengumpulkan'}</small></div>
+          ${x.live ? '<span class="pill ok mon-live">● berjalan</span>' : ''}<span class="rep-go">›</span></a>`;
+      }).join('') : `<div class="card empty"><div class="big">📭</div>${items.length ? 'Tidak ada laporan yang cocok dengan filter.' : 'Belum ada hasil ujian. Mulai ujian atau kuis dari menu <a href="#/perpustakaan">Perpustakaan</a>.'}</div>`;
+    };
+    return {
+      html,
+      async mount(v) {
+        const d = S.mode === 'server' ? await S.api('monitor').catch(e => { toast(e.message, 'bad'); return null; }) : null;
+        items = reportItems(d);
+        draw();
+        const bind = (sel, key, ev) => { const el = $(sel, v); if (el) el['on' + (ev || 'change')] = e => { rep[key] = e.target.type === 'checkbox' ? e.target.checked : e.target.value; draw(); }; };
+        bind('#rp-q', 'q', 'input'); bind('#rp-kind', 'kind'); bind('#rp-cls', 'cls'); bind('#rp-subj', 'subj'); bind('#rp-days', 'days'); bind('#rp-mine', 'mine');
+      }
+    };
+  }
+
+  /** Data laporan yang seragam untuk kuis & ujian token. */
+  async function loadReport(kind, id) {
+    const s = st(), kktp = s.settings.kktp;
+    const clsOfStudent = sid => s.classes.find(c => c.students.some(m => m.id === sid));
+    if (kind === 'g') {
+      const d = await S.api('games/' + id);
+      const g = d.game, isExam = g.settings.mode === 'exam', qs = d.questions;
+      const graded = qs.filter(q => q.type !== 'slide' && q.type !== 'polling');
+      const rows = d.players.map(p => {
+        const ans = {}, det = {};
+        Object.keys(p.answers || {}).forEach(k => { const v = p.answers[k]; ans[k] = v && typeof v === 'object' ? v.a : v; });
+        if (isExam && p.result) p.result.detail.forEach(x => { det[x.id] = x; });
+        else qs.forEach(q => { const v = (p.answers || {})[q.id]; if (!v || typeof v !== 'object') { det[q.id] = { status: 'kosong', got: 0, pts: 1 }; return; } const f = v.f !== undefined ? +v.f : v.ok ? 1 : 0; det[q.id] = { status: v.info ? 'tidak dinilai' : f >= 1 ? 'benar' : f > 0 ? 'sebagian' : (v.a ? 'salah' : 'kosong'), got: f, pts: 1 }; });
+        const score = isExam ? p.exam_score : graded.length ? Math.round(graded.reduce((t, q) => t + (det[q.id] ? +det[q.id].got || 0 : 0), 0) / graded.length * 1000) / 10 : 0;
+        const c = p.student_id ? clsOfStudent(p.student_id) : null;
+        const secs = isExam ? (p.finished_at && p.started_ms ? Math.max(0, Math.round((new Date(String(p.finished_at).replace(' ', 'T')).getTime() - p.started_ms) / 1000)) : null) : Math.round(Object.values(p.answers || {}).reduce((t, v) => t + ((v && v.ms) || 0), 0) / 1000);
+        return { id: p.id, name: p.nickname, cls: c ? c.name : '', sid: p.student_id, score: isExam && !p.finished ? null : score, points: isExam ? null : p.score, finished: p.finished, ans, det, secs, violations: p.violations, review: isExam && p.finished ? () => examReviewModal({ data: d, load: () => route() }, p.id) : null };
+      });
+      const cids = g.settings.classIds && g.settings.classIds.length ? g.settings.classIds : g.classId ? [g.classId] : [];
+      const joined = new Set(d.players.map(p => p.student_id).filter(Boolean));
+      const notDone = [].concat(...cids.map(cid => { const c = S.cls(cid); return c ? c.students.filter(m => !joined.has(m.id)).map(m => ({ name: m.name, cls: c.name })) : []; }));
+      return { title: g.title, kind, mode: isExam ? 'exam' : 'game', when: g.endedAt || g.startedAt || g.createdAt, classes: cids.map(cid => (S.cls(cid) || {}).name).filter(Boolean), questions: qs, rows, notDone, kktp, live: g.status !== 'ended', link: '#/kuis/' + g.id, scoreLabel: isExam ? 'Nilai' : 'Akurasi', game: d };
+    }
+    await S.pull(true).catch(() => {});
+    const a0 = S.asm(id); if (!a0) throw new Error('Asesmen tidak ditemukan.');
+    const group = a0.linkId ? s.assessments.filter(x => x.linkId === a0.linkId) : [a0];
+    const q = S.qset(a0.qsetId); const qs = q ? q.questions : [];
+    const rows = [], notDone = [];
+    group.forEach(a => {
+      const c = S.cls(a.classId); if (!c) return;
+      const subs = s.submissions[a.id] || {};
+      c.students.forEach(m => {
+        const sb = subs[m.id];
+        if (!sb) { notDone.push({ name: m.name, cls: c.name }); return; }
+        const det = {}; ((sb.result || {}).detail || []).forEach(x => { det[x.id] = x; });
+        rows.push({ id: m.id, name: m.name, cls: c.name, sid: m.id, score: sb.result ? sb.result.score : null, finished: true, ans: sb.answers || {}, det, secs: sb.duration, review: () => reviewModal(a, m.id, () => route()) });
+      });
+    });
+    return { title: a0.title, kind, mode: 'token', type: a0.type, when: a0.date, classes: group.map(a => (S.cls(a.classId) || {}).name).filter(Boolean), questions: qs, rows, notDone, kktp, live: !!a0.examOpen, link: '#/asesmen/' + a0.type + '/' + a0.id, scoreLabel: 'Nilai' };
+  }
+  let repTab = 'peserta', repSort = 'score';
+  function viewReport(kind, id) {
+    setTitle('📊 Laporan Hasil Ujian', 'Memuat…');
+    renderCtx(false);
+    const out = {
+      html: `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/hasil">← Semua hasil</a><span id="rp-actions" class="btns" style="margin-left:auto"></span></div><div id="rp" class="muted">Memuat laporan…</div>`,
+      async mount(v) {
+        let R; try { R = await loadReport(kind, id); } catch (e) { $('#rp', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+        out.R = R; drawReport(R);
+      },
+      actions: {
+        'rp-tab': el => { repTab = el.dataset.t; drawReport(out.R); },
+        'rp-sort': el => { repSort = el.dataset.s; drawReport(out.R); },
+        'rp-xls': () => exportTable($('#rp-xls-table'), 'Hasil_' + out.R.title),
+        'rp-print': () => window.print(),
+        'rp-rev': el => { const r = out.R.rows.find(x => String(x.id) === el.dataset.id); if (r && r.review) r.review(); else if (r) answersModal(out.R, r); },
+        'rp-save': () => saveGameScores(out.R.game)
+      }
+    };
+    function drawReport(R) {
+      const box = $('#rp'); if (!box) return;
+      setTitle('📊 ' + esc(R.title), `${R.mode === 'token' ? '🔑 Asesmen/Token' : R.mode === 'exam' ? '📝 Kuis Mode Ujian' : '🎮 Kuis Permainan'} · ${R.when ? tgl(R.when) : ''}${R.classes.length ? ' · Kelas ' + esc(R.classes.join(', ')) : ''}`);
+      const graded = R.questions.filter(q => q.type !== 'slide' && q.type !== 'polling');
+      const done = R.rows.filter(r => C.isNum(r.score)), scores = done.map(r => r.score);
+      const avg = C.mean(scores), tuntas = scores.filter(v => v >= R.kktp).length;
+      const isOk = d => d && (d.status === 'benar' || d.status === 'dikoreksi' && +d.got >= +d.pts);
+      const qstat = graded.map(q => {
+        const ds = done.map(r => r.det[q.id]).filter(Boolean);
+        const ok = ds.filter(isOk).length, part = ds.filter(d => d.status === 'sebagian' || (d.status === 'dikoreksi' && +d.got > 0 && +d.got < +d.pts)).length, emp = ds.filter(d => d.status === 'kosong').length, manual = ds.filter(d => d.status === 'perlu koreksi').length;
+        const n = done.length, pct = n ? Math.round((ok + part * 0.5) / n * 100) : 0;
+        const dist = {};
+        if (['pg', 'pgk', 'bs', 'polling'].indexOf(q.type) >= 0) done.forEach(r => { const a = r.ans[q.id]; if (a === undefined || a === null || a === '') return; String(a).split(',').forEach(l => { const k = String(l).trim().toUpperCase(); if (k) dist[k] = (dist[k] || 0) + 1; }); });
+        return { q, ok, part, emp, manual, n, pct, dist };
+      });
+      const hard = qstat.filter(x => x.n && x.pct < 40).length;
+      $('#rp-actions').innerHTML = `${R.mode === 'game' || R.mode === 'exam' ? `<a class="btn ghost sm" href="${R.link}">${R.live ? '● Buka layar langsung' : '🖥 Layar kuis'}</a>` : `<a class="btn ghost sm" href="${R.link}">📋 Daftar nilai & token</a>`}${R.game && R.game.game.classId ? '<button class="btn ok sm" data-act="rp-save">💾 Simpan sebagai Nilai</button>' : ''}<button class="btn soft sm" data-act="rp-xls">⬇ Excel</button><button class="btn ghost sm" data-act="rp-print">🖨 Cetak</button>`;
+      const tile = (n, l, cls) => `<div class="card stat rep-tile ${cls || ''}"><div class="num">${n}</div><div class="lbl">${l}</div></div>`;
+      const rows = R.rows.slice().sort((a, b) => repSort === 'name' ? a.name.localeCompare(b.name) : (C.isNum(b.score) ? b.score : -1) - (C.isNum(a.score) ? a.score : -1));
+      const mmss = sec => C.isNum(sec) ? Math.floor(sec / 60) + 'm ' + String(sec % 60).padStart(2, '0') + 'd' : '–';
+      const cell = (r, q) => { const d = r.det[q.id]; const st0 = !d ? 'kosong' : isOk(d) ? 'ok' : d.status === 'sebagian' ? 'part' : d.status === 'perlu koreksi' ? 'man' : d.status === 'kosong' ? 'kosong' : d.status === 'tidak dinilai' ? 'na' : 'bad'; return `<i class="hm ${st0}" title="No. ${R.questions.indexOf(q) + 1}: ${esc(d ? d.status : 'kosong')}"></i>`; };
+      const pesertaHTML = `<div class="card"><div class="card-head"><h3>👥 Peserta (${R.rows.length})</h3><div class="tabs" style="margin:0"><button class="${repSort === 'score' ? 'on' : ''}" data-act="rp-sort" data-s="score">Urut nilai</button><button class="${repSort === 'name' ? 'on' : ''}" data-act="rp-sort" data-s="name">Urut nama</button></div></div>
+        <div class="table-wrap"><table class="rep-table"><thead><tr><th class="num">#</th><th>Nama</th>${R.classes.length > 1 ? '<th>Kelas</th>' : ''}<th class="num">${R.scoreLabel}</th><th class="num">✔</th><th class="num">✖</th><th class="num">○</th><th>Peta jawaban (per soal)</th><th class="num">Waktu</th><th></th></tr></thead><tbody>
+        ${rows.map((r, k) => { const vals = graded.map(q => r.det[q.id]); const nOk = vals.filter(isOk).length, nEmp = vals.filter(d => !d || d.status === 'kosong').length; return `<tr>
+          <td class="num">${repSort === 'score' && C.isNum(r.score) ? (k < 3 ? ['🥇', '🥈', '🥉'][k] : k + 1) : k + 1}</td><td><b>${esc(r.name)}</b>${r.violations ? ` <span class="pill bad" title="pelanggaran">⚠${r.violations}</span>` : ''}</td>${R.classes.length > 1 ? `<td class="small">${esc(r.cls)}</td>` : ''}
+          <td class="num"><span class="pill ${scoreClass2(r.score, R.kktp)}">${C.isNum(r.score) ? fmt(r.score, 1) + (R.mode === 'game' ? '%' : '') : r.finished ? '–' : 'mengerjakan'}</span></td>
+          <td class="num">${nOk}</td><td class="num">${graded.length - nOk - nEmp}</td><td class="num">${nEmp}</td>
+          <td><div class="hm-row">${graded.map(q => cell(r, q)).join('')}</div></td><td class="num small">${mmss(r.secs)}</td>
+          <td><button class="btn ghost sm" data-act="rp-rev" data-id="${esc(r.id)}">${r.review ? '📝 Jawaban' : '👁 Jawaban'}</button></td></tr>`; }).join('') || `<tr><td colspan="10" class="empty">Belum ada yang mengumpulkan.</td></tr>`}
+        </tbody></table></div><div class="hm-legend small muted"><span><i class="hm ok"></i>benar</span><span><i class="hm part"></i>sebagian</span><span><i class="hm bad"></i>salah</span><span><i class="hm man"></i>perlu koreksi</span><span><i class="hm kosong"></i>kosong</span></div></div>`;
+      const LET = 'ABCDEFGH';
+      const soalHTML = `<div class="rep-qs">${qstat.map((x, k) => {
+        const q = x.q, no = R.questions.indexOf(q) + 1;
+        const keyL = String(q.answer || '').toUpperCase().split(',');
+        const optsList = q.type === 'bs' ? [['B', 'Benar'], ['S', 'Salah']] : (q.options || []).map(o => [o.label, o.text]);
+        const maxD = Math.max(1, ...Object.values(x.dist));
+        return `<div class="card rep-q"><div class="card-head"><span class="qn">${no}</span><span class="pill">${QT.TYPES[q.type] ? QT.TYPES[q.type].icon + ' ' + TYPE_LABEL[q.type] : q.type}</span>
+            <span class="pill ${x.pct >= 80 ? 'ok' : x.pct >= 40 ? 'warn' : 'bad'}">${x.pct >= 80 ? '😀 Mudah' : x.pct >= 40 ? '🙂 Sedang' : '😓 Sulit'}</span><b class="rep-pct" style="margin-left:auto">${x.n ? x.pct + '%' : '–'}</b></div>
+          <div class="q-text small" style="max-height:4.8em;overflow:hidden">${QT.rich(q.text)}</div>
+          <div class="bar" style="margin:8px 0"><i style="width:${x.pct}%"></i></div>
+          <div class="small muted">✔ ${x.ok} benar${x.part ? ' · ◐ ' + x.part + ' sebagian' : ''} · ✖ ${Math.max(0, x.n - x.ok - x.part - x.emp - x.manual)} salah · ○ ${x.emp} kosong${x.manual ? ' · ✍ ' + x.manual + ' perlu koreksi' : ''}</div>
+          ${optsList.length ? `<div class="rep-dist">${optsList.map(([l, t]) => `<div class="rep-opt ${keyL.indexOf(l) >= 0 ? 'key' : ''}"><span class="lab">${l}</span><span class="rep-ot">${QT.rich(t)}</span><div class="rep-ob"><i style="width:${(x.dist[l] || 0) / maxD * 100}%"></i></div><b>${x.dist[l] || 0}</b></div>`).join('')}</div>` : ''}
+        </div>`; }).join('') || '<div class="card empty">Tidak ada soal yang dinilai.</div>'}</div>`;
+      const belumHTML = `<div class="card"><h3>⏳ Belum mengerjakan (${R.notDone.length})</h3>${R.notDone.length ? `<div class="btns">${R.notDone.map(m => `<span class="pill">${esc(m.name)}${R.classes.length > 1 ? ' · ' + esc(m.cls) : ''}</span>`).join('')}</div>` : '<p class="muted">Semua murid sudah mengerjakan. 🎉</p>'}</div>`;
+      box.classList.remove('muted');
+      box.innerHTML = `<div class="grid g4 rep-tiles">
+          ${tile(done.length + (R.notDone.length ? '<small>/' + (done.length + R.notDone.length) + '</small>' : ''), 'mengumpulkan')}
+          ${tile(C.isNum(avg) ? fmt(avg, 1) + (R.mode === 'game' ? '%' : '') : '–', R.mode === 'game' ? 'akurasi rata-rata' : 'rata-rata nilai', scoreClass2(avg, R.kktp))}
+          ${tile(scores.length ? fmt(Math.max(...scores), 1) + ' / ' + fmt(Math.min(...scores), 1) : '–', 'tertinggi / terendah')}
+          ${tile(scores.length ? Math.round(tuntas / scores.length * 100) + '%' : '–', `tuntas (≥ KKTP ${R.kktp})`)}
+        </div>
+        ${hard ? `<div class="note warn" style="margin:0 0 12px">😓 <b>${hard} soal</b> dijawab benar oleh kurang dari 40% murid — pertimbangkan pembahasan ulang atau periksa kunci jawabannya (tab Analisis Soal).</div>` : ''}
+        <div class="tabs no-print"><button class="${repTab === 'peserta' ? 'on' : ''}" data-act="rp-tab" data-t="peserta">👥 Peserta</button><button class="${repTab === 'soal' ? 'on' : ''}" data-act="rp-tab" data-t="soal">❓ Analisis Soal</button><button class="${repTab === 'belum' ? 'on' : ''}" data-act="rp-tab" data-t="belum">⏳ Belum mengerjakan <span class="pill">${R.notDone.length}</span></button></div>
+        ${repTab === 'soal' ? soalHTML : repTab === 'belum' ? belumHTML : pesertaHTML}
+        <table id="rp-xls-table" class="hidden"><thead><tr><th>No</th><th>Nama</th><th>Kelas</th><th>${R.scoreLabel}</th>${graded.map(q => `<th>Soal ${R.questions.indexOf(q) + 1}</th>`).join('')}</tr></thead><tbody>${rows.map((r, k) => `<tr><td>${k + 1}</td><td>${esc(r.name)}</td><td>${esc(r.cls)}</td><td>${C.isNum(r.score) ? r.score : ''}</td>${graded.map(q => { const d = r.det[q.id]; return `<td>${d ? (d.status === 'perlu koreksi' ? '?' : (+d.got || 0)) : ''}</td>`; }).join('')}</tr>`).join('')}</tbody></table>`;
+    }
+    return out;
+  }
+  /** Lihat jawaban satu pemain kuis permainan. */
+  function answersModal(R, r) {
+    modal(`<h2>${esc(r.name)}</h2><p class="small muted" style="margin-top:0">${R.scoreLabel}: ${C.isNum(r.score) ? fmt(r.score, 1) + (R.mode === 'game' ? '%' : '') : '–'}${r.points !== null && r.points !== undefined ? ' · ' + fmt(r.points) + ' poin' : ''}</p>
+      ${R.questions.map((q, k) => { const d = r.det[q.id]; return `<div class="q-card"><div class="q-head"><span class="qn">${k + 1}</span><span class="pill">${TYPE_LABEL[q.type] || q.type}</span><span class="pill ${d && d.status === 'benar' ? 'ok' : d && d.status === 'sebagian' ? 'warn' : 'bad'}">${esc(d ? d.status : 'kosong')}</span></div><div class="q-text small">${QT.rich(q.text)}</div><div class="small" style="margin-top:6px">${QT.answerHTML(q, r.ans[q.id])}</div><div class="small muted">Kunci: ${esc(QT.keyText(q))}</div></div>`; }).join('')}
+      <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
+  }
+
   /* ================= Ujian berjalan & riwayat ================= */
   let monitorPoll = null, monitorFilter = 'all';
   const sinceText = t => { if (!t) return ''; const d = (Date.now() - new Date(String(t).replace(' ', 'T')).getTime()) / 60000; return d < 1 ? 'baru saja' : d < 60 ? Math.floor(d) + ' menit lalu' : d < 1440 ? Math.floor(d / 60) + ' jam lalu' : tgl(t); };
@@ -2744,7 +3102,7 @@ B. VII B</pre></div></div></div>
       };
       const row = x => `<tr><td class="small">${x.kind === 'token' ? (x.lastAt ? tgl(x.lastAt) : '–') : tgl(x.endedAt || x.createdAt)}</td><td><b>${esc(x.title)}</b></td><td>${kindPill(x)}</td><td>${x.classes.map(esc).join(', ') || '<span class="muted">nama bebas</span>'}</td>
         <td class="num">${x.finished}${x.expected ? '/' + x.expected : ''}</td><td class="num">${x.avg !== null && x.avg !== undefined ? fmt(x.avg, x.kind !== 'token' && x.mode === 'game' ? 0 : 1) + (x.kind !== 'token' && x.mode === 'game' ? ' poin' : '') : '–'}</td><td class="small">${esc(x.owner || '')}</td>
-        <td>${x.kind === 'token' ? `<a class="btn ghost sm" href="#/asesmen/${x.type}/${x.id}">📊 Nilai</a>` : `<a class="btn ghost sm" href="#/kuis/${x.id}">📊 Hasil</a>`}</td></tr>`;
+        <td><a class="btn ghost sm" href="#/hasil/${x.kind === 'token' ? 'a' : 'g'}/${x.id}">📊 Laporan</a></td></tr>`;
       $('#mon').innerHTML = `<div class="grid g4 mon-top">
           <div class="card stat"><div class="num">${live.length}</div><div class="lbl">ujian/kuis berjalan</div></div>
           <div class="card stat"><div class="num">${live.reduce((t, x) => t + (x.kind === 'token' ? 0 : x.working || 0), 0)}</div><div class="lbl">murid sedang mengerjakan</div></div>

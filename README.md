@@ -128,6 +128,12 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Perpustakaan Soal & Hasil Ujian (v5.14)
+
+- **📚 Perpustakaan Soal** (menu Soal): kartu bersampul (gambar soal atau ikon mapel), jumlah soal & jenis soal, pembuat, berapa kali dipakai. Panel kiri: Semua / Milik saya / Guru lain / **Folder**. Pencarian, urutan (terbaru, A–Z, paling sering dipakai, soal terbanyak), tampilan kartu/daftar. Tombol **▶ Mulai** → Kuis Permainan, Ujian (Kuis Mode Ujian), atau Asesmen + Token; menu **⋯** → detail, edit, duplikat, pindah folder, lihat hasil, hapus. Halaman detail paket soal: daftar soal (kunci bisa disembunyikan) dan riwayat pemakaian.
+- **📊 Hasil Ujian** (menu Kuis): semua laporan ujian token/asesmen, Kuis Mode Ujian, dan Kuis Permainan dengan filter jenis, kelas, mapel, waktu, milik saya, dan per paket soal. Laporan tiap ujian: ringkasan (mengumpulkan, rata-rata, tertinggi/terendah, % tuntas KKTP), peringatan soal sulit, tab **Peserta** (peringkat 🥇, ✔/✖/○, **peta jawaban per soal**, waktu, buka jawaban/koreksi), tab **Analisis Soal** (% benar, Mudah/Sedang/Sulit, sebaran pilihan A–E dengan kunci ditandai), tab **Belum mengerjakan**; unduh Excel, cetak, simpan nilai kuis. Ujian token untuk beberapa kelas digabung dalam satu laporan.
+- Menu **Unggah & Buat Soal** untuk mengunggah PDF/teks dan membuat soal; **Ujian Berjalan** untuk memantau ujian yang sedang berlangsung.
+
 ## Atasi murid bermasalah, simpan otomatis ujian token, perpustakaan soal (v5.13)
 
 - Tombol **🛠 Atasi masalah** per murid (Kuis Mode Ujian: tabel peserta; ujian token: kolom Online di daftar nilai). Hanya murid itu yang terpengaruh:

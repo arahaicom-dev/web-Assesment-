@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.13.0');
+define('APP_VERSION', '5.14.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -595,9 +595,11 @@ try {
       $d = json_decode($g['data'], true); $set = isset($d['settings']) ? $d['settings'] : array();
       $isExam = isset($set['mode']) && $set['mode'] === 'exam';
       $cids = !empty($set['classIds']) ? $set['classIds'] : ($g['class_id'] ? array($g['class_id']) : array());
-      $st = one('SELECT COUNT(*) n, SUM(finished_at IS NOT NULL) f, SUM(started_ms > 0 AND finished_at IS NULL) w, AVG(CASE WHEN finished_at IS NOT NULL THEN ' . ($isExam ? 'exam_score' : 'score') . ' END) av, COALESCE(SUM(violations),0) v FROM game_players WHERE game_id = ?', array($g['id']));
+      $st = one('SELECT COUNT(*) n, COALESCE(SUM(correct),0) c, COALESCE(SUM(answered),0) an, SUM(finished_at IS NOT NULL) f, SUM(started_ms > 0 AND finished_at IS NULL) w, AVG(CASE WHEN finished_at IS NOT NULL THEN ' . ($isExam ? 'exam_score' : 'score') . ' END) av, COALESCE(SUM(violations),0) v FROM game_players WHERE game_id = ?', array($g['id']));
       $expected = 0; foreach ($cids as $c) $expected += isset($clsSize[$c]) ? $clsSize[$c] : 0;
       $games[] = array('kind' => 'game', 'id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'mode' => $isExam ? 'exam' : 'game',
+        'qsetId' => isset($set['qsetId']) ? $set['qsetId'] : '', 'subjectId' => $g['subject_id'], 'classIds' => $cids, 'questionCount' => isset($d['questions']) ? count($d['questions']) : 0,
+        'acc' => (int)$st['an'] ? round($st['c'] / $st['an'] * 100, 1) : null,
         'classes' => array_values(array_filter(array_map(function ($c) use ($clsName) { return isset($clsName[$c]) ? $clsName[$c] : null; }, $cids))),
         'expected' => $expected, 'players' => (int)$st['n'], 'finished' => (int)$st['f'], 'working' => $isExam ? (int)$st['w'] : max(0, (int)$st['n'] - (int)$st['f']),
         'avg' => $st['av'] === null ? null : round((float)$st['av'], 1), 'violations' => (int)$st['v'], 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0,
@@ -616,7 +618,7 @@ try {
       $avg = null;
       if (isset($subs[$x['id']])) { $sum = 0; $k = 0; foreach (rows('SELECT data FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $x['id'])) as $sb) { $sd = json_decode($sb['data'], true); if (isset($sd['result']['score'])) { $sum += $sd['result']['score']; $k++; } } if ($k) $avg = round($sum / $k, 1); }
       $cid = prop($a, 'classId'); $own = prop($a, 'ownerId') ?: $x['updated_by'];
-      $tokens[] = array('kind' => 'token', 'id' => $x['id'], 'type' => prop($a, 'type'), 'title' => prop($a, 'title', ''), 'open' => $open, 'code' => $open ? prop($a, 'examCode') : '', 'linkId' => prop($a, 'linkId'),
+      $tokens[] = array('kind' => 'token', 'id' => $x['id'], 'type' => prop($a, 'type'), 'title' => prop($a, 'title', ''), 'qsetId' => prop($a, 'qsetId', ''), 'subjectId' => prop($a, 'subjectId'), 'classId' => $cid, 'date' => prop($a, 'date'), 'open' => $open, 'code' => $open ? prop($a, 'examCode') : '', 'linkId' => prop($a, 'linkId'),
         'classes' => array(isset($clsName[$cid]) ? $clsName[$cid] : ''), 'expected' => isset($clsSize[$cid]) ? $clsSize[$cid] : 0, 'finished' => isset($subs[$x['id']]) ? (int)$subs[$x['id']]['n'] : 0, 'working' => isset($work[$x['id']]) ? $work[$x['id']] : 0,
         'avg' => $avg, 'duration' => (int)prop($a, 'duration', 0), 'firstAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['first'] : null, 'lastAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['last'] : null,
         'owner' => isset($names[(int)$own]) ? $names[(int)$own] : '', 'ownerId' => (int)$own);
