@@ -128,6 +128,13 @@
     const u = L.filter((x, i) => L.indexOf(x) === i).sort();
     return u.length >= 2 ? u.join(',') : null;
   }
+  /** Buang huruf pilihan yang tertulis dua kali, mis. "a) A. 15/16" → "15/16". */
+  function stripDupLabel(o) {
+    const re = new RegExp('^\\(?' + o.label + '\\s*[.)\\]]\\s*', 'i');
+    let t = o.text, k = 0;
+    while (re.test(t) && k++ < 2) t = t.replace(re, '');
+    return t;
+  }
   function finalizeQuestion(q) {
     q.text = q.text.replace(/\s{2,}/g, ' ').trim();
     q.options.forEach(o => { o.text = o.text.replace(/\s{2,}/g, ' ').trim(); });
@@ -142,6 +149,10 @@
       const sp = splitInlineOptions(' ' + last.text, q.options.length, 1);
       if (sp && sp.head) { last.text = sp.head; q.options = q.options.concat(sp.options); }
     }
+    q.options.forEach(o => { o.text = stripDupLabel(o); });
+    // pecahan bersusun dari PDF ("15⁄16") → "15/16"
+    q.text = q.text.replace(/⁄/g, '/');
+    q.options.forEach(o => { o.text = o.text.replace(/⁄/g, '/'); });
     extractPoints(q);
     markAnswerInOptions(q);
 
@@ -377,12 +388,25 @@
       }
 
       // Baris berisi huruf pilihan saja (pilihan berupa gambar): "A.   B.   C.   D."
-      if (/^(?:\(?[A-Ha-h]\s*[.)]\s*){2,8}$/.test(t)) {
-        const labs = (t.match(/[A-Ha-h](?=\s*[.)])/g) || []).map(x => x.toUpperCase());
-        if (labs.every((l, k) => l === LETTERS[cur.options.length + k])) {
-          labs.forEach(l => cur.options.push({ label: l, text: '(lihat gambar)' }));
-          lastTarget = 'option'; subList = null;
-          continue;
+      if (/^(?:\(?[A-Ha-h]\s*[.)]\s*){1,16}$/.test(t)) {
+        // label ganda "a) A.   b) B." dihitung satu
+        const labs = (t.match(/[A-Ha-h](?=\s*[.)])/g) || []).map(x => x.toUpperCase()).filter((l, k, a) => k === 0 || l !== a[k - 1]);
+        if (labs.length >= 1 && labs.every((l, k) => l === LETTERS[cur.options.length + k])) {
+          // isi pilihan ada di baris berikutnya, mis. pecahan bersusun: "15/16   11/16"
+          let j = i + 1; while (j < lines.length && !lines[j].trim()) j++;
+          const nx = (lines[j] || '').trim();
+          const parts = nx.split(/\s{3,}/).map(x => x.trim()).filter(Boolean);
+          const plain = nx && !/^\(?\d{1,3}\s*[.)\]:]\s+\D/.test(nx) && !/^\(?[A-Ha-h]\s*[.)\]]/.test(nx) && !KEY_HEADING.test(nx);
+          if (plain && parts.length === labs.length) {
+            labs.forEach((l, k) => cur.options.push({ label: l, text: parts[k] }));
+            i = j; lastTarget = 'option'; subList = null;
+            continue;
+          }
+          if (labs.length >= 2) {
+            labs.forEach(l => cur.options.push({ label: l, text: '(lihat gambar)' }));
+            lastTarget = 'option'; subList = null;
+            continue;
+          }
         }
       }
 
@@ -675,7 +699,7 @@
     const OPS = lib.OPS;
     const ops = await page.getOperatorList();
     const mul = (m, n) => [m[0] * n[0] + m[2] * n[1], m[1] * n[0] + m[3] * n[1], m[0] * n[2] + m[2] * n[3], m[1] * n[2] + m[3] * n[3], m[0] * n[4] + m[2] * n[5] + m[4], m[1] * n[4] + m[3] * n[5] + m[5]];
-    let ctm = [1, 0, 0, 1, 0, 0]; const stack = []; const boxes = [];
+    let ctm = [1, 0, 0, 1, 0, 0]; const stack = []; const boxes = []; const bars = [];
     const imgOps = [OPS.paintImageXObject, OPS.paintInlineImageXObject, OPS.paintJpegXObject, OPS.paintImageXObjectRepeat].filter(x => x !== undefined);
     for (let i = 0; i < ops.fnArray.length; i++) {
       const fn = ops.fnArray[i], args = ops.argsArray[i];
@@ -684,13 +708,44 @@
       else if (fn === OPS.transform) ctm = mul(ctm, args);
       else if (fn === OPS.paintFormXObjectBegin) { stack.push(ctm.slice()); if (args && args[0] && args[0].length === 6) ctm = mul(ctm, args[0]); }
       else if (fn === OPS.paintFormXObjectEnd) ctm = stack.pop() || [1, 0, 0, 1, 0, 0];
+      else if (fn === OPS.constructPath && args && args[2] && args[2].length === 4) {
+        const mm = args[2];
+        const pts = [[mm[0], mm[2]], [mm[1], mm[2]], [mm[0], mm[3]], [mm[1], mm[3]]].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
+        const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
+        const b = { x1: Math.min.apply(null, xs), x2: Math.max.apply(null, xs), y1: Math.min.apply(null, ys), y2: Math.max.apply(null, ys) };
+        if (b.y2 - b.y1 < 2.5 && b.x2 - b.x1 > 3 && b.x2 - b.x1 < 160) bars.push(b);
+      }
       else if (imgOps.indexOf(fn) >= 0) {
         const pts = [[0, 0], [1, 0], [0, 1], [1, 1]].map(([x, y]) => [ctm[0] * x + ctm[2] * y + ctm[4], ctm[1] * x + ctm[3] * y + ctm[5]]);
         const xs = pts.map(p => p[0]), ys = pts.map(p => p[1]);
         boxes.push({ x1: Math.min.apply(null, xs), x2: Math.max.apply(null, xs), y1: Math.min.apply(null, ys), y2: Math.max.apply(null, ys) });
       }
     }
-    return boxes;
+    return { boxes, bars };
+  }
+
+  /**
+   * Gabungkan pecahan bersusun (pembilang di atas garis, penyebut di bawah) menjadi satu teks "a⁄b".
+   * Hanya digabung bila ada garis bagi di antaranya, agar tabel angka tidak ikut tergabung.
+   */
+  const FRAC_TOKEN = /^\s*[-−]?[0-9A-Za-z+\-−×·()^.,]{1,8}\s*$/;
+  function mergeFractions(items, bars) {
+    if (!bars || !bars.length) return items;
+    const used = new Set(), out = [];
+    const cand = items.filter(it => FRAC_TOKEN.test(it.str) && /[0-9a-z]/i.test(it.str));
+    const cx = it => it.x + it.w / 2;
+    for (const bar of bars) {
+      const by = (bar.y1 + bar.y2) / 2, bw = bar.x2 - bar.x1;
+      const inX = it => cx(it) >= bar.x1 - 2 && cx(it) <= bar.x2 + 2 && it.w <= bw + 6;
+      const above = cand.filter(it => !used.has(it) && inX(it) && it.y > by - 1 && it.y - by < (it.h || 10) * 1.1).sort((a, b) => a.y - b.y)[0];
+      const below = cand.filter(it => !used.has(it) && inX(it) && it.y < by && by - it.y < (it.h || 10) * 1.6 && by - (it.y + (it.h || 10) * 0.75) < (it.h || 10) * 0.7).sort((a, b) => b.y - a.y)[0];
+      if (!above || !below || above === below) continue;
+      used.add(above); used.add(below);
+      const h = Math.max(above.h || 10, below.h || 10);
+      out.push({ str: above.str.trim() + '⁄' + below.str.trim(), x: Math.min(above.x, below.x, bar.x1), y: by - h * 0.3, w: Math.max(bw, above.w, below.w), h, frac: true });
+    }
+    if (!out.length) return items;
+    return items.filter(it => !used.has(it)).concat(out);
   }
 
   /** Ekstrak teks (dan posisi gambar) dari file PDF memakai pdf.js (window.pdfjsLib). */
@@ -704,14 +759,17 @@
       const page = await doc.getPage(p);
       const vp = page.getViewport({ scale: 1 });
       const tc = await page.getTextContent();
-      const items = tc.items.map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height }));
+      let items = tc.items.map(it => ({ str: it.str, x: it.transform[4], y: it.transform[5], w: it.width, h: Math.abs(it.transform[3]) || it.height }));
+      let geo = { boxes: [], bars: [] };
+      try { geo = await pageImages(page, lib); } catch (e) { /* tanpa info gambar/garis */ }
+      try { items = mergeFractions(items, geo.bars); } catch (e) { /* biarkan apa adanya */ }
       const lay = layoutLines(items, vp.width);
       lay.lines.forEach(l => { all.push(l.text); meta.push({ page: p, group: l.group, y: l.y }); });
       charCount += lay.lines.map(l => l.text).join('').replace(/\s/g, '').length;
       all.push(''); meta.push(null);
       try {
         const area = vp.width * vp.height;
-        for (const bx of await pageImages(page, lib)) {
+        for (const bx of geo.boxes) {
           const a = (bx.x2 - bx.x1) * (bx.y2 - bx.y1);
           if (a < 300 || a > area * 0.85 || bx.x2 - bx.x1 < 12 || bx.y2 - bx.y1 < 12) continue; // ikon kecil / latar halaman penuh
           images.push(Object.assign({ page: p, group: groupOf(bx, lay) }, bx));

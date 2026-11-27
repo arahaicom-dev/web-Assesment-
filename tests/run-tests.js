@@ -123,6 +123,16 @@ t('penilaian jenis soal baru (nilai sebagian)', () => {
   assert.strictEqual(r.total, 4); assert.strictEqual(r.earned, 3); assert.strictEqual(r.score, 75);
 });
 
+t('huruf pilihan ganda dobel "a) A." dibuang', () => {
+  const r = P.parse('1. Pecahan yang senilai 1/2 adalah ....\na) A. 2/4   b) B. 2/3\nc) C. 3/4   d) D. 1/3\nKunci: A');
+  assert.deepStrictEqual(r.questions[0].options.map(o => o.label + ':' + o.text), ['A:2/4', 'B:2/3', 'C:3/4', 'D:1/3']);
+});
+t('baris label saja diikuti baris isi (pecahan bersusun dari PDF)', () => {
+  const r = P.parse('1. Daerah yang diarsir menunjukkan pecahan ....\na) A.    b) B.\n15⁄16   11⁄16\nc) C.   d) D.\n12⁄32   15⁄32\n2. Soal berikutnya?\nA. ya\nB. tidak');
+  assert.deepStrictEqual(r.questions[0].options.map(o => o.label + ':' + o.text), ['A:15/16', 'B:11/16', 'C:12/32', 'D:15/32']);
+  assert.strictEqual(r.questions.length, 2);
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur

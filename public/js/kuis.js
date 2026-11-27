@@ -216,14 +216,14 @@
     G.q = d.question; G.busy = false;
     const q = d.question;
     let body;
-    if (q.type === 'pg') body = `<div class="kz-opts n${q.options.length}">${q.options.map((o, k) => `<button class="kz-opt c${k % 6}" data-v="${esc(o.label)}"><span class="kz-opt-l">${'ABCDEF'[k]}</span><span>${esc(o.text)}</span></button>`).join('')}</div>`;
+    if (q.type === 'pg') body = `<div class="kz-opts n${q.options.length}">${q.options.map((o, k) => `<button class="kz-opt c${k % 6}" data-v="${esc(o.label)}"><span class="kz-opt-l">${'ABCDEF'[k]}</span><span>${QT.rich(o.text)}</span></button>`).join('')}</div>`;
     else if (q.type === 'bs') body = `<div class="kz-opts n2"><button class="kz-opt c3" data-v="B"><span class="kz-opt-l">✓</span><span>Benar</span></button><button class="kz-opt c0" data-v="S"><span class="kz-opt-l">✗</span><span>Salah</span></button></div>`;
     else if (q.type === 'isian') body = `<form id="isian" class="kz-isian"><input id="ans" autocomplete="off" placeholder="Ketik jawabanmu…"><button class="btn lg kz-go" type="submit">Kirim</button></form>`;
     else body = `<div class="kz-card kz-qt" id="qt-host"></div><div style="text-align:center;margin-top:12px"><button class="btn lg kz-go" id="qt-send">${q.type === 'slide' ? 'Lanjut ▶' : 'Kirim ✔'}</button></div>`;
     view.innerHTML = `<div class="kz-q pop">
       <div class="kz-q-head"><span class="kz-pill">${d.index} / ${d.total}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
       ${q.type === 'pg' || q.type === 'bs' || q.type === 'isian' ? '' : `<div class="kz-type">${typeLabel(q.type)}</div>`}
-      <div class="kz-card kz-q-card">${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}${hideText(q.type) ? '<div class="kz-q-text small">Lengkapi kalimat berikut.</div>' : `<div class="kz-q-text">${esc(q.text)}</div>`}</div>
+      <div class="kz-card kz-q-card">${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}${hideText(q.type) ? '<div class="kz-q-text small">Lengkapi kalimat berikut.</div>' : `<div class="kz-q-text">${QT.rich(q.text)}</div>`}</div>
       ${body}</div>`;
     const host = $('#qt-host');
     if (host) { const h = QT.mount(host, q, '', {}); $('#qt-send').onclick = () => send(h.get() || ''); }
@@ -360,7 +360,7 @@
         <div class="kz-card">
           <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${typeLabel(q.type)}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
           ${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}
-          ${hideText(q.type) ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>`}
+          ${hideText(q.type) ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${QT.rich(q.text)}</div>`}
           <div id="qt-host"></div>
           <div class="btns" style="justify-content:space-between;margin-top:16px">
             <button class="btn ghost" id="ex-prev" ${E.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
@@ -473,4 +473,6 @@
   G.code = (new URLSearchParams(location.search).get('kode') || '').replace(/\D/g, '');
   if (G.code.length === 6) { $('#view').innerHTML = ''; (async () => { try { G.info = await api(''); const saved = JSON.parse(localStorage.getItem(saveKey()) || 'null'); if (saved && saved.token) { G.token = saved.token; try { return resume(await api('state')); } catch (e) { G.token = ''; localStorage.removeItem(saveKey()); } } stepName(); } catch (e) { stepCode(e.message); } })(); }
   else stepCode();
+  // :active di layar sentuh iOS langsung terasa
+  document.addEventListener('touchstart', () => {}, { passive: true });
 })();

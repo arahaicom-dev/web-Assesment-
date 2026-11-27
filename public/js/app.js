@@ -29,7 +29,7 @@
   /** Pratinjau satu soal seperti tampilan murid (bisa dicoba) + kunci. */
   function previewCard(x, i) {
     return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${QT.TYPES[x.type].icon} ${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span></div>
-      ${x.image && x.type !== 'titik' && x.type !== 'label' ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}${x.type === 'seret' || x.type === 'dropdown' ? '' : `<div class="q-text">${esc(x.text)}</div>`}
+      ${x.image && x.type !== 'titik' && x.type !== 'label' ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}${x.type === 'seret' || x.type === 'dropdown' ? '' : `<div class="q-text">${QT.rich(x.text)}</div>`}
       <div class="pv-mount" data-pv="${i}"></div>
       ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
   }
@@ -87,7 +87,7 @@
     $$('[data-demo]', root).forEach(el => {
       const t = el.dataset.demo, q = guideExample(t); if (!q) return;
       let ans = '';
-      el.innerHTML = `${q.image && t !== 'titik' && t !== 'label' && t !== 'gambar' ? `<img src="${q.image}" class="q-img">` : ''}${t === 'seret' || t === 'dropdown' ? '' : `<div class="q-text" style="margin-bottom:10px">${esc(q.text)}</div>`}<div class="pd-mount"></div>
+      el.innerHTML = `${q.image && t !== 'titik' && t !== 'label' && t !== 'gambar' ? `<img src="${q.image}" class="q-img">` : ''}${t === 'seret' || t === 'dropdown' ? '' : `<div class="q-text" style="margin-bottom:10px">${QT.rich(q.text)}</div>`}<div class="pd-mount"></div>
         ${t === 'slide' ? '' : `<div class="btns" style="margin-top:10px"><button class="btn sm pd-check">✔ Periksa jawaban</button><button class="btn ghost sm pd-reset">↺ Ulang</button></div><div class="pd-res small"></div>`}`;
       const mnt = () => { ans = ''; $('.pd-res', el) && ($('.pd-res', el).innerHTML = ''); QT.mount($('.pd-mount', el), QT.publicView(q, 'demo'), '', { onChange: v => { ans = v; } }); };
       mnt();
@@ -342,7 +342,17 @@
   }
 
   /* ================= Router ================= */
-  let current = null;
+  let current = null, lastSection = null, lastHash = null;
+  /** Efek singkat saat berpindah menu (ikon menu muncul + bunyi pendek). */
+  function menuIntro(r, parts) {
+    const key = r === 'asesmen' && parts[1] ? 'asesmen/' + parts[1] : r;
+    const prev = lastSection; lastSection = key;
+    if (!prev || prev === key || !window.MenuFx) return;
+    let icon, label;
+    if (r === 'asesmen' && T[parts[1]]) { icon = T[parts[1]].icon; label = T[parts[1]].name; }
+    else { const n = NAV.find(x => x.href === r || x.href === key); if (!n) return; icon = n.ic; label = n.label; }
+    MenuFx.play(key, icon, label);
+  }
   function setTitle(title, sub) { $('#page-title').innerHTML = `<h1>${title}</h1>${sub ? `<div class="muted small">${sub}</div>` : ''}`; }
   function route() {
     let hash = (location.hash || '#/beranda').replace(/^#\/?/, '');
@@ -350,6 +360,8 @@
     const parts = hash.split('/');
     const r = parts[0] || 'beranda';
     renderNav(hash);
+    const hashChanged = hash !== lastHash; lastHash = hash;
+    if (hashChanged) menuIntro(r, parts);
     document.body.classList.remove('nav-open');
     closeMenuSheet();
     const view = $('#view');
@@ -384,7 +396,7 @@
     const sub = S.subscription;
     if (S.saas && sub && sub.active && sub.status === 'trial' && r !== 'langganan') banner += `<div class="note no-print" style="margin-bottom:16px">🎁 Masa coba gratis tersisa <b>${sub.daysLeft} hari</b>. <a href="#/langganan">Pilih paket langganan →</a></div>`;
     else if (S.saas && sub && sub.active && sub.status === 'active' && sub.daysLeft !== null && sub.daysLeft <= 7 && r !== 'langganan') banner += `<div class="note warn no-print" style="margin-bottom:16px">⏳ Langganan berakhir dalam <b>${sub.daysLeft} hari</b>. <a href="#/langganan">Perpanjang sekarang →</a></div>`;
-    view.innerHTML = `<div class="page">${banner}${out.html}</div>`;
+    view.innerHTML = `<div class="page${hashChanged ? " page-enter" : ""}">${banner}${out.html}</div>`;
     bindTilt(view);
     if (out.mount) out.mount(view);
     window.scrollTo({ top: 0 });
@@ -1107,10 +1119,10 @@
           const d = res.detail[i]; const ans = sub.answers[qq.id];
           const pill = d.status === 'benar' ? 'ok' : d.status === 'salah' || d.status === 'kosong' ? 'bad' : 'warn';
           const ansHtml = reviewAnsHTML(qq, ans);
-          if (d.status === 'tidak dinilai') return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(qq.text)}</div>${qq.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
+          if (d.status === 'tidak dinilai') return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${QT.rich(qq.text)}</div>${qq.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
           return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill ${pill}">${d.status}</span>
             <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${d.pts}" data-man="${qq.id}" value="${d.got}"${canRv ? '' : ' disabled'}> / ${d.pts}</span></div>
-            <div class="q-text small">${esc(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
+            <div class="q-text small">${QT.rich(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
         }).join('')}
         <div class="foot">${canRv ? '' : '<span class="small muted" style="margin-right:auto">👁 Hanya lihat — koreksi oleh pembuat asesmen atau admin.</span>'}<button class="btn ghost" data-close>Tutup</button>${canRv ? '<button class="btn" id="rv-save">Simpan Koreksi</button>' : ''}</div>`;
     };
@@ -1183,7 +1195,7 @@
         <div class="card">
           <div class="q-head" style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${ex.idx + 1}</span><span class="pill">${QT.TYPES[cur.type].icon} ${TYPE_LABEL[cur.type]}</span>${+cur.points ? `<span class="pill">${cur.points} poin</span>` : ''}<span class="muted small" style="margin-left:auto">Soal ${ex.idx + 1} dari ${qs.length}</span></div>
           ${cur.image && cur.type !== 'titik' && cur.type !== 'label' && cur.type !== 'gambar' ? `<img src="${cur.image}" alt="gambar soal" class="zoomable q-img">` : ''}
-          ${cur.type === 'seret' || cur.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${esc(cur.text)}</div>`}
+          ${cur.type === 'seret' || cur.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${QT.rich(cur.text)}</div>`}
           <div id="qt-host"></div>
           <div class="btns" style="justify-content:space-between;margin-top:16px">
             <button class="btn ghost" data-act="prev" ${ex.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
@@ -1769,6 +1781,13 @@
             ${g.diagnosticBands.map((b, i) => `<tr><td><input data-dband="${i}" data-k="name" value="${esc(b.name)}"></td><td><input type="number" data-dband="${i}" data-k="min" value="${b.min}" style="width:80px"></td></tr>`).join('')}
           </tbody></table></div>
         </div>
+        <div class="card"><h2>✨ Efek Menu</h2>
+          <p class="small muted" style="margin-top:0">Saat membuka menu, ikon menu muncul sekejap (±0,7 detik) disertai bunyi pendek. Hanya berlaku di perangkat ini.</p>
+          <label class="switch-row"><input type="checkbox" id="fx-anim" ${window.MenuFx && MenuFx.prefs().anim ? 'checked' : ''}><span class="sw"></span><span><b>Animasi gambar saat membuka menu</b></span></label>
+          <label class="switch-row" style="margin-top:8px"><input type="checkbox" id="fx-sound" ${window.MenuFx && MenuFx.prefs().sound ? 'checked' : ''}><span class="sw"></span><span><b>Bunyi saat membuka menu</b></span></label>
+          <label class="field" style="margin-top:8px"><span>Volume bunyi</span><input type="range" min="0" max="1" step="0.05" id="fx-vol" value="${window.MenuFx ? MenuFx.prefs().vol : 0.5}"></label>
+          <button class="btn soft sm" data-act="fx-try">▶ Coba efek</button>
+        </div>
         <div class="card"><h2>💾 Data</h2>
           <p class="small muted">${S.mode === 'server' ? 'Data tersimpan di <b>database MySQL</b> server dan bisa dibuka dari perangkat mana pun setelah login. Tetap ekspor cadangan secara berkala.' : 'Semua data tersimpan di browser perangkat ini. Ekspor cadangan secara berkala atau untuk memindahkan ke perangkat lain.'}</p>
           <div class="btns"><button class="btn" data-act="export">⬇ Ekspor Cadangan (.json)</button>${isAdmin() ? '<button class="btn soft" data-act="import">⬆ Pulihkan dari Cadangan</button>' : ''}<button class="btn ghost" data-act="demo">Muat Data Contoh</button>${isAdmin() ? '<button class="btn danger" data-act="reset">Hapus Semua Data</button>' : ''}</div>
@@ -1777,6 +1796,10 @@
       </div></div>`,
       mount(v) {
         if (window.innerWidth < 1000) $('#set-grid', v).style.gridTemplateColumns = '1fr';
+        if (window.MenuFx) {
+          const upd = () => { const pr = MenuFx.prefs(); pr.anim = $('#fx-anim', v).checked; pr.sound = $('#fx-sound', v).checked; pr.vol = +$('#fx-vol', v).value; MenuFx.save(pr); };
+          $('#fx-anim', v).onchange = upd; $('#fx-sound', v).onchange = upd; $('#fx-vol', v).onchange = () => { upd(); MenuFx.chime('coba'); };
+        }
         const live = () => { applyTheme(); S.save(); };
         $('#th-h', v).addEventListener('input', e => { t.h = +e.target.value; t.preset = 'custom'; live(); e.target.previousElementSibling && (e.target.parentNode.querySelector('span').textContent = `Warna bebas (geser) — hue ${t.h}°`); $$('.swatch', v).forEach(x => x.classList.remove('on')); });
         $('#th-s', v).addEventListener('input', e => { t.s = +e.target.value; live(); });
@@ -1793,6 +1816,7 @@
         $$('[data-dband]', v).forEach(inp => inp.addEventListener('change', () => { const b = g.diagnosticBands[+inp.dataset.dband]; b[inp.dataset.k] = inp.dataset.k === 'min' ? +inp.value : inp.value; S.save(); }));
       },
       actions: {
+        'fx-try': () => window.MenuFx && MenuFx.play('pengaturan-' + Date.now(), '✨', 'Efek Menu'),
         preset: el => { const p = S.PRESETS.find(x => x.id === el.dataset.id); Object.assign(t, { preset: p.id, h: p.h, s: p.s }, p.mode ? { mode: p.mode } : {}); applyTheme(); S.save(); keepScroll(); },
         export: () => download('asesmen-merdeka-cadangan-' + new Date().toISOString().slice(0, 10) + '.json', JSON.stringify(s, (k, v) => k && k[0] === '_' ? undefined : v, 1), 'application/json'),
         import: async () => {
@@ -2406,7 +2430,7 @@
         if (q.type === 'slide' || q.type === 'polling') return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(q.text)}</div>${q.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
         return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill ${pill}">${x.status}</span>
           <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${x.pts}" data-man="${esc(q.id)}" value="${manual[q.id] !== undefined ? manual[q.id] : x.got}"> / ${x.pts}</span></div>
-          <div class="q-text small">${esc(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
+          <div class="q-text small">${QT.rich(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
       }).join('')}
       <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`, { wide: true, noFocus: true });
     loadMedia(m);
@@ -2629,4 +2653,6 @@
   }).catch(e => {
     $('#view').innerHTML = `<div class="card"><h2>Tidak bisa memuat data</h2><p>${esc(e.message)}</p><p class="small muted">${S.backend === 'php' ? 'Periksa database di cPanel → MySQL® Databases. Untuk mengisi ulang pengaturan database, hapus file <b>api/config.php</b> lewat File Manager lalu muat ulang halaman ini.' : 'Periksa pengaturan database di cPanel → Setup Node.js App → Environment variables (DB_HOST, DB_NAME, DB_USER, DB_PASSWORD), lalu Restart. Detail juga tercatat di file log-aplikasi.txt di folder aplikasi.'}</p><button class="btn" onclick="location.reload()">Coba Lagi</button></div>`;
   });
+  // :active di layar sentuh iOS langsung terasa
+  document.addEventListener('touchstart', () => {}, { passive: true });
 })();

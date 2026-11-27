@@ -128,6 +128,13 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Pecahan, label ganda, klik halus & efek menu (v5.9)
+
+- **Pecahan bersusun dari PDF** (pembilang di atas garis, penyebut di bawah) kini terbaca utuh menjadi `15/16`; garis bagi dideteksi dari gambar vektor PDF sehingga tabel angka tidak ikut tergabung. Di web, pecahan `a/b` ditampilkan bersusun (tanggal `12/03/2024` dan satuan `km/jam` tidak diubah).
+- **Huruf pilihan ganda dobel** seperti `a) A. …` dibuang sehingga hanya huruf dari web yang tampil; baris berisi label saja (`a) A.   b) B.`) dipasangkan dengan isi di baris bawahnya.
+- **Klik lebih halus**: umpan balik tekan langsung di HP (tanpa jeda ketuk), transisi tombol/pilihan, dan halaman masuk dengan animasi lembut.
+- **Efek membuka menu**: ikon menu + maskot muncul ±0,7 detik disertai bunyi pendek (nada berbeda tiap menu). Tidak menghalangi klik; bisa dimatikan/diatur volumenya di **Pengaturan → ✨ Efek Menu**, dan otomatis lebih tenang bila perangkat memilih "kurangi gerakan".
+
 ## Hak akses antar-guru dalam satu sekolah (v5.8)
 
 | Data | Guru lain di sekolah yang sama | Pembuat | Admin sekolah |

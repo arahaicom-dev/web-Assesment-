@@ -3,6 +3,11 @@
 (function () {
   'use strict';
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  /** Teks aman + pecahan "a/b" ditampilkan bersusun (tanggal 12/03/2024 & satuan km/jam tidak diubah). */
+  function rich(t) {
+    return esc(t).replace(/(^|[\s(=+\-−×:;,\[])(-?\d{1,6}|[a-zA-Z])\/(\d{1,6}|[a-zA-Z])(?=$|[\s).,;:=+\-−×?!\]])/g,
+      (m, pre, a, b) => `${pre}<span class="frac"><span class="fn">${a}</span><span class="fd">${b}</span></span>`);
+  }
   const P = () => (typeof window !== 'undefined' && window.SoalParser) || require('./parser.js');
   const LET = 'ABCDEFGH';
   const pj = v => { if (v && typeof v === 'object') return v; try { return JSON.parse(v); } catch (e) { return null; } };
@@ -63,8 +68,8 @@
     const draw = () => { el.innerHTML = `<div class="qt qt-${v.type}">${HINT[v.type] ? `<div class="qt-hint">${HINT[v.type]}</div>` : ''}${body()}</div>`; bind(); };
     const body = () => {
       const a = st.ans, t = v.type;
-      if (t === 'pg' || t === 'polling') return (v.options || []).map((o, k) => `<div class="exam-opt ${a === o.label ? 'sel' : ''}" data-v="${esc(o.label)}"><span class="lab">${LET[k]}</span><span>${esc(o.text)}</span></div>`).join('');
-      if (t === 'pgk') { const s = a.split(',').filter(Boolean); return (v.options || []).map((o, k) => `<div class="exam-opt chk ${s.indexOf(o.label) >= 0 ? 'sel' : ''}" data-m="${esc(o.label)}"><span class="lab">${s.indexOf(o.label) >= 0 ? '✓' : LET[k]}</span><span>${esc(o.text)}</span></div>`).join(''); }
+      if (t === 'pg' || t === 'polling') return (v.options || []).map((o, k) => `<div class="exam-opt ${a === o.label ? 'sel' : ''}" data-v="${esc(o.label)}"><span class="lab">${LET[k]}</span><span>${rich(o.text)}</span></div>`).join('');
+      if (t === 'pgk') { const s = a.split(',').filter(Boolean); return (v.options || []).map((o, k) => `<div class="exam-opt chk ${s.indexOf(o.label) >= 0 ? 'sel' : ''}" data-m="${esc(o.label)}"><span class="lab">${s.indexOf(o.label) >= 0 ? '✓' : LET[k]}</span><span>${rich(o.text)}</span></div>`).join(''); }
       if (t === 'bs') return [['B', 'Benar'], ['S', 'Salah']].map(([x, l]) => `<div class="exam-opt ${a === x ? 'sel' : ''}" data-v="${x}"><span class="lab">${x}</span><span>${l}</span></div>`).join('');
       if (t === 'isian') return `<input class="ex-input qt-in" autocomplete="off" placeholder="Tulis jawaban singkat…" value="${esc(a)}">`;
       if (t === 'angka') return `<input class="ex-input qt-in" inputmode="decimal" autocomplete="off" placeholder="Contoh: 12,5" value="${esc(a)}">`;
@@ -89,12 +94,12 @@
       if (t === 'seret') {
         const m = pj(a) || []; const usedCount = {}; m.forEach(w => { if (w) usedCount[w] = (usedCount[w] || 0) + 1; });
         const avail = []; const cnt = Object.assign({}, usedCount); v.chips.forEach((w, k) => { if (cnt[w]) cnt[w]--; else avail.push({ w, k }); });
-        const sentence = segs(v.text, z => `<button class="qt-blank ${m[z.b] ? 'filled' : ''} ${st.sel !== null ? 'drop' : ''}" data-b="${z.b}">${m[z.b] ? esc(m[z.b]) : '&nbsp;'}</button>`).map(x => typeof x === 'string' ? esc(x) : x.html).join('');
+        const sentence = segs(v.text, z => `<button class="qt-blank ${m[z.b] ? 'filled' : ''} ${st.sel !== null ? 'drop' : ''}" data-b="${z.b}">${m[z.b] ? esc(m[z.b]) : '&nbsp;'}</button>`).map(x => typeof x === 'string' ? rich(x) : x.html).join('');
         return `<div class="qt-sentence">${sentence}</div><div class="qt-pool">${avail.map(c => `<button class="qt-chip ${st.sel === c.k ? 'pick' : ''}" data-k="${c.k}">${esc(c.w)}</button>`).join('')}</div>`;
       }
       if (t === 'dropdown') {
         const m = pj(a) || [];
-        return `<div class="qt-sentence">${segs(v.text, z => `<select class="qt-drop" data-b="${z.b}"><option value="">— pilih —</option>${(v.drops[z.b] || []).map(o => `<option ${m[z.b] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).map(x => typeof x === 'string' ? esc(x) : x.html).join('')}</div>`;
+        return `<div class="qt-sentence">${segs(v.text, z => `<select class="qt-drop" data-b="${z.b}"><option value="">— pilih —</option>${(v.drops[z.b] || []).map(o => `<option ${m[z.b] === o ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`).map(x => typeof x === 'string' ? rich(x) : x.html).join('')}</div>`;
       }
       if (t === 'titik') {
         const p = a ? a.split(',').map(Number) : null;
@@ -329,7 +334,7 @@
     return `<div style="white-space:pre-wrap">${esc(a)}</div>`;
   }
 
-  const QT = { TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
+  const QT = { rich, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
   if (typeof window !== 'undefined') window.QT = QT;
   if (typeof module !== 'undefined' && module.exports) module.exports = QT;
 })();

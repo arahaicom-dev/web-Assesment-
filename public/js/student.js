@@ -120,7 +120,7 @@
       <div class="card">
         <div style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${S.idx + 1}</span><span class="pill">${TYPE[q.type]}</span><span class="muted small" style="margin-left:auto">Soal ${S.idx + 1} dari ${qs.length}</span></div>
         ${q.image && ['titik', 'label', 'gambar'].indexOf(q.type) < 0 ? `<img src="${q.image}" alt="" class="q-img zoomable">` : ''}
-        ${q.type === 'seret' || q.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${esc(q.text)}</div>`}
+        ${q.type === 'seret' || q.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${QT.rich(q.text)}</div>`}
         <div id="qt-host"></div>
         <div class="btns" style="justify-content:space-between;margin-top:16px">
           <button class="btn ghost" id="prev" ${S.idx === 0 ? 'disabled' : ''}>← Sebelumnya</button>
@@ -196,4 +196,6 @@
   S.token = (new URLSearchParams(location.search).get('token') || '').toUpperCase();
   if (S.token) api('exam/' + encodeURIComponent(S.token)).then(i => { S.info = i; stepName(); }).catch(e => stepToken(e.message));
   else stepToken();
+  // :active di layar sentuh iOS langsung terasa
+  document.addEventListener('touchstart', () => {}, { passive: true });
 })();
