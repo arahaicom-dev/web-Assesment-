@@ -157,6 +157,24 @@
       contoh: { type: 'slide', text: 'Bacalah teks berikut dengan saksama sebelum menjawab soal nomor 2–4.', points: 0 }
     }
   };
+  /* Aturan teks bacaan (stimulus) yang dipakai beberapa soal */
+  G._teks = {
+    aturan: [
+      'Tulis <b>baris petunjuk</b> tepat sebelum teks, yang menyebut <b>nomor soal</b> pemakainya.',
+      'Baris berikutnya boleh berisi <b>judul teks</b> (opsional), mis. <span class="kbd">Teks 2: Penerapan Nilai-Nilai Pancasila di Sekolah</span>.',
+      'Lalu tulis <b>isi teks</b> (boleh beberapa paragraf, boleh ada gambar/tabel).',
+      'Setelah teks, langsung tulis <b>soal dengan nomor pertama yang disebut</b> (mis. <span class="kbd">6. …</span>).',
+      'Bila baris petunjuk <b>tidak menyebut nomor</b> (mis. <span class="kbd">Bacalah teks berikut!</span>), teks hanya dipakai untuk <b>1 soal</b> sesudahnya.',
+      'Daftar bernomor <b>di dalam</b> teks sebaiknya memakai <span class="kbd">a)</span> <span class="kbd">b)</span> atau tanda <span class="kbd">•</span> agar tidak dikira nomor soal.'
+    ],
+    bentuk: ['Bacalah teks berikut untuk menjawab soal nomor 6–10!', 'Perhatikan teks berikut untuk soal no. 6 s.d. 10.', 'Cermatilah wacana berikut untuk menjawab soal nomor 6, 7, dan 8.', 'Teks berikut untuk menjawab soal 11-13', 'Perhatikan gambar berikut untuk menjawab soal nomor 4 dan 5!'],
+    contoh: 'Bacalah teks berikut untuk menjawab soal nomor 6–8!\nTeks 2: Penerapan Nilai-Nilai Pancasila di Sekolah\nSMP Negeri Satap Ratte melaksanakan kerja bakti setiap hari Jumat. Semua siswa bekerja sama membersihkan halaman sekolah.\nKetika ada teman yang kesulitan, siswa lain membantu tanpa membedakan suku dan agama.\n6. Kegiatan kerja bakti mencerminkan sila ke ....\nA. 1\nB. 3\nC. 4\nD. 5\n7. …\n8. …',
+    hasil: [
+      'Teks tampil di <b>atas setiap soal</b> yang memakainya (murid bisa menyembunyikan/menampilkan kembali).',
+      'Saat urutan soal <b>diacak</b>, soal-soal dengan teks yang sama tetap <b>berdekatan dan berurutan</b>.',
+      'Di editor, teks bacaan bisa diubah sekali untuk semua soalnya; tombol <b>📖</b> pada soal untuk menambah teks bacaan atau mengatur nomor soal pemakainya.'
+    ]
+  };
   if (typeof window !== 'undefined') window.PANDUAN = G;
   if (typeof module !== 'undefined' && module.exports) module.exports = G;
 })();

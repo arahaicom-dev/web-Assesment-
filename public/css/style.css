@@ -864,3 +864,24 @@ a, button, .btn, [data-act], .exam-opt, .kz-opt, .qt-card, .qt-chip, .qt-pick, .
 @keyframes mfxFade { from { opacity: 0; } to { opacity: 1; } }
 @keyframes mfxOut { to { opacity: 0; transform: scale(1.06); } }
 @media (max-width: 560px) { .mfx-card { width: 92px; height: 92px; border-radius: 24px; } .mfx-ic { font-size: 50px; } .mfx-kubi { width: 70px; left: calc(50% + 36px); } .mfx-label { top: calc(50% + 66px); font-size: .95rem; } }
+
+/* ================= Teks bacaan (stimulus) ================= */
+.passage { border: 2px solid var(--border); border-left: 5px solid var(--primary); border-radius: 14px; background: var(--surface); margin: 0 0 12px; overflow: hidden; }
+.passage > summary { list-style: none; cursor: pointer; display: flex; gap: 8px; align-items: center; padding: 10px 14px; background: var(--primary-soft); font-size: .95rem; }
+.passage > summary::-webkit-details-marker { display: none; }
+.passage .pz-note { font-size: .8rem; color: var(--muted); }
+.passage .pz-tog { margin-left: auto; font-size: .8rem; color: var(--muted); }
+.passage .pz-tog::after { content: 'Sembunyikan ▲'; }
+.passage:not([open]) .pz-tog::after { content: 'Tampilkan ▼'; }
+.passage-body { padding: 12px 16px; max-height: 46vh; overflow: auto; }
+.pz-text { white-space: pre-line; line-height: 1.7; text-align: justify; hyphens: auto; }
+.passage-body .q-img { margin-bottom: 8px; }
+.kz-q .passage { color: var(--text); text-align: left; }
+.passage-ed { margin: 8px 0; padding: 10px 12px; border-radius: 12px; border: 2px dashed var(--primary); background: var(--primary-soft); }
+.passage-ed input, .passage-ed textarea { width: 100%; margin-top: 6px; }
+.pz-nums { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pz-num { display: inline-flex; }
+.pz-num input { display: none; }
+.pz-num span { min-width: 38px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 2px solid var(--border); background: var(--surface); font-weight: 800; cursor: pointer; }
+.pz-num input:checked + span { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
+.pz-num.other span { text-decoration: line-through; opacity: .7; }

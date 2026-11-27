@@ -29,6 +29,44 @@ Panduan ini juga tersedia di aplikasi (menu **📘 Panduan Jenis Soal**) lengkap
 | 📊 [Polling / Survei](#polling) | Tidak dinilai | Permainan & Ujian |
 | 📖 [Slide Materi](#slide) | Tidak dinilai | Permainan & Ujian |
 
+## 📖 Teks bacaan untuk beberapa soal
+
+**Aturan penulisan di PDF / teks:**
+1. Tulis **baris petunjuk** tepat sebelum teks, yang menyebut **nomor soal** pemakainya.
+2. Baris berikutnya boleh berisi **judul teks** (opsional), mis. `Teks 2: Penerapan Nilai-Nilai Pancasila di Sekolah`.
+3. Lalu tulis **isi teks** (boleh beberapa paragraf, boleh ada gambar/tabel).
+4. Setelah teks, langsung tulis **soal dengan nomor pertama yang disebut** (mis. `6. …`).
+5. Bila baris petunjuk **tidak menyebut nomor** (mis. `Bacalah teks berikut!`), teks hanya dipakai untuk **1 soal** sesudahnya.
+6. Daftar bernomor **di dalam** teks sebaiknya memakai `a)` `b)` atau tanda `•` agar tidak dikira nomor soal.
+
+**Bentuk baris petunjuk yang dikenali:**
+- `Bacalah teks berikut untuk menjawab soal nomor 6–10!`
+- `Perhatikan teks berikut untuk soal no. 6 s.d. 10.`
+- `Cermatilah wacana berikut untuk menjawab soal nomor 6, 7, dan 8.`
+- `Teks berikut untuk menjawab soal 11-13`
+- `Perhatikan gambar berikut untuk menjawab soal nomor 4 dan 5!`
+
+**Contoh:**
+
+```
+Bacalah teks berikut untuk menjawab soal nomor 6–8!
+Teks 2: Penerapan Nilai-Nilai Pancasila di Sekolah
+SMP Negeri Satap Ratte melaksanakan kerja bakti setiap hari Jumat. Semua siswa bekerja sama membersihkan halaman sekolah.
+Ketika ada teman yang kesulitan, siswa lain membantu tanpa membedakan suku dan agama.
+6. Kegiatan kerja bakti mencerminkan sila ke ....
+A. 1
+B. 3
+C. 4
+D. 5
+7. …
+8. …
+```
+
+**Hasilnya di web:**
+- Teks tampil di **atas setiap soal** yang memakainya (murid bisa menyembunyikan/menampilkan kembali).
+- Saat urutan soal **diacak**, soal-soal dengan teks yang sama tetap **berdekatan dan berurutan**.
+- Di editor, teks bacaan bisa diubah sekali untuk semua soalnya; tombol **📖** pada soal untuk menambah teks bacaan atau mengatur nomor soal pemakainya.
+
 <a id="pg"></a>
 ## 🔘 Pilihan Ganda
 

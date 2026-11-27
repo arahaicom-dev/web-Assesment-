@@ -27,8 +27,12 @@
     return `<div class="rv-ans"><div class="small muted">Jawaban murid:</div><div class="rv-box">${QT.answerHTML(q, ans)}</div>${skipKey || q.type === 'polling' || q.type === 'slide' ? '' : `<div class="small muted">${isManual(q.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(q))}</b></div>`}</div>`;
   }
   /** Pratinjau satu soal seperti tampilan murid (bisa dicoba) + kunci. */
-  function previewCard(x, i) {
-    return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${QT.TYPES[x.type].icon} ${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span></div>
+  const passageNums = (qs, q) => q.passage ? qs.map((y, k) => y.passage && y.passage.id === q.passage.id ? k + 1 : 0).filter(Boolean) : [];
+  const numsText = ns => ns.length > 2 && ns[ns.length - 1] - ns[0] === ns.length - 1 ? ns[0] + '–' + ns[ns.length - 1] : ns.join(', ');
+  function previewCard(x, i, all) {
+    const pn = all ? passageNums(all, x) : [];
+    const showPass = x.passage && (!all || pn[0] === i + 1);
+    return `${showPass ? QT.passageHTML(x, { note: pn.length ? 'untuk soal no. ' + numsText(pn) : '' }) : ''}<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${QT.TYPES[x.type].icon} ${TYPE_LABEL[x.type]}</span><span class="pill">${x.points} poin</span>${x.passage && !showPass ? '<span class="pill">📖 teks di atas</span>' : ''}</div>
       ${x.image && x.type !== 'titik' && x.type !== 'label' ? `<img src="${x.image}" class="zoomable q-img" alt="gambar soal">` : ''}${x.type === 'seret' || x.type === 'dropdown' ? '' : `<div class="q-text">${QT.rich(x.text)}</div>`}
       <div class="pv-mount" data-pv="${i}"></div>
       ${x.type === 'slide' || x.type === 'polling' ? '' : `<div class="small muted" style="margin-top:6px">${isManual(x.type) ? 'Pedoman' : 'Kunci'}: <b>${esc(QT.keyText(x))}</b>${QT.hasKey(x) ? '' : ' <span class="pill bad">belum lengkap</span>'}</div>`}</div>`;
@@ -101,6 +105,15 @@
       };
     });
   }
+  function teksGuideHTML() {
+    const X = window.PANDUAN._teks;
+    return `<div class="card" id="pd-teks"><div class="pd-head"><span class="pd-ic">📖</span><div><h3>Teks bacaan untuk beberapa soal</h3><div class="small muted">mis. "Bacalah teks berikut untuk menjawab soal nomor 6–10!"</div></div></div>
+      <div class="pd-grid"><div>
+        <h4>📏 Aturan penulisan di PDF / teks</h4><ol>${X.aturan.map(x => `<li>${x}</li>`).join('')}</ol>
+        <h4>✅ Bentuk baris petunjuk yang dikenali</h4><ul>${X.bentuk.map(x => `<li><span class="kbd">${esc(x)}</span></li>`).join('')}</ul>
+        <h4>🎯 Hasilnya di web</h4><ul>${X.hasil.map(x => `<li>${x}</li>`).join('')}</ul>
+      </div><div><h4>📄 Contoh</h4><pre class="pd-pre">${esc(X.contoh)}</pre></div></div></div>`;
+  }
   function viewGuide(focus) {
     setTitle('📘 Panduan Jenis Soal', '17 jenis soal: kapan dipakai, cara membuat, cara murid menjawab, dan cara penilaiannya');
     renderCtx(false);
@@ -118,8 +131,10 @@
           <li><b>Koreksi & nilai</b> — soal otomatis langsung bernilai; uraian, gambar, dan rekaman dinilai di tombol <b>📝 Koreksi</b>. Nilai akhir = poin diperoleh ÷ total poin × 100.</li>
         </ol>
         <div class="btns no-print" style="margin-top:10px"><button class="btn ghost sm" data-act="print">🖨 Cetak / Simpan PDF</button></div></div></div>
+      <div class="pd-toc"><b>📖 Lainnya</b><a class="chip" href="#/panduan-soal/teks">📖 Teks bacaan untuk beberapa soal</a></div>
       ${groups.map(([g, ts]) => `<div class="pd-toc"><b>${g}</b>${ts.map(t => `<a class="chip" href="#/panduan-soal/${t}">${QT.TYPES[t].icon} ${TYPE_LABEL[t]}</a>`).join('')}</div>`).join('')}
       <div class="card small"><b>Penilaian sebagian:</b> pada PG Kompleks, Menjodohkan, Mengurutkan, Mengelompokkan, Seret ke Kalimat, Pilihan dalam Kalimat, dan Label Gambar, murid mendapat poin sesuai bagian yang benar. Contoh: soal 4 poin, 3 dari 4 pasangan benar → 3 poin. Di Kuis Permainan, jawaban benar sebagian juga mendapat poin sebagian.</div>
+      ${teksGuideHTML()}
       ${QT.ORDER.map(t => `<div class="card">${guideHTML(t)}</div>`).join('')}`,
       mount(v) {
         mountGuideDemos(v);
@@ -1122,7 +1137,7 @@
           if (d.status === 'tidak dinilai') return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${QT.rich(qq.text)}</div>${qq.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
           return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill ${pill}">${d.status}</span>
             <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${d.pts}" data-man="${qq.id}" value="${d.got}"${canRv ? '' : ' disabled'}> / ${d.pts}</span></div>
-            <div class="q-text small">${QT.rich(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
+            ${QT.passageHTML(qq, { closed: true })}<div class="q-text small">${QT.rich(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
         }).join('')}
         <div class="foot">${canRv ? '' : '<span class="small muted" style="margin-right:auto">👁 Hanya lihat — koreksi oleh pembuat asesmen atau admin.</span>'}<button class="btn ghost" data-close>Tutup</button>${canRv ? '<button class="btn" id="rv-save">Simpan Koreksi</button>' : ''}</div>`;
     };
@@ -1194,6 +1209,7 @@
       html: `<div class="grid" style="grid-template-columns: minmax(0,1fr) 260px; align-items:start" id="exam-grid">
         <div class="card">
           <div class="q-head" style="display:flex;gap:10px;align-items:center;margin-bottom:10px"><span class="grade">${ex.idx + 1}</span><span class="pill">${QT.TYPES[cur.type].icon} ${TYPE_LABEL[cur.type]}</span>${+cur.points ? `<span class="pill">${cur.points} poin</span>` : ''}<span class="muted small" style="margin-left:auto">Soal ${ex.idx + 1} dari ${qs.length}</span></div>
+          ${QT.passageHTML(cur)}
           ${cur.image && cur.type !== 'titik' && cur.type !== 'label' && cur.type !== 'gambar' ? `<img src="${cur.image}" alt="gambar soal" class="zoomable q-img">` : ''}
           ${cur.type === 'seret' || cur.type === 'dropdown' ? '' : `<div class="q-text" style="font-size:1.12rem;margin-bottom:14px">${QT.rich(cur.text)}</div>`}
           <div id="qt-host"></div>
@@ -1271,6 +1287,7 @@
         <div class="card"><h3>Unggah File Soal</h3>
           <div class="drop" id="drop"><div class="pdf3d">PDF</div><b>Klik atau seret file PDF ke sini</b><div class="small muted">Juga menerima .txt. Pilihan ganda (biasa &amp; kompleks), benar/salah, isian, menjodohkan, dan uraian dikenali otomatis.</div></div>
           <div id="import-status" class="small" style="margin-top:10px"></div>
+          <div class="note small" style="margin-top:10px">📖 <b>Ada teks bacaan untuk beberapa soal?</b> Tulis baris seperti <span class="kbd">Bacalah teks berikut untuk menjawab soal nomor 6–10!</span> sebelum teksnya. <a href="#/panduan-soal/teks">Lihat aturannya →</a></div>
         </div>
         <div class="card"><h3>…atau Tempel Teks Soal</h3>
           <textarea id="paste-src" style="min-height:170px" placeholder="1. Ibu kota Indonesia adalah ...&#10;A. Bandung&#10;B. Jakarta&#10;C. Surabaya&#10;Kunci: B&#10;&#10;2. Jelaskan pengertian fotosintesis!"></textarea>
@@ -1423,7 +1440,7 @@
     return q && q.ownerId === S.user.id;
   }
   function previewQset(q) {
-    const m = modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal · ${typeSummary(q.questions)}</p>${q.questions.map(previewCard).join('')}
+    const m = modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal · ${typeSummary(q.questions)}</p>${q.questions.map((x, k) => previewCard(x, k, q.questions)).join('')}
       <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
     mountPreviews(m, q.questions);
   }
@@ -1456,7 +1473,7 @@
   }
   /** Tempel gambar PDF ke soal pemiliknya (dipotong langsung dari halaman, utuh & tajam). */
   async function attachPdfImages(res, ext) {
-    const map = P.assignImages(res.questions, ext.meta, ext.images, res.keyLine);
+    const map = P.assignImages(res.questions, ext.meta, ext.images, res.keyLine, res.passages);
     let n = 0;
     const area = l => l.reduce((a, b) => a + (b.x2 - b.x1) * (b.y2 - b.y1), 0);
     for (const k in map) {
@@ -1469,7 +1486,9 @@
       const page = await ext.doc.getPage(pg); const vp = page.getViewport({ scale: 1 });
       const r = vp.convertToViewportRectangle([u.x1 - padL, u.y1 - pad, u.x2 + pad, u.y2 + pad + (list.length > 1 ? 16 : 0)]);
       const x = Math.min(r[0], r[2]), y = Math.min(r[1], r[3]);
-      res.questions[k].image = await cropFraction(ext.doc, pg, { x: x / vp.width, y: y / vp.height, w: Math.abs(r[2] - r[0]) / vp.width, h: Math.abs(r[3] - r[1]) / vp.height });
+      const url = await cropFraction(ext.doc, pg, { x: x / vp.width, y: y / vp.height, w: Math.abs(r[2] - r[0]) / vp.width, h: Math.abs(r[3] - r[1]) / vp.height });
+      if (/^p:/.test(k)) res.questions.forEach(q => { if (q.passage && q.passage.id === k.slice(2)) q.passage.image = url; });
+      else res.questions[k].image = url;
       n++;
     }
     return n;
@@ -1526,9 +1545,15 @@
           ${q.type === 'slide' || q.type === 'polling' ? '<span class="pill">tidak dinilai</span>' : `<label class="small">Poin <input type="number" min="0" step="0.5" data-qt="points" value="${+q.points || 0}" style="width:70px"></label>`}
           <button class="btn ghost sm" data-act="guide" data-t="${q.type}" title="Cara membuat soal jenis ini">❓ Panduan</button>
           ${QT.hasKey(q) ? '' : '<span class="pill bad">Kunci belum lengkap</span>'}
-          <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
+          <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}${q.passage ? '' : `<button class="btn ghost sm" data-act="pass-add" data-i="${i}" title="Tambahkan teks bacaan untuk soal ini (dan soal lain)">📖</button>`}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
         <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
         ${q.image ? `<div class="q-img-row">${q.type === 'titik' || q.type === 'label' ? '' : `<img src="${q.image}" class="zoomable" alt="gambar soal">`}<button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
+        ${q.passage ? `<div class="passage-ed"><div class="btns" style="align-items:center"><b>📖 Teks bacaan</b><span class="small muted">dipakai soal no. ${numsText(passageNums(w.questions, q))}</span>
+            <span style="margin-left:auto" class="btns"><button class="btn ghost sm" data-act="pass-img" data-i="${i}" title="Gambar untuk teks bacaan">🖼</button>${q.passage.image ? `<button class="btn ghost sm" data-act="pass-rmimg" data-i="${i}">Hapus gambar</button>` : ''}<button class="btn ghost sm" data-act="pass-link" data-i="${i}" title="Atur soal yang memakai teks ini">🔗 Atur soal</button><button class="btn ghost sm" data-act="pass-off" data-i="${i}">✕ Lepas dari soal ini</button></span></div>
+            <input data-pt="title" value="${esc(q.passage.title || '')}" placeholder="Judul teks (opsional), mis. Teks 2: Penerapan Nilai Pancasila">
+            ${q.passage.image ? `<img src="${q.passage.image}" class="zoomable" style="max-height:160px;border-radius:10px;margin:6px 0">` : ''}
+            <textarea data-pt="text" placeholder="Isi teks bacaan" style="min-height:110px">${esc(q.passage.text || '')}</textarea>
+            <div class="small muted">Perubahan di sini berlaku untuk semua soal yang memakai teks ini.</div></div>` : ''}
         <div class="qt-ed">${QT.editor(q)}</div>
       </div>`;
     return {
@@ -1562,6 +1587,10 @@
             else q[f] = inp.value;
           }));
           QT.bindEditor($('.qt-ed', card), q, keepScroll);
+          $$('[data-pt]', card).forEach(inp => inp.addEventListener('input', () => {
+            const pid = q.passage.id, f = inp.dataset.pt;
+            w.questions.forEach(x => { if (x.passage && x.passage.id === pid) x.passage[f] = inp.value; });
+          }));
         });
       },
       actions: {
@@ -1572,6 +1601,15 @@
         down: el => { const i = +el.dataset.i; if (i < w.questions.length - 1) { const t = w.questions[i]; w.questions[i] = w.questions[i + 1]; w.questions[i + 1] = t; keepScroll(); } },
         addq: el => { const q = QT.blank(el.dataset.t, S.uid('q')); q.num = w.questions.length + 1; w.questions.push(q); route(); setTimeout(() => window.scrollTo(0, document.body.scrollHeight), 30); },
         guide: el => guideModal(el.dataset.t),
+        'pass-add': el => passageModal(w, +el.dataset.i, keepScroll),
+        'pass-link': el => passageModal(w, +el.dataset.i, keepScroll),
+        'pass-off': el => { const q = w.questions[+el.dataset.i]; delete q.passage; keepScroll(); },
+        'pass-img': async el => {
+          const f = await pickFile('image/*'); if (!f) return;
+          const url = await resizeImage(f, 1400), q = w.questions[+el.dataset.i], pid = q.passage.id;
+          w.questions.forEach(x => { if (x.passage && x.passage.id === pid) x.passage.image = url; }); keepScroll();
+        },
+        'pass-rmimg': el => { const pid = w.questions[+el.dataset.i].passage.id; w.questions.forEach(x => { if (x.passage && x.passage.id === pid) delete x.passage.image; }); keepScroll(); },
         addpick: () => {
           const m = modal(`<h2>Pilih Jenis Soal</h2><p class="small muted" style="margin-top:0">Semua jenis bisa dipakai di Ujian. Yang bertanda 🎮 juga bisa dipakai di Kuis Seru mode Permainan. Bingung memilih? <a href="#/panduan-soal" data-close>📘 Lihat panduan & coba contohnya</a>.</p>
             <div class="qt-picker">${QT.ORDER.map(t => `<button class="qt-pick" data-t="${t}"><span class="qt-pi">${QT.TYPES[t].icon}</span><b>${TYPE_LABEL[t]}</b><small>${QT.TYPES[t].desc}</small>${QT.TYPES[t].game ? '<i>🎮</i>' : ''}</button>`).join('')}</div>
@@ -1595,7 +1633,7 @@
           $('#p-ok', m).onclick = () => { w.questions.forEach(q => { const inp = $('#p-' + q.type, m); if (inp) q.points = +inp.value || 0; }); closeModal(); keepScroll(); };
         },
         preview: () => {
-          const m = modal(`<h2>Pratinjau: ${esc(w.title)}</h2><p class="small muted" style="margin-top:0">Tampilan seperti di HP murid — boleh dicoba. Pilihan diacak saat murid mengerjakan.</p>${w.questions.map(previewCard).join('')}
+          const m = modal(`<h2>Pratinjau: ${esc(w.title)}</h2><p class="small muted" style="margin-top:0">Tampilan seperti di HP murid — boleh dicoba. Pilihan diacak saat murid mengerjakan.</p>${w.questions.map((x, k) => previewCard(x, k, w.questions)).join('')}
             <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
           mountPreviews(m, w.questions);
         },
@@ -1614,6 +1652,40 @@
           }
         }
       }
+    };
+  }
+  /** Tambah / atur teks bacaan untuk beberapa soal sekaligus. */
+  function passageModal(w, i, done) {
+    const q = w.questions[i];
+    const existing = []; w.questions.forEach(x => { if (x.passage && !existing.some(e => e.id === x.passage.id)) existing.push(x.passage); });
+    const cur = q.passage || null;
+    const sel = new Set(cur ? passageNums(w.questions, q) : [i + 1]);
+    const m = modal(`<h2>📖 Teks Bacaan</h2>
+      <p class="small muted" style="margin-top:0">Satu teks bacaan bisa dipakai beberapa soal (mis. "Bacalah teks berikut untuk menjawab soal nomor 6–10"). Teks tampil di atas setiap soal yang memakainya; bila soal diacak, soal-soal ini tetap berdekatan.</p>
+      ${!cur && existing.length ? `<label class="field"><span>Pakai teks yang sudah ada</span><select id="pz-pick"><option value="">— buat teks baru —</option>${existing.map(e => `<option value="${esc(e.id)}">${esc(e.title || (e.text || '').slice(0, 50) || 'Teks bacaan')}</option>`).join('')}</select></label>` : ''}
+      <div id="pz-new" ${cur ? 'class="hidden"' : ''}><label class="field"><span>Judul (opsional)</span><input id="pz-title" placeholder="mis. Teks 2: Penerapan Nilai Pancasila di Sekolah"></label>
+      <label class="field"><span>Isi teks bacaan</span><textarea id="pz-text" style="min-height:140px" placeholder="Tempel teks bacaan di sini"></textarea></label></div>
+      <div class="field"><span>Dipakai untuk soal nomor</span><div class="pz-nums">${w.questions.map((x, k) => `<label class="pz-num ${x.passage && cur && x.passage.id !== cur.id ? 'other' : ''}"><input type="checkbox" value="${k + 1}" ${sel.has(k + 1) ? 'checked' : ''}><span>${k + 1}</span></label>`).join('')}</div>
+        <div class="small muted">Nomor bergaris = sudah memakai teks bacaan lain (akan dipindahkan bila dicentang).</div></div>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="pz-ok">Simpan</button></div>`, { wide: true });
+    const pick = $('#pz-pick', m); if (pick) pick.onchange = () => { $('#pz-new', m).classList.toggle('hidden', !!pick.value); };
+    $('#pz-ok', m).onclick = () => {
+      let ps = cur;
+      if (!ps) {
+        if (pick && pick.value) ps = existing.find(e => e.id === pick.value);
+        else {
+          const title = $('#pz-title', m).value.trim(), text = $('#pz-text', m).value.trim();
+          if (!title && !text) return toast('Isi teks bacaannya dulu.', 'bad');
+          ps = { id: S.uid('ps'), title, text };
+        }
+      }
+      const nums = $$('.pz-num input:checked', m).map(x => +x.value);
+      if (!nums.length) return toast('Pilih minimal satu soal.', 'bad');
+      w.questions.forEach((x, k) => {
+        if (nums.indexOf(k + 1) >= 0) x.passage = Object.assign({}, ps);
+        else if (x.passage && x.passage.id === ps.id) delete x.passage;
+      });
+      closeModal(); done();
     };
   }
   function keepScroll() { const y = window.scrollY; route(); window.scrollTo(0, y); }
@@ -2430,7 +2502,7 @@
         if (q.type === 'slide' || q.type === 'polling') return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(q.text)}</div>${q.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
         return `<div class="q-card"><div class="q-head"><span class="qn">${q.no}</span><span class="pill">${TYPE_LABEL[q.type]}</span><span class="pill ${pill}">${x.status}</span>
           <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${x.pts}" data-man="${esc(q.id)}" value="${manual[q.id] !== undefined ? manual[q.id] : x.got}"> / ${x.pts}</span></div>
-          <div class="q-text small">${QT.rich(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
+          ${QT.passageHTML(q, { closed: true })}<div class="q-text small">${QT.rich(q.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
       }).join('')}
       <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`, { wide: true, noFocus: true });
     loadMedia(m);

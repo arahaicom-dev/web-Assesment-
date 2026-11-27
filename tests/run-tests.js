@@ -133,6 +133,23 @@ t('baris label saja diikuti baris isi (pecahan bersusun dari PDF)', () => {
   assert.strictEqual(r.questions.length, 2);
 });
 
+t('teks bacaan untuk beberapa soal (nomor 6–8) tidak menempel ke pilihan soal sebelumnya', () => {
+  const r = P.parse('5. Contoh sikap toleransi adalah ....\nA. Menghargai teman\nB. Mengejek\nC. Memaksa\nD. Menolak pendapat orang lain\nBacalah teks berikut untuk menjawab soal nomor 6–8!\nTeks 2: Penerapan Nilai-Nilai Pancasila di Sekolah\nSMP Negeri Satap Ratte melaksanakan kerja bakti setiap Jumat.\nKetika ada teman kesulitan, siswa lain membantu.\n6. Kerja bakti mencerminkan sila ke ....\nA. 1\nB. 3\n7. Membantu teman mencerminkan ....\nA. toleransi\nB. egois\n8. Pemilihan ketua kelas melalui ....\nA. musyawarah\nB. undian\n9. Soal lepas?\nA. x\nB. y');
+  const q = n => r.questions.find(x => x.num === n);
+  assert.strictEqual(q(5).options[3].text, 'Menolak pendapat orang lain');
+  [6, 7, 8].forEach(n => { assert.ok(q(n).passage, 'soal ' + n); assert.strictEqual(q(n).passage.title, 'Teks 2: Penerapan Nilai-Nilai Pancasila di Sekolah'); });
+  assert.ok(/kerja bakti/.test(q(6).passage.text) && /membantu/.test(q(6).passage.text));
+  assert.strictEqual(q(9).passage, undefined); assert.strictEqual(q(5).passage, undefined);
+});
+t('bentuk lain: "s.d.", "dan", dan tanpa nomor (1 soal)', () => {
+  const a = P.parse('Perhatikan teks berikut untuk soal no. 1 s.d. 2.\nAni pergi ke pasar.\n1. Siapa?\nA. Ani\nB. Budi\n2. Ke mana?\nA. pasar\nB. sekolah\n3. Lain?\nA. x\nB. y');
+  assert.deepStrictEqual(a.questions.map(q => !!q.passage), [true, true, false]);
+  const b = P.parse('1. Q1?\nA. x\nB. y\nBacalah teks berikut!\nHujan turun deras sejak pagi.\n2. Kapan hujan?\nA. pagi\nB. malam\n3. Lain?\nA. x\nB. y');
+  assert.deepStrictEqual(b.questions.map(q => !!q.passage), [false, true, false]);
+  const c = P.parse('1. Perhatikan gambar berikut!\nBangun di atas adalah ....\nA. persegi\nB. segitiga');
+  assert.strictEqual(c.questions[0].passage, undefined);
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur

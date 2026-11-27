@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.9.0');
+define('APP_VERSION', '5.10.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -743,7 +743,7 @@ try {
       }
       if ($count() >= 300) bad(429, 'Kuis sudah penuh.');
       $order = range(0, count($qsAll) - 1);
-      if ($set['shuffleQ']) shuffle($order);
+      if ($set['shuffleQ']) $order = shuffle_keep_passages($order, function ($i) use ($qsAll) { return isset($qsAll[$i]['passage']['id']) ? $qsAll[$i]['passage']['id'] : null; });
       $token = bin2hex(random_bytes(16));
       q('INSERT INTO game_players (game_id, token, nickname, avatar, student_id, qorder, answers) VALUES (?,?,?,?,?,?,?)', array($g['id'], $token, $nick, $avatar, $sid, jenc($order), '{}'));
       $p = one('SELECT * FROM game_players WHERE token = ?', array($token));
@@ -920,7 +920,7 @@ try {
       }
       $qs = array();
       foreach ($questions as $qq) if (in_array(prop($qq, 'type'), q_types(), true)) $qs[] = public_q($qq, $a->id . $sid, false);
-      if (prop($a, 'shuffle')) { mt_srand(crc32($a->id . $sid)); shuffle($qs); mt_srand(); }
+      if (prop($a, 'shuffle')) { mt_srand(crc32($a->id . $sid)); $qs = shuffle_keep_passages($qs, function ($q) { return isset($q['passage']['id']) ? $q['passage']['id'] : null; }); mt_srand(); }
       out(array('submitted' => false, 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
     }
 

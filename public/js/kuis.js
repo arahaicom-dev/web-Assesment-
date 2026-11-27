@@ -223,6 +223,7 @@
     view.innerHTML = `<div class="kz-q pop">
       <div class="kz-q-head"><span class="kz-pill">${d.index} / ${d.total}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
       ${q.type === 'pg' || q.type === 'bs' || q.type === 'isian' ? '' : `<div class="kz-type">${typeLabel(q.type)}</div>`}
+      ${QT.passageHTML(q)}
       <div class="kz-card kz-q-card">${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}${hideText(q.type) ? '<div class="kz-q-text small">Lengkapi kalimat berikut.</div>' : `<div class="kz-q-text">${QT.rich(q.text)}</div>`}</div>
       ${body}</div>`;
     const host = $('#qt-host');
@@ -359,6 +360,7 @@
       <div class="exam-grid">
         <div class="kz-card">
           <div class="exam-qhead"><span class="grade">${E.idx + 1}</span><span class="pill">${typeLabel(q.type)}</span><span class="small muted" style="margin-left:auto">Soal ${E.idx + 1} dari ${n}</span></div>
+          ${QT.passageHTML(q)}
           ${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}
           ${hideText(q.type) ? '' : `<div class="q-text" style="font-size:1.1rem;margin-bottom:14px">${QT.rich(q.text)}</div>`}
           <div id="qt-host"></div>

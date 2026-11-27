@@ -284,6 +284,27 @@
     return applied;
   }
 
+  /* ---------- Teks bacaan (stimulus) untuk beberapa soal ---------- */
+  const STIM_VERB = /^(?:bacalah|baca|perhatikan(?:lah)?|cermati(?:lah)?|simak(?:lah)?|amati(?:lah)?|pahami(?:lah)?|gunakan)\b/i;
+  const STIM_NOUN = /^(?:teks|bacaan|wacana|stimulus|cerita|kutipan|puisi|dialog|gambar|tabel|grafik|data|informasi|ilustrasi|kasus)\b/i;
+  /** Baris seperti "Bacalah teks berikut untuk menjawab soal nomor 6–10!" → {nums:[6..10]} ; tanpa nomor → {nums:[]} ; bukan kepala → null */
+  function stimulusHeader(t) {
+    if (/^\(?\d{1,3}\s*[.)\]:]/.test(t) || t.length > 200) return null;
+    const ref = t.match(/\b(?:soal|nomor|no\.?)\s*(?:nomor|no\.?)?\s*(\d{1,3})((?:\s*(?:[-–—,&/]|s\.?\s*\/?\s*d\.?|sd|sampai(?:\s+dengan)?|hingga|dan)\s*\d{1,3})*)/i);
+    const verb = STIM_VERB.test(t), noun = STIM_NOUN.test(t);
+    if (ref && (verb || noun || /untuk\s+(?:menjawab\s+)?soal/i.test(t))) {
+      const first = +ref[1], tail = ref[2] || '';
+      const nums = [first];
+      const rng = tail.match(/^\s*(?:[-–—]|s\.?\s*\/?\s*d\.?|sd|sampai(?:\s+dengan)?|hingga)\s*(\d{1,3})/i);
+      if (rng && +rng[1] > first && +rng[1] - first <= 40) { for (let k = first + 1; k <= +rng[1]; k++) nums.push(k); }
+      else (tail.match(/\d{1,3}/g) || []).forEach(x => { if (nums.indexOf(+x) < 0) nums.push(+x); });
+      return { nums: nums.sort((a, b) => a - b) };
+    }
+    if (verb && /\b(teks|bacaan|wacana|cerita|kutipan|paragraf|puisi|dialog|gambar|tabel|grafik|data|informasi|ilustrasi)\b/i.test(t) && /\b(berikut|di\s*bawah\s*ini|ini)\b/i.test(t) && t.length < 120) return { nums: [] };
+    return null;
+  }
+  const looksTitle = l => STIM_NOUN.test(l) && l.length <= 100 || (l.length <= 70 && !/[.!?,;]$/.test(l) && l.split(/\s+/).length <= 10);
+
   /**
    * Parser utama.
    * @param {string|string[]} input teks atau array baris
@@ -306,6 +327,9 @@
     let lastTarget = 'text'; // ke mana baris lanjutan ditempel: 'text' | 'option'
 
     const push = () => { if (cur) { questions.push(cur); } };
+    const passages = [];
+    let reading = null;      // teks bacaan yang sedang dikumpulkan
+    const addPassageLine = l => { reading.lines.push(l); };
 
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
@@ -321,6 +345,24 @@
           if (t.includes(':') && restKey.trim()) keyFirst = restKey;
           break;
         }
+      }
+
+      // Teks bacaan untuk beberapa soal
+      const sh = stimulusHeader(t);
+      if (sh && (sh.nums.length || !cur || cur.options.length > 0)) {
+        push(); cur = null;
+        reading = { id: uid(), title: '', text: '', header: t, nums: sh.nums, lines: [], line: i, endLine: i };
+        passages.push(reading); lastTarget = 'text';
+        continue;
+      }
+      if (reading) {
+        const qn = t.match(/^\(?(\d{1,3})\s*[.)\]:]\s*(.*)$/) || t.match(/^(?:soal|no|nomor)\b\s*\.?\s*(\d{1,3})\s*[.):\-]?\s*(.*)$/i);
+        const expectNum = reading.nums.length ? reading.nums[0] : lastNum + 1;
+        if (!(qn && +qn[1] === expectNum)) {
+          // bukan soal berikutnya → bagian dari teks bacaan (judul, paragraf, daftar bernomor di dalam teks)
+          if (!sectionTypeOf(t) || reading.lines.length) { addPassageLine(t); reading.endLine = i; continue; }
+        }
+        reading = null;
       }
 
       // Bagian / instruksi
@@ -449,6 +491,28 @@
     }
     push();
 
+    // Teks bacaan → judul + paragraf, lalu pasangkan ke soal yang disebut
+    passages.forEach(ps => {
+      let ls = ps.lines.slice();
+      if (ls.length > 1 && looksTitle(ls[0])) ps.title = ls.shift().replace(/[:.]\s*$/, '');
+      const maxLen = Math.max(1, ...ls.map(l => l.length));
+      ps.text = ls.reduce((acc, l, k) => {
+        if (!k) return l;
+        const prev = ls[k - 1];
+        const para = (/[.!?:"')]$/.test(prev) && (prev.length < maxLen * 0.78 || (/^[A-Z"'(]/.test(l) && prev.length < maxLen * 0.93))) || /^[-•*]\s|^\(?[a-z0-9]{1,2}[.)]\s/i.test(l);
+        return acc + (para ? '\n' : ' ') + l;
+      }, '').replace(/⁄/g, '/');
+      let targets;
+      if (ps.nums.length) targets = questions.filter(q => ps.nums.indexOf(q.num) >= 0 && q.line > ps.line);
+      else { const nx = questions.find(q => q.line > ps.line); targets = nx ? [nx] : []; }
+      if (!targets.length && ps.nums.length) targets = questions.filter(q => ps.nums.indexOf(q.num) >= 0);
+      const got = targets.map(q => q.num);
+      ps.nums.filter(n => got.indexOf(n) < 0).forEach(n => warnings.push('Teks bacaan "' + (ps.title || ps.header).slice(0, 40) + '" menyebut soal no. ' + n + ', tetapi soal itu tidak ditemukan.'));
+      if (!ps.text && !ps.title) warnings.push('Teks bacaan setelah "' + ps.header.slice(0, 50) + '" kosong — mungkin berupa gambar; tambahkan gambarnya lewat editor.');
+      const obj = { id: ps.id, title: ps.title, text: ps.text };
+      targets.forEach(q => { if (!q.passage) q.passage = obj; });
+    });
+
     questions.forEach(finalizeQuestion);
 
     let keysApplied = 0;
@@ -473,6 +537,7 @@
       questions,
       warnings,
       keyLine: keyStart >= 0 ? keyStart - 1 : -1,
+      passages: passages.map(ps => ({ id: ps.id, line: ps.line, endLine: ps.endLine })),
       stats: { total: questions.length, pg: count('pg'), bs: count('bs'), isian: count('isian'), uraian: count('uraian'), keysApplied, byType }
     };
   }
@@ -673,7 +738,7 @@
    * meta: [{page, group, y}] sejajar dengan baris teks; images: [{page, group, x1,y1,x2,y2}] (koordinat PDF, y ke atas)
    * Mengembalikan peta indeks soal → daftar gambar.
    */
-  function assignImages(questions, meta, images, keyLine) {
+  function assignImages(questions, meta, images, keyLine, passages) {
     const starts = questions.map((q, i) => ({ i, line: q.line })).filter(x => typeof x.line === 'number').sort((a, b) => a.line - b.line);
     const out = {};
     for (const im of images) {
@@ -686,6 +751,8 @@
         if (before) L = k;
       }
       if (L < 0 || (keyLine >= 0 && L >= keyLine)) continue;
+      const ps = (passages || []).find(x => L >= x.line && L <= x.endLine && !starts.some(st => st.line > x.line && st.line <= L));
+      if (ps) { (out['p:' + ps.id] = out['p:' + ps.id] || []).push(im); continue; }
       let owner = null;
       for (const st of starts) if (st.line <= L) owner = st.i;
       if (owner === null) continue;

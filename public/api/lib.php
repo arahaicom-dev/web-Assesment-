@@ -520,6 +520,8 @@ function seeded_shuffle($arr, $seed) {
 function public_q($q, $seed = '', $shuffleOpt = false) {
   $t = prop($q, 'type'); $seed = $seed . $q->id;
   $v = array('id' => $q->id, 'type' => $t, 'text' => (string)prop($q, 'text', ''), 'image' => prop($q, 'image'), 'points' => prop($q, 'points'));
+  $ps = prop($q, 'passage');
+  if (is_object($ps) || is_array($ps)) { $ps = arr_of($ps); if (!empty($ps['text']) || !empty($ps['title']) || !empty($ps['image'])) $v['passage'] = array('id' => isset($ps['id']) ? (string)$ps['id'] : '', 'title' => isset($ps['title']) ? (string)$ps['title'] : '', 'text' => isset($ps['text']) ? (string)$ps['text'] : '', 'image' => isset($ps['image']) ? $ps['image'] : null); }
   if ($t === 'pg' || $t === 'pgk' || $t === 'polling') {
     $opts = array(); foreach (arr_of(prop($q, 'options', array())) as $o) { $o = arr_of($o); $opts[] = array('label' => $o['label'], 'text' => isset($o['text']) ? $o['text'] : ''); }
     $v['options'] = $shuffleOpt ? seeded_shuffle($opts, $seed . 'o') : $opts;
@@ -766,4 +768,18 @@ function notify_password_changed($u, $how) {
     ), array('Buka aplikasi', app_base_url() . 'app.html'));
     send_mail($to, 'Password akun Anda telah diubah', $t, $h);
   } catch (Exception $ex) { log_error('notify_password_changed: ' . $ex->getMessage()); }
+}
+
+/** Acak urutan soal, tetapi soal yang memakai teks bacaan yang sama tetap berurutan & berdekatan. */
+function shuffle_keep_passages($items, $passageOf) {
+  $groups = array(); $index = array();
+  foreach ($items as $it) {
+    $pid = $passageOf($it);
+    if ($pid !== null && $pid !== '' && isset($index[$pid])) { $groups[$index[$pid]][] = $it; continue; }
+    if ($pid !== null && $pid !== '') $index[$pid] = count($groups);
+    $groups[] = array($it);
+  }
+  shuffle($groups);
+  $out = array(); foreach ($groups as $g) foreach ($g as $it) $out[] = $it;
+  return $out;
 }

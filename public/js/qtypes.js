@@ -41,6 +41,7 @@
   /** Versi soal untuk murid (tanpa kunci). Sama dengan public_q() di server PHP. */
   function publicView(q, seed) {
     const v = { id: q.id, type: q.type, text: q.text || '', image: q.image || null, points: q.points };
+    if (q.passage && (q.passage.text || q.passage.title || q.passage.image)) v.passage = { id: q.passage.id, title: q.passage.title || '', text: q.passage.text || '', image: q.passage.image || null };
     seed = seed || q.id;
     if (q.type === 'pg' || q.type === 'pgk' || q.type === 'polling') v.options = (q.options || []).map(o => ({ label: o.label, text: o.text }));
     if (q.type === 'pgk') v.multi = true;
@@ -334,7 +335,14 @@
     return `<div style="white-space:pre-wrap">${esc(a)}</div>`;
   }
 
-  const QT = { rich, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
+  /** Kotak teks bacaan (stimulus) di atas soal. */
+  function passageHTML(v, opts) {
+    const ps = v && v.passage; if (!ps) return '';
+    opts = opts || {};
+    return `<details class="passage" ${opts.closed ? '' : 'open'}><summary><span class="pz-ic">📖</span><b>${esc(ps.title || 'Teks bacaan')}</b>${opts.note ? `<span class="pz-note">${esc(opts.note)}</span>` : ''}<span class="pz-tog"></span></summary>
+      <div class="passage-body">${ps.image ? `<img src="${ps.image}" class="zoomable q-img" alt="">` : ''}${ps.text ? `<div class="pz-text">${rich(ps.text)}</div>` : ''}</div></details>`;
+  }
+  const QT = { rich, passageHTML, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
   if (typeof window !== 'undefined') window.QT = QT;
   if (typeof module !== 'undefined' && module.exports) module.exports = QT;
 })();

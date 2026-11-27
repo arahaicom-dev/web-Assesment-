@@ -128,6 +128,10 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Teks bacaan untuk beberapa soal (v5.10)
+
+Tulis baris petunjuk seperti `Bacalah teks berikut untuk menjawab soal nomor 6–10!` sebelum teksnya (judul opsional di baris berikutnya), lalu lanjutkan dengan soal nomor 6. Teks otomatis dipasangkan ke soal 6–10, tampil di atas setiap soal itu (bisa disembunyikan murid), dan saat soal diacak kelompoknya tetap berdekatan. Bentuk lain yang dikenali: `… soal no. 6 s.d. 10`, `… nomor 6, 7, dan 8`, `Teks berikut untuk menjawab soal 11-13`. Tanpa nomor (`Bacalah teks berikut!`) → hanya untuk 1 soal sesudahnya. Di editor: tombol 📖 pada soal. Aturan lengkap: menu **Panduan Jenis Soal → Teks bacaan**.
+
 ## Pecahan, label ganda, klik halus & efek menu (v5.9)
 
 - **Pecahan bersusun dari PDF** (pembilang di atas garis, penyebut di bawah) kini terbaca utuh menjadi `15/16`; garis bagi dideteksi dari gambar vektor PDF sehingga tabel angka tidak ikut tergabung. Di web, pecahan `a/b` ditampilkan bersusun (tanggal `12/03/2024` dan satuan `km/jam` tidak diubah).
