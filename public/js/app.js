@@ -1512,7 +1512,7 @@ B. VII B</pre></div></div></div>
       const pg = +Object.keys(byPage).sort((a, b) => area(byPage[b]) - area(byPage[a]))[0];
       const list = byPage[pg];
       const u = { x1: Math.min(...list.map(b => b.x1)), x2: Math.max(...list.map(b => b.x2)), y1: Math.min(...list.map(b => b.y1)), y2: Math.max(...list.map(b => b.y2)) };
-      const pad = 6, padL = list.length > 1 ? 22 : pad; // beberapa gambar (mis. pilihan A–D) → sertakan hurufnya
+      const pad = list.length > 1 ? 6 : 1.5, padL = list.length > 1 ? 22 : pad; // beberapa gambar (mis. pilihan A–D) → sertakan hurufnya
       const page = await ext.doc.getPage(pg); const vp = page.getViewport({ scale: 1 });
       const r = vp.convertToViewportRectangle([u.x1 - padL, u.y1 - pad, u.x2 + pad, u.y2 + pad + (list.length > 1 ? 16 : 0)]);
       const x = Math.min(r[0], r[2]), y = Math.min(r[1], r[3]);
@@ -1579,11 +1579,11 @@ B. VII B</pre></div></div></div>
         <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
         ${q.image ? `<div class="q-img-row">${q.type === 'titik' || q.type === 'label' ? '' : `<img src="${q.image}" class="zoomable" alt="gambar soal">`}<button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
         ${q.passage ? `<div class="passage-ed"><div class="btns" style="align-items:center"><b>📖 Teks bacaan</b><span class="small muted">dipakai soal no. ${numsText(passageNums(w.questions, q))}</span>
-            <span style="margin-left:auto" class="btns"><button class="btn ghost sm" data-act="pass-img" data-i="${i}" title="Gambar untuk teks bacaan">🖼</button>${q.passage.image ? `<button class="btn ghost sm" data-act="pass-rmimg" data-i="${i}">Hapus gambar</button>` : ''}<button class="btn ghost sm" data-act="pass-link" data-i="${i}" title="Atur soal yang memakai teks ini">🔗 Atur soal</button><button class="btn ghost sm" data-act="pass-off" data-i="${i}">✕ Lepas dari soal ini</button></span></div>
+            <span style="margin-left:auto" class="btns"><button class="btn ghost sm" data-act="pass-img" data-i="${i}" title="Gambar untuk teks bacaan">🖼</button>${q.passage.image ? `<button class="btn ghost sm" data-act="pass-rmimg" data-i="${i}">Hapus gambar</button>` : ''}<button class="btn ghost sm" data-act="pass-link" data-i="${i}" title="Atur soal yang memakai teks ini">🔗 Atur soal</button><button class="btn ghost sm" data-act="pass-off" data-i="${i}">✕ Lepas dari soal ini</button><button class="btn ghost sm" data-act="pass-del" data-i="${i}" title="Bukan teks bacaan: hapus dari semua soal">🗑 Hapus dari semua soal</button><button class="btn ghost sm" data-act="pass-instr" data-i="${i}" title="Pindahkan isinya ke Petunjuk soal">📋 Jadikan petunjuk</button></span></div>
             <input data-pt="title" value="${esc(q.passage.title || '')}" placeholder="Judul teks (opsional), mis. Teks 2: Penerapan Nilai Pancasila">
             ${q.passage.image ? `<img src="${q.passage.image}" class="zoomable" style="max-height:160px;border-radius:10px;margin:6px 0">` : ''}
             <textarea data-pt="text" placeholder="Isi teks bacaan" style="min-height:110px">${esc(q.passage.text || '')}</textarea>
-            <div class="small muted">Perubahan di sini berlaku untuk semua soal yang memakai teks ini.</div></div>` : ''}
+            <div class="small muted">Perubahan di sini berlaku untuk semua soal yang memakai teks ini.${q.passage.image ? ' Tulis <span class="kbd">{{gambar}}</span> pada baris tersendiri untuk mengatur letak gambar.' : ''} Tabel: <span class="kbd">| a | b |</span> per baris.</div></div>` : ''}
         <div class="qt-ed">${QT.editor(q)}</div>
       </div>`;
     return {
@@ -1638,6 +1638,8 @@ B. VII B</pre></div></div></div>
         'pass-add': el => passageModal(w, +el.dataset.i, keepScroll),
         'pass-link': el => passageModal(w, +el.dataset.i, keepScroll),
         'ins-table': el => { const q = w.questions[+el.dataset.i]; q.text = (q.text ? q.text.replace(/\s+$/, '') + '\n' : '') + '| Kolom 1 | Kolom 2 |\n| isi | isi |\n| isi | isi |'; keepScroll(); toast('Tabel disisipkan. Ubah isinya di kotak pertanyaan: satu baris = satu baris tabel, pisahkan kolom dengan |'); },
+        'pass-del': async el => { const pid = w.questions[+el.dataset.i].passage.id; const n = w.questions.filter(x => x.passage && x.passage.id === pid).length; if (!await confirmBox(`Hapus teks bacaan ini dari <b>${n} soal</b>?`, 'Hapus')) return; w.questions.forEach(x => { if (x.passage && x.passage.id === pid) delete x.passage; }); keepScroll(); },
+        'pass-instr': el => { const ps = w.questions[+el.dataset.i].passage, pid = ps.id; w.instructions = ((w.instructions || '').trim() + '\n' + [ps.title, ps.text].filter(Boolean).join('\n')).trim(); w.questions.forEach(x => { if (x.passage && x.passage.id === pid) delete x.passage; }); keepScroll(); toast('Dipindahkan ke 📋 Petunjuk soal (di bagian atas).'); },
         'pass-off': el => { const q = w.questions[+el.dataset.i]; delete q.passage; keepScroll(); },
         'pass-img': async el => {
           const f = await pickFile('image/*'); if (!f) return;

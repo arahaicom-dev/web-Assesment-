@@ -263,6 +263,16 @@
       }
       const st = sectionTypeOf(line) || (/^(pilihan\s*ganda|pg)\b/i.test(line) ? 'pg' : /^(isian)\b/i.test(line) ? 'isian' : /^(uraian|esai|essay)\b/i.test(line) ? 'uraian' : /^benar/i.test(line) ? 'bs' : null);
       if (st && !/^\d/.test(line)) { sec = st; continue; }
+      // Banyak kunci berupa teks dalam satu baris: "6. Rp13.500 7. Rp4.000 8. Rp17.500"
+      const bounds = []; const reB = /(^|\s)\(?(\d{1,3})\s*[.)\-:=]\s+/g; let bm;
+      while ((bm = reB.exec(line))) bounds.push({ num: +bm[2], at: bm.index + bm[1].length, end: reB.lastIndex });
+      if (bounds.length >= 2 && bounds[0].at === 0 && bounds.every((b, k) => !k || b.num > bounds[k - 1].num)) {
+        const vals = bounds.map((b, k) => line.slice(b.end, k + 1 < bounds.length ? bounds[k + 1].at : line.length).trim().replace(/[,;|]+$/, '').trim());
+        if (vals.every(Boolean) && vals.some(v => !/^\(?[A-Ha-h]\)?\.?$/.test(v) && !/^(benar|salah|B|S)$/i.test(v))) {
+          bounds.forEach((b, k) => keys.push({ num: b.num, value: vals[k], section: sec }));
+          continue;
+        }
+      }
       // Banyak pasangan dalam satu baris: "1. A  2. C  3. D" atau "1-A, 2-B"
       const multi = [];
       const reMulti = /(\d{1,3})\s*[.)\-:=]?\s*\(?([A-Ha-h]|benar|salah|B|S)\)?(?=[\s,;|]|$)/g;
@@ -404,7 +414,7 @@
       }
 
       // Teks bacaan untuk beberapa soal
-      const sh = stimulusHeader(t);
+      const sh = /^(?:pilihan\s+ganda|isian|uraian|esai|essay|benar\s*[-/]?\s*salah|menjodohkan)\b/i.test(t) ? null : stimulusHeader(t);
       if (sh && (sh.nums.length || !cur || cur.options.length > 0)) {
         push(); cur = null;
         reading = { id: uid(), title: '', text: '', header: t, nums: sh.nums, lines: [], line: i, endLine: i };
@@ -414,17 +424,25 @@
       if (reading) {
         const qn = t.match(/^\(?(\d{1,3})\s*[.)\]:]\s*(.*)$/) || t.match(/^(?:soal|no|nomor)\b\s*\.?\s*(\d{1,3})\s*[.):\-]?\s*(.*)$/i);
         const expectNum = reading.nums.length ? reading.nums[0] : lastNum + 1;
-        if (!(qn && +qn[1] === expectNum)) {
+        const isSec = sectionTypeOf(t) || /^(?:[IVX]{1,4}\s*[.)]\s*)?(?:bagian\s+\w+|pilihan\s+ganda|isian|uraian|esai|essay|benar\s*[-/]?\s*salah|menjodohkan)\b.*\b(?:nomor|no\.?|soal)\s*\d/i.test(t);
+        if (isSec) { reading.endedBy = 'section'; reading = null; }
+        else if (!(qn && +qn[1] === expectNum)) {
           // bukan soal berikutnya → bagian dari teks bacaan (judul, paragraf, daftar bernomor di dalam teks)
-          if (!sectionTypeOf(t) || reading.lines.length) { addPassageLine(t); reading.endLine = i; continue; }
+          addPassageLine(t); reading.endLine = i; continue;
         }
-        reading = null;
+        else reading = null;
       }
 
       // Bagian / instruksi
       const st = sectionTypeOf(t);
       if (st && !(cur && cur.options.length && /^[A-H]\s*[.)]/.test(t) && LETTERS[cur.options.length] === t[0] && !/^[A-H]\s*[.)]\s*(pilih|isi|jawab|beri|lengkap|uraian|esai|benar)/i.test(t))) {
         push(); cur = null; section = st; sectionChanged = true; subList = null; sectionOrder.push(st); sectionTitle = t.replace(/^(?:[IVX]{1,4}|[A-H])\s*[.)]\s*/, '');
+        const sr = t.match(/\b(?:nomor|no\.?|soal)\s*(\d{1,3})\s*(?:[-–—]|s\.?\s*\/?\s*d\.?|sd|sampai(?:\s+dengan)?|hingga)\s*(\d{1,3})/i);
+        if (sr && +sr[2] > +sr[1] && +sr[2] - +sr[1] <= 40) {
+          const nums = []; for (let k = +sr[1]; k <= +sr[2]; k++) nums.push(k);
+          reading = { id: uid(), title: '', text: '', header: t, nums, lines: [], line: i, endLine: i, implicit: true };
+          passages.push(reading);
+        }
         continue;
       }
 
@@ -548,6 +566,22 @@
     push();
 
     // Teks bacaan → judul + paragraf, lalu pasangkan ke soal yang disebut
+    const firstQLine = questions.length ? Math.min(...questions.map(q => q.line)) : Infinity;
+    const instrExtra = [];
+    for (let k = passages.length - 1; k >= 0; k--) {
+      const ps = passages[k];
+      const body = ps.lines.join(' ');
+      // (a) petunjuk umum di awal dokumen (menyebut hampir semua nomor, atau ditutup judul bagian) → halaman Petunjuk
+      const covers = ps.nums.length && questions.length && ps.nums.filter(n => questions.some(q => q.num === n)).length >= Math.max(6, questions.length * 0.8);
+      if (!ps.implicit && ps.line < firstQLine && (covers || (!ps.nums.length && ps.endedBy === 'section') || ps.endedBy === 'section' && covers)) {
+        instrExtra.unshift([ps.header].concat(ps.lines).join(' ').replace(/\s+/g, ' ').trim());
+        passages.splice(k, 1); continue;
+      }
+      if (!ps.implicit && covers && ps.endedBy === 'section') { instrExtra.unshift([ps.header].concat(ps.lines).join(' ').replace(/\s+/g, ' ').trim()); passages.splice(k, 1); continue; }
+      // (b) bagian yang hanya berisi perintah singkat ("Pilihlah jawaban yang tepat!") → bukan teks bacaan
+      if (ps.implicit && (body.length < 90 && !ps.lines.some(isTableRow) || /^(pilih|isi|jawab|beri|lengkap|tulis|tentukan|kerjakan|bacalah\s+soal)/i.test(body) && body.length < 160)) { passages.splice(k, 1); continue; }
+    }
+    if (instrExtra.length) { instr = instr || { lines: [], last: 0, done: true }; instr.lines = instrExtra.concat(instr.lines); }
     passages.forEach(ps => {
       let ls = ps.lines.slice();
       if (ls.length > 1 && looksTitle(ls[0]) && !isTableRow(ls[0])) ps.title = ls.shift().replace(/[:.]\s*$/, '');

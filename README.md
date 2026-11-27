@@ -135,7 +135,7 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 
 ## Teks bacaan untuk beberapa soal (v5.10)
 
-Tulis baris petunjuk seperti `Bacalah teks berikut untuk menjawab soal nomor 6–10!` sebelum teksnya (judul opsional di baris berikutnya), lalu lanjutkan dengan soal nomor 6. Teks otomatis dipasangkan ke soal 6–10, tampil di atas setiap soal itu (bisa disembunyikan murid), dan saat soal diacak kelompoknya tetap berdekatan. Bentuk lain yang dikenali: `… soal no. 6 s.d. 10`, `… nomor 6, 7, dan 8`, `Teks berikut untuk menjawab soal 11-13`. Tanpa nomor (`Bacalah teks berikut!`) → hanya untuk 1 soal sesudahnya. Di editor: tombol 📖 pada soal. Aturan lengkap: menu **Panduan Jenis Soal → Teks bacaan**.
+Tulis baris petunjuk seperti `Bacalah teks berikut untuk menjawab soal nomor 6–10!` sebelum teksnya (judul opsional di baris berikutnya), lalu lanjutkan dengan soal nomor 6. Teks otomatis dipasangkan ke soal 6–10, tampil di atas setiap soal itu (bisa disembunyikan murid), dan saat soal diacak kelompoknya tetap berdekatan. Bentuk lain yang dikenali: `… soal no. 6 s.d. 10`, `… nomor 6, 7, dan 8`, `Teks berikut untuk menjawab soal 11-13`. Tanpa nomor (`Bacalah teks berikut!`) → hanya untuk 1 soal sesudahnya. Gaya AKM `PILIHAN GANDA / NOMOR 1–5` + kasus → teks bacaan hanya untuk nomor itu; petunjuk umum di awal dokumen masuk ke halaman Petunjuk (v5.11.1). Gambar & tabel di dalam teks ikut tersusun (teks → gambar → tabel, atau atur dengan `{{gambar}}`). Di editor: tombol 📖 pada soal. Aturan lengkap: menu **Panduan Jenis Soal → Teks bacaan**.
 
 ## Pecahan, label ganda, klik halus & efek menu (v5.9)
 

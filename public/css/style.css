@@ -909,3 +909,4 @@ a, button, .btn, [data-act], .exam-opt, .kz-opt, .qt-card, .qt-chip, .qt-pick, .
 .ins-ok input { width: 20px; height: 20px; accent-color: var(--primary); }
 button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: grayscale(.3); }
 .ins-ed summary { cursor: pointer; padding: 6px 0; }
+.pz-img { display: block; margin: 10px auto; max-height: 340px; }

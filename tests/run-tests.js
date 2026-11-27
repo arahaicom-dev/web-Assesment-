@@ -168,6 +168,17 @@ t('petunjuk umum sebelum soal pertama diambil (bernomor & berbutir)', () => {
   assert.strictEqual(P.parse('Petunjuk: Pilihlah jawaban yang tepat!\n1. Soal?\nA. a\nB. b').instructions, '');
 });
 
+t('gaya AKM: petunjuk umum bukan teks bacaan; kasus per bagian hanya untuk nomornya', () => {
+  const src = require('fs').readFileSync(__dirname + '/data/akm.txt', 'utf8');
+  const r = P.parse(src);
+  assert.ok(/Semua angka pada kasus/.test(r.instructions), r.instructions);
+  const has = n => !!r.questions.find(q => q.num === n).passage;
+  assert.deepStrictEqual([1, 2, 3, 4, 5, 6, 7, 8].map(has), [true, true, true, false, false, true, true, true]);
+  assert.strictEqual(r.questions[0].passage.title, 'Mengantar buku ke sekolah');
+  assert.ok(!/PILIHAN GANDA|langkah hitung/.test(r.questions[0].passage.text));
+  assert.strictEqual(r.questions.find(q => q.num === 8).answer, 'Rp17.500');
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur

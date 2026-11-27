@@ -37,7 +37,9 @@ Panduan ini juga tersedia di aplikasi (menu **📘 Panduan Jenis Soal**) lengkap
 3. Lalu tulis **isi teks** (boleh beberapa paragraf, boleh ada gambar/tabel).
 4. Setelah teks, langsung tulis **soal dengan nomor pertama yang disebut** (mis. `6. …`).
 5. Bila baris petunjuk **tidak menyebut nomor** (mis. `Bacalah teks berikut!`), teks hanya dipakai untuk **1 soal** sesudahnya.
-6. Daftar bernomor **di dalam** teks sebaiknya memakai `a)` `b)` atau tanda `•` agar tidak dikira nomor soal.
+6. Judul bagian bernomor seperti `PILIHAN GANDA / NOMOR 1–5` yang diikuti cerita/kasus juga dikenali: kasus itu menjadi teks bacaan **hanya untuk nomor 1–5**. Bagian yang hanya berisi perintah (mis. `Pilihlah jawaban yang tepat!`) tidak dijadikan teks bacaan.
+7. Petunjuk umum di awal (mis. `Bacalah setiap kasus … untuk soal nomor 1–40`) masuk ke **halaman Petunjuk**, bukan ke setiap soal.
+8. Daftar bernomor **di dalam** teks sebaiknya memakai `a)` `b)` atau tanda `•` agar tidak dikira nomor soal.
 
 **Bentuk baris petunjuk yang dikenali:**
 - `Bacalah teks berikut untuk menjawab soal nomor 6–10!`

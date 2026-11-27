@@ -165,6 +165,8 @@
       'Lalu tulis <b>isi teks</b> (boleh beberapa paragraf, boleh ada gambar/tabel).',
       'Setelah teks, langsung tulis <b>soal dengan nomor pertama yang disebut</b> (mis. <span class="kbd">6. …</span>).',
       'Bila baris petunjuk <b>tidak menyebut nomor</b> (mis. <span class="kbd">Bacalah teks berikut!</span>), teks hanya dipakai untuk <b>1 soal</b> sesudahnya.',
+      'Judul bagian bernomor seperti <span class="kbd">PILIHAN GANDA / NOMOR 1–5</span> yang diikuti cerita/kasus juga dikenali: kasus itu menjadi teks bacaan <b>hanya untuk nomor 1–5</b>. Bagian yang hanya berisi perintah (mis. <span class="kbd">Pilihlah jawaban yang tepat!</span>) tidak dijadikan teks bacaan.',
+      'Petunjuk umum di awal (mis. <span class="kbd">Bacalah setiap kasus … untuk soal nomor 1–40</span>) masuk ke <b>halaman Petunjuk</b>, bukan ke setiap soal.',
       'Daftar bernomor <b>di dalam</b> teks sebaiknya memakai <span class="kbd">a)</span> <span class="kbd">b)</span> atau tanda <span class="kbd">•</span> agar tidak dikira nomor soal.'
     ],
     bentuk: ['Bacalah teks berikut untuk menjawab soal nomor 6–10!', 'Perhatikan teks berikut untuk soal no. 6 s.d. 10.', 'Cermatilah wacana berikut untuk menjawab soal nomor 6, 7, dan 8.', 'Teks berikut untuk menjawab soal 11-13', 'Perhatikan gambar berikut untuk menjawab soal nomor 4 dan 5!'],

@@ -371,7 +371,19 @@
     const ps = v && v.passage; if (!ps) return '';
     opts = opts || {};
     return `<details class="passage" ${opts.closed ? '' : 'open'}><summary><span class="pz-ic">📖</span><b>${esc(ps.title || 'Teks bacaan')}</b>${opts.note ? `<span class="pz-note">${esc(opts.note)}</span>` : ''}<span class="pz-tog"></span></summary>
-      <div class="passage-body">${ps.image ? `<img src="${ps.image}" class="zoomable q-img" alt="">` : ''}${ps.text ? `<div class="pz-text">${rich(ps.text)}</div>` : ''}</div></details>`;
+      <div class="passage-body">${passageBody(ps)}</div></details>`;
+  }
+  /** Isi teks bacaan: gambar di posisi {{gambar}}; tanpa penanda → setelah paragraf, sebelum tabel pertama. */
+  function passageBody(ps) {
+    const img = ps.image ? `<img src="${ps.image}" class="zoomable q-img pz-img" alt="">` : '';
+    let text = String(ps.text || '');
+    if (/\{\{\s*gambar\s*\}\}/i.test(text)) {
+      return text.split(/\{\{\s*gambar\s*\}\}/i).map((part, k) => (k ? img : '') + (part.trim() ? `<div class="pz-text">${rich(part.replace(/^\n+|\n+$/g, ''))}</div>` : '')).join('');
+    }
+    if (!img) return text ? `<div class="pz-text">${rich(text)}</div>` : '';
+    const lines = text.split('\n'), ti = lines.findIndex(l => /^\s*\|.*\|\s*$/.test(l));
+    const before = ti < 0 ? text : lines.slice(0, ti).join('\n'), after = ti < 0 ? '' : lines.slice(ti).join('\n');
+    return (before.trim() ? `<div class="pz-text">${rich(before)}</div>` : '') + img + (after.trim() ? `<div class="pz-text">${rich(after)}</div>` : '');
   }
   const QT = { rich, passageHTML, instructionsHTML, DEFAULT_INSTR, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
   if (typeof window !== 'undefined') window.QT = QT;
