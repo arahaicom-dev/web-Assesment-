@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.11.2');
+define('APP_VERSION', '5.12.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -559,6 +559,45 @@ try {
     out(array('data' => $m['data']));
   }
 
+  /* ---------- Pantau ujian berjalan & riwayat ---------- */
+  if ($route === 'monitor' && $method === 'GET') {
+    $u = auth(); $tid = tenant_of($u);
+    $names = array(); foreach (rows('SELECT id, name FROM users WHERE tenant_id = ?', array($tid)) as $x) $names[(int)$x['id']] = $x['name'];
+    $clsName = array(); $clsSize = array();
+    foreach (rows("SELECT id, data FROM docs WHERE tenant_id = ? AND kind = 'classes'", array($tid)) as $x) { $c = json_decode($x['data']); $clsName[$x['id']] = $c ? prop($c, 'name', '') : ''; $clsSize[$x['id']] = $c ? count((array)prop($c, 'students', array())) : 0; }
+    // Kuis Seru / Mode Ujian
+    $games = array();
+    foreach (rows("SELECT * FROM games WHERE tenant_id = ? AND (status <> 'ended' OR created_at > (NOW() - INTERVAL 120 DAY)) ORDER BY id DESC LIMIT 150", array($tid)) as $g) {
+      $d = json_decode($g['data'], true); $set = isset($d['settings']) ? $d['settings'] : array();
+      $isExam = isset($set['mode']) && $set['mode'] === 'exam';
+      $cids = !empty($set['classIds']) ? $set['classIds'] : ($g['class_id'] ? array($g['class_id']) : array());
+      $st = one('SELECT COUNT(*) n, SUM(finished_at IS NOT NULL) f, SUM(started_ms > 0 AND finished_at IS NULL) w, AVG(CASE WHEN finished_at IS NOT NULL THEN ' . ($isExam ? 'exam_score' : 'score') . ' END) av, COALESCE(SUM(violations),0) v FROM game_players WHERE game_id = ?', array($g['id']));
+      $expected = 0; foreach ($cids as $c) $expected += isset($clsSize[$c]) ? $clsSize[$c] : 0;
+      $games[] = array('kind' => 'game', 'id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'mode' => $isExam ? 'exam' : 'game',
+        'classes' => array_values(array_filter(array_map(function ($c) use ($clsName) { return isset($clsName[$c]) ? $clsName[$c] : null; }, $cids))),
+        'expected' => $expected, 'players' => (int)$st['n'], 'finished' => (int)$st['f'], 'working' => $isExam ? (int)$st['w'] : max(0, (int)$st['n'] - (int)$st['f']),
+        'avg' => $st['av'] === null ? null : round((float)$st['av'], 1), 'violations' => (int)$st['v'], 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0,
+        'createdAt' => $g['created_at'], 'startedAt' => $g['started_at'], 'endedAt' => $g['ended_at'], 'owner' => isset($names[(int)$g['created_by']]) ? $names[(int)$g['created_by']] : '', 'ownerId' => (int)$g['created_by']);
+    }
+    // Ujian token (per asesmen)
+    $subs = array();
+    foreach (rows('SELECT assessment_id a, COUNT(*) n, MAX(submitted_at) last, MIN(submitted_at) first FROM submissions WHERE tenant_id = ? GROUP BY assessment_id', array($tid)) as $x) $subs[$x['a']] = $x;
+    $tokens = array();
+    foreach (rows("SELECT id, data, updated_by FROM docs WHERE tenant_id = ? AND kind = 'assessments'", array($tid)) as $x) {
+      $a = json_decode($x['data']); if (!$a) continue;
+      $open = (bool)prop($a, 'examOpen') && prop($a, 'examCode');
+      if (!$open && !isset($subs[$x['id']])) continue;
+      $avg = null;
+      if (isset($subs[$x['id']])) { $sum = 0; $k = 0; foreach (rows('SELECT data FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $x['id'])) as $sb) { $sd = json_decode($sb['data'], true); if (isset($sd['result']['score'])) { $sum += $sd['result']['score']; $k++; } } if ($k) $avg = round($sum / $k, 1); }
+      $cid = prop($a, 'classId'); $own = prop($a, 'ownerId') ?: $x['updated_by'];
+      $tokens[] = array('kind' => 'token', 'id' => $x['id'], 'type' => prop($a, 'type'), 'title' => prop($a, 'title', ''), 'open' => $open, 'code' => $open ? prop($a, 'examCode') : '', 'linkId' => prop($a, 'linkId'),
+        'classes' => array(isset($clsName[$cid]) ? $clsName[$cid] : ''), 'expected' => isset($clsSize[$cid]) ? $clsSize[$cid] : 0, 'finished' => isset($subs[$x['id']]) ? (int)$subs[$x['id']]['n'] : 0,
+        'avg' => $avg, 'duration' => (int)prop($a, 'duration', 0), 'firstAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['first'] : null, 'lastAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['last'] : null,
+        'owner' => isset($names[(int)$own]) ? $names[(int)$own] : '', 'ownerId' => (int)$own);
+    }
+    out(array('games' => $games, 'tokens' => $tokens, 'now' => date('Y-m-d H:i:s')));
+  }
+
   /* ---------- Kuis Seru: guru ---------- */
   if ($seg && $seg[0] === 'games') {
     $u = auth(); $tid = tenant_of($u);
@@ -607,6 +646,9 @@ try {
       do { $code = (string)random_int(100000, 999999); } while (one("SELECT id FROM games WHERE code = ? AND status <> 'ended'", array($code)));
       $title = str_cut(prop($body, 'title', '') ?: prop($set, 'title', 'Kuis'), 200);
       $cls = clean_id(prop($body, 'classId')); $subj = clean_id(prop($body, 'subjectId'));
+      $cids = array(); foreach ((array)prop($body, 'classIds', array()) as $x) { $x = clean_id($x); if ($x && !in_array($x, $cids, true) && count($cids) < 30) $cids[] = $x; }
+      if (!$cids && $cls) $cids = array($cls);
+      if ($cids) { $cls = $cids[0]; $settings['classIds'] = $cids; }
       q('INSERT INTO games (tenant_id, code, title, data, class_id, subject_id, created_by) VALUES (?,?,?,?,?,?,?)',
         array($tid, $code, $title, jenc(array('questions' => $questions, 'settings' => $settings)), $cls, $subj, $u['id']));
       out(array('ok' => true, 'id' => (int)db()->lastInsertId(), 'code' => $code, 'skipped' => $skipped, 'count' => count($questions)));
@@ -689,10 +731,17 @@ try {
     $me = $tok ? one('SELECT * FROM game_players WHERE token = ? AND game_id = ?', array($tok, $g['id'])) : null;
     $rank_of = function ($p) use ($g) { return 1 + (int)one('SELECT COUNT(*) n FROM game_players WHERE game_id = ? AND (score > ? OR (score = ? AND correct > ?))', array($g['id'], $p['score'], $p['score'], $p['correct']))['n']; };
     $count = function () use ($g) { return (int)one('SELECT COUNT(*) n FROM game_players WHERE game_id = ?', array($g['id']))['n']; };
-    $roster = function () use ($g) {
+    /** Daftar murid peserta (bisa dari beberapa kelas); null = nama bebas. */
+    $roster = function () use ($g, $set) {
       if (!$g['class_id']) return null;
-      $c = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'classes', $g['class_id']));
-      return $c ? (array)prop(json_decode($c['data']), 'students', array()) : array();
+      $ids = !empty($set['classIds']) ? $set['classIds'] : array($g['class_id']);
+      $all = array();
+      foreach ($ids as $cid) {
+        $c = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'classes', $cid));
+        if (!$c) continue; $cd = json_decode($c['data']);
+        foreach ((array)prop($cd, 'students', array()) as $st1) { $st1->clsName = count($ids) > 1 ? prop($cd, 'name', '') : ''; $all[] = $st1; }
+      }
+      return $all;
     };
     $isExam = isset($set['mode']) && $set['mode'] === 'exam';
     $meOut = function ($p) use ($rank_of, $qsAll, $isExam, $set) {
@@ -717,7 +766,7 @@ try {
       $r = $roster();
       if ($r !== null) {
         $taken = array(); foreach (rows('SELECT student_id FROM game_players WHERE game_id = ? AND student_id IS NOT NULL', array($g['id'])) as $x) $taken[$x['student_id']] = true;
-        $info['students'] = array(); foreach ($r as $s) $info['students'][] = array('id' => $s->id, 'name' => prop($s, 'name', ''), 'needNis' => trim((string)prop($s, 'nis', '')) !== '', 'taken' => isset($taken[$s->id]));
+        $info['students'] = array(); foreach ($r as $s) $info['students'][] = array('id' => $s->id, 'name' => prop($s, 'name', ''), 'cls' => prop($s, 'clsName', ''), 'needNis' => trim((string)prop($s, 'nis', '')) !== '', 'taken' => isset($taken[$s->id]));
       }
       out($info);
     }
@@ -870,7 +919,7 @@ try {
   /* ---------- ujian online murid ---------- */
   if ($seg && $seg[0] === 'exam' && isset($seg[1])) {
     $code = preg_replace('/[^A-Z0-9]/', '', strtoupper(urldecode($seg[1])));
-    $ex = null; $closedBySub = false;
+    $ex = null; $exs = array(); $closedBySub = false;
     if ($code !== '') {
       foreach (rows('SELECT tenant_id, data FROM docs WHERE kind = ? AND exam_code = ?', array('assessments', $code)) as $r) {
         $a = json_decode($r['data']);
@@ -880,8 +929,17 @@ try {
         if (!$ti || !$ti['active']) { $closedBySub = true; continue; }
         $load = function ($kind, $id) use ($tid) { $x = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, (string)$id)); return $x ? json_decode($x['data']) : null; };
         $qset = $load('questionSets', $a->qsetId); $cls = $load('classes', prop($a, 'classId'));
-        if ($qset && $cls) { $ex = array('tid' => $tid, 'a' => $a, 'qset' => $qset, 'cls' => $cls, 'subj' => $load('subjects', prop($a, 'subjectId')), 'settings' => $load('settings', 'main')); break; }
+        if ($qset && $cls) {
+          if ($exs && $exs[0]['tid'] !== $tid) continue; // token sama di sekolah lain: abaikan
+          $exs[] = array('tid' => $tid, 'a' => $a, 'qset' => $qset, 'cls' => $cls, 'subj' => $load('subjects', prop($a, 'subjectId')), 'settings' => $load('settings', 'main'));
+        }
       }
+    }
+    // Satu token bisa dipakai beberapa kelas: pilih asesmen sesuai kelas murid
+    if ($exs) {
+      $ex = $exs[0];
+      $sidIn = (string)prop($body, 'studentId', '');
+      if ($sidIn !== '') foreach ($exs as $cand) foreach ((array)prop($cand['cls'], 'students', array()) as $st0) if (prop($st0, 'id') === $sidIn) { $ex = $cand; break 2; }
     }
     if (!$ex) bad(404, $closedBySub ? 'Ujian tidak tersedia: langganan sekolah sedang tidak aktif. Hubungi guru.' : 'Token ujian tidak ditemukan atau ujian sudah ditutup.');
     $tid = $ex['tid'];
@@ -897,13 +955,16 @@ try {
     $action = isset($seg[2]) ? $seg[2] : '';
 
     if ($action === '' && $method === 'GET') {
-      $done = array();
-      foreach (rows('SELECT student_id FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a->id)) as $r) $done[$r['student_id']] = true;
-      $list = array();
-      foreach ($students as $s) $list[] = array('id' => $s->id, 'name' => prop($s, 'name', ''), 'needNis' => trim((string)prop($s, 'nis', '')) !== '', 'done' => isset($done[$s->id]));
+      $list = array(); $clsNames = array();
+      foreach ($exs as $e1) {
+        $done = array();
+        foreach (rows('SELECT student_id FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $e1['a']->id)) as $r) $done[$r['student_id']] = true;
+        $cn = prop($e1['cls'], 'name', ''); $clsNames[] = $cn;
+        foreach ((array)prop($e1['cls'], 'students', array()) as $s1) $list[] = array('id' => $s1->id, 'name' => prop($s1, 'name', ''), 'cls' => count($exs) > 1 ? $cn : '', 'needNis' => trim((string)prop($s1, 'nis', '')) !== '', 'done' => isset($done[$s1->id]));
+      }
       out(array(
         'assessment' => array('title' => prop($a, 'title', ''), 'type' => prop($a, 'type'), 'duration' => (int)prop($a, 'duration', 0), 'questionCount' => count($questions)),
-        'className' => prop($ex['cls'], 'name', ''), 'subjectName' => $ex['subj'] ? prop($ex['subj'], 'name', '') : '',
+        'className' => implode(', ', $clsNames), 'subjectName' => $ex['subj'] ? prop($ex['subj'], 'name', '') : '',
         'schoolName' => $ex['settings'] ? prop($ex['settings'], 'schoolName', '') : '',
         'students' => $list
       ));

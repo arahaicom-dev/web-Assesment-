@@ -910,3 +910,15 @@ a, button, .btn, [data-act], .exam-opt, .kz-opt, .qt-card, .qt-chip, .qt-pick, .
 button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: grayscale(.3); }
 .ins-ed summary { cursor: pointer; padding: 6px 0; }
 .pz-img { display: block; margin: 10px auto; max-height: 340px; }
+
+/* ujian berjalan */
+.mon-card .card-head h3 { font-size: 1.05rem; }
+.mon-live { animation: monPulse 1.6s ease-in-out infinite; }
+@keyframes monPulse { 50% { opacity: .55; } }
+.mon-stats { display: flex; flex-wrap: wrap; gap: 14px; }
+.mon-stats > div { min-width: 70px; }
+.mon-stats b { display: block; font-size: 1.5rem; line-height: 1.1; }
+.mon-stats small { color: var(--muted); font-size: .75rem; }
+.mon-top .stat { text-align: center; padding: 14px; }
+.mon-top .stat .num { font-size: 2rem; font-weight: 900; }
+.mon-top .stat .lbl { color: var(--muted); font-size: .85rem; }

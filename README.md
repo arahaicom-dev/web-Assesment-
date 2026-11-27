@@ -128,6 +128,13 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Ujian berjalan, riwayat & ujian untuk beberapa kelas (v5.12)
+
+- Menu **📡 Ujian Berjalan & Riwayat** (versi server): semua Kuis Seru, Mode Ujian, dan ujian token yang sedang berlangsung di sekolah — jumlah yang bergabung, sedang mengerjakan, selesai, pelanggaran, rata-rata — diperbarui otomatis tiap 8 detik; tombol buka pengawas, **Akhiri**/**Tutup Ujian**; penanda "⚠ lebih dari sehari" untuk yang lupa diakhiri; tabel **riwayat** dengan rata-rata nilai; filter "Milik saya".
+- **Kuis Seru / Mode Ujian untuk beberapa kelas**: pilih "🏫 Beberapa kelas sekaligus…", centang kelasnya. Murid memilih kelas lalu namanya (+NIS). "Simpan sebagai Nilai" membuat satu asesmen untuk tiap kelas.
+- **Satu token untuk beberapa kelas**: di panel token asesmen, tombol **＋ Kelas lain (token sama)**. Asesmen dibuat otomatis untuk tiap kelas; murid memilih kelas & nama; jawaban masuk ke daftar nilai kelasnya. Buka/tutup/ganti token berlaku untuk semua kelas itu.
+- Essay dengan bagian a, b, c (mis. "Hitunglah: a… b… c…") tetap dibaca **Uraian**, bukan pilihan ganda; tabel berkolom sempit dikenali dari kolom yang sejajar (v5.11.2).
+
 ## Tabel & halaman petunjuk sebelum ujian (v5.11)
 
 - **Tabel** dari PDF/Word (bergaris maupun tidak) dan dari Excel (tempel, dipisah Tab) dikenali otomatis dan tampil sebagai tabel rapi di soal & teks bacaan. Bisa juga diketik: `| Kelas | Jumlah |` per baris (tombol ▦ di editor). Garis tabel tidak lagi disangka garis pecahan.

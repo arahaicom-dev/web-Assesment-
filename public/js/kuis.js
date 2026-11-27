@@ -125,6 +125,8 @@
   function stepName(msg) {
     const i = G.info;
     if (i.status === 'ended') return stepCode('Kuis ini sudah selesai.');
+    const clsList = []; (i.students || []).forEach(s => { if (s.cls && clsList.indexOf(s.cls) < 0) clsList.push(s.cls); });
+    let pickCls = '';
     const avatars = `<div class="kz-avatars">${AVATARS.map(a => `<button type="button" class="kz-av ${a === G.avatar ? 'on' : ''}" data-a="${a}">${a}</button>`).join('')}</div>`;
     view.innerHTML = `<div class="kz-card pop" style="max-width:560px;margin:3vh auto 0">
       <div class="small muted">${esc(i.schoolName || '')}</div><h2 style="margin-top:2px">${esc(i.title)}</h2>
@@ -133,7 +135,7 @@
       <div class="small" style="font-weight:700;margin-bottom:6px">Pilih avatar</div>${avatars}
       <form id="f">
         ${i.needName ? '<label class="field"><span>Nama panggilan</span><input id="nick" maxlength="30" autocomplete="off" placeholder="mis. Budi"></label>'
-          : `<label class="field"><span>Cari nama kamu</span><input id="q" placeholder="Ketik nama..."></label><div class="kz-names" id="names"></div>
+          : `${clsList.length > 1 ? `<div class="field"><span>Pilih kelasmu</span><div class="btns" id="cls-pick">${clsList.map(c => `<button type="button" class="btn soft sm" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>` : ''}<label class="field"><span>Cari nama kamu</span><input id="q" placeholder="Ketik nama..."></label><div class="kz-names" id="names"></div>
              <label class="field hidden" id="nis-wrap"><span>NIS</span><input id="nis" inputmode="numeric" autocomplete="off"></label>`}
         <button class="btn lg kz-go" type="submit">Siap! ▶</button>
       </form></div>`;
@@ -142,10 +144,11 @@
     if (!i.needName) {
       const draw = () => {
         const f = $('#q').value.trim().toLowerCase();
-        $('#names').innerHTML = i.students.filter(s => !f || s.name.toLowerCase().includes(f)).map(s => `<button type="button" class="btn ${chosen && chosen.id === s.id ? '' : 'soft'} sm" data-id="${esc(s.id)}">${esc(s.name)}${s.taken ? ' ✓' : ''}</button>`).join('') || '<span class="muted small">Nama tidak ditemukan.</span>';
+        $('#names').innerHTML = i.students.filter(s => (!f || s.name.toLowerCase().includes(f)) && (!pickCls || s.cls === pickCls)).map(s => `<button type="button" class="btn ${chosen && chosen.id === s.id ? '' : 'soft'} sm" data-id="${esc(s.id)}">${esc(s.name)}${s.cls && !pickCls ? ` <small>· ${esc(s.cls)}</small>` : ''}${s.taken ? ' ✓' : ''}</button>`).join('') || '<span class="muted small">Nama tidak ditemukan.</span>';
         $$('#names button').forEach(b => b.onclick = () => { chosen = i.students.find(s => s.id === b.dataset.id); $('#nis-wrap').classList.toggle('hidden', !chosen.needNis); draw(); if (chosen.needNis) $('#nis').focus(); });
       };
       $('#q').oninput = draw; draw();
+      $$('#cls-pick button').forEach(b => b.onclick = () => { pickCls = pickCls === b.dataset.c ? '' : b.dataset.c; $$('#cls-pick button').forEach(x => { x.className = 'btn sm ' + (x.dataset.c === pickCls ? '' : 'soft'); }); draw(); });
     } else $('#nick').focus();
     $('#f').onsubmit = async e => {
       e.preventDefault();

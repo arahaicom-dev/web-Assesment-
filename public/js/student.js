@@ -53,19 +53,23 @@
   /* 2. Pilih nama */
   function stepName() {
     const i = S.info;
+    const clsList = []; i.students.forEach(s => { if (s.cls && clsList.indexOf(s.cls) < 0) clsList.push(s.cls); });
+    let pickCls = '';
     $('#school').textContent = i.schoolName || 'Asesmen Merdeka';
     view.innerHTML = `<div class="card"><h2>${esc(i.assessment.title)}</h2>
       <p class="muted">${esc(i.subjectName)} · Kelas ${esc(i.className)} · ${i.assessment.questionCount} soal${i.assessment.duration ? ' · ' + i.assessment.duration + ' menit' : ''}</p>
+      ${clsList.length > 1 ? `<div class="field"><span>Pilih kelasmu</span><div class="btns" id="cls-pick">${clsList.map(c => `<button class="btn soft sm" data-c="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>` : ''}
       <label class="field"><span>Cari nama kamu</span><input id="q" placeholder="Ketik nama..."></label>
       <div class="student-list" id="list"></div>
       <div class="btns" style="margin-top:14px"><button class="btn ghost" id="back">← Ganti token</button></div></div>`;
     const draw = () => {
       const f = $('#q').value.trim().toLowerCase();
-      $('#list').innerHTML = i.students.filter(s => !f || s.name.toLowerCase().includes(f)).map(s =>
-        `<button class="btn ${s.done ? 'ghost' : 'soft'}" data-id="${esc(s.id)}"><span>${esc(s.name)}</span>${s.done ? '<span class="pill ok">✔ selesai</span>' : ''}</button>`).join('') || '<p class="muted small">Nama tidak ditemukan.</p>';
+      $('#list').innerHTML = i.students.filter(s => (!f || s.name.toLowerCase().includes(f)) && (!pickCls || s.cls === pickCls)).map(s =>
+        `<button class="btn ${s.done ? 'ghost' : 'soft'}" data-id="${esc(s.id)}"><span>${esc(s.name)}${s.cls && !pickCls ? ` <small class="muted">· ${esc(s.cls)}</small>` : ''}</span>${s.done ? '<span class="pill ok">✔ selesai</span>' : ''}</button>`).join('') || '<p class="muted small">Nama tidak ditemukan.</p>';
       $$('#list button').forEach(b => b.onclick = () => stepNis(i.students.find(s => s.id === b.dataset.id)));
     };
     $('#q').oninput = draw; draw();
+    $$('#cls-pick button').forEach(b => b.onclick = () => { pickCls = pickCls === b.dataset.c ? '' : b.dataset.c; $$('#cls-pick button').forEach(x => { x.className = 'btn sm ' + (x.dataset.c === pickCls ? '' : 'soft'); }); draw(); });
     $('#back').onclick = () => stepToken();
   }
 

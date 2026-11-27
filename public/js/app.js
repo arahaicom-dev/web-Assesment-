@@ -278,6 +278,7 @@ B. VII B</pre></div></div></div>
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
     { href: 'kuis', ic: '🎮', label: 'Kuis Seru (Live)', tag: 'Baru' },
+    { href: 'pantau', ic: '📡', label: 'Ujian Berjalan & Riwayat', server: true },
     { group: 'Soal' },
     { href: 'bank-soal', ic: '📄', label: 'Bank Soal & Unggah PDF' },
     { href: 'panduan-soal', ic: '📘', label: 'Panduan Jenis Soal', tag: '17' },
@@ -423,12 +424,14 @@ B. VII B</pre></div></div></div>
       else if (r === 'akun' && S.mode === 'server') out = viewAccount();
       else if (r === 'langganan' && S.saas) out = viewBilling();
       else if (r === 'kuis') out = parts[1] ? viewGameHost(parts[1]) : viewGames();
+      else if (r === 'pantau' && S.mode === 'server') out = viewMonitor();
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
       else { location.hash = '#/beranda'; return; }
     } catch (e) {
       console.error(e);
       out = { html: `<div class="card"><h2>Terjadi kesalahan</h2><pre class="small">${esc(e.stack || e)}</pre></div>` };
     }
+    if (monitorPoll && !/^pantau/.test(hash)) { clearInterval(monitorPoll); monitorPoll = null; }
     if (gamePoll && !/^kuis\/\d+/.test(hash)) { clearInterval(gamePoll); gamePoll = null; document.body.classList.remove('fs-mode'); if (window.Music) Music.stop(); }
     current = out;
     const onHosting = S.mode === 'local' && /^https?:$/.test(location.protocol) && !/^(localhost|127\.|192\.168\.|10\.)/.test(location.hostname);
@@ -1084,13 +1087,14 @@ B. VII B</pre></div></div></div>
           };
         },
         review: el => reviewModal(a, el.dataset.id),
+        'exam-link': () => linkClassesModal(a, keepScroll),
         'exam-toggle': () => {
           if (!a.examCode) a.examCode = newExamCode();
-          a.examOpen = !a.examOpen; S.save(); keepScroll();
+          const open = !a.examOpen; linkedAsm(a).forEach(x => { if (canEditAsm(x)) { x.examOpen = open; x.examCode = a.examCode; } }); S.save(); keepScroll();
           toast(a.examOpen ? 'Ujian dibuka. Bagikan token ' + a.examCode + ' ke murid.' : 'Ujian ditutup.');
         },
-        'exam-opt': el => { a[el.dataset.k] = !a[el.dataset.k]; S.save(); keepScroll(); },
-        'exam-newcode': async () => { if (!await confirmBox('Buat token baru? Token lama tidak bisa dipakai lagi.', 'Buat Token Baru')) return; a.examCode = newExamCode(); S.save(); keepScroll(); },
+        'exam-opt': el => { const v = !a[el.dataset.k]; linkedAsm(a).forEach(x => { if (canEditAsm(x)) x[el.dataset.k] = v; }); S.save(); keepScroll(); },
+        'exam-newcode': async () => { if (!await confirmBox('Buat token baru? Token lama tidak bisa dipakai lagi.', 'Buat Token Baru')) return; const c = newExamCode(); linkedAsm(a).forEach(x => { if (canEditAsm(x)) x.examCode = c; }); S.save(); keepScroll(); },
         'exam-wa': () => {
           const subj = S.subj(a.subjectId);
           const txt = `Ujian ${a.title} (${subj ? subj.name : ''}) sudah dibuka.\nToken: ${a.examCode}\nKerjakan di: ${examLink(a)}\nMasuk dengan memilih nama dan mengisi NIS.`;
@@ -1110,6 +1114,27 @@ B. VII B</pre></div></div></div>
     return c;
   }
   function examLink(a) { return location.origin + location.pathname.replace(/[^/]*$/, '') + 'ujian.html?token=' + (a.examCode || ''); }
+  /** Asesmen yang berbagi token yang sama (satu ujian untuk beberapa kelas). */
+  const linkedAsm = a => a.linkId ? st().assessments.filter(x => x.linkId === a.linkId) : [a];
+  function linkClassesModal(a, done) {
+    const s = st(), group = linkedAsm(a), inGroup = cid => group.some(x => x.classId === cid);
+    const m = modal(`<h2>🏫 Satu token untuk beberapa kelas</h2>
+      <p class="small muted" style="margin-top:0">Murid dari kelas yang dicentang memakai token <b>${esc(a.examCode)}</b> yang sama, memilih kelas & namanya, lalu nilainya masuk ke daftar nilai kelas masing-masing (asesmen "${esc(a.title)}" dibuat otomatis untuk tiap kelas).</p>
+      <div class="pz-nums">${s.classes.map(c => `<label class="pz-num" style="min-width:auto"><input type="checkbox" value="${esc(c.id)}" ${inGroup(c.id) ? 'checked' : ''} ${c.id === a.classId ? 'disabled' : ''}><span style="padding:0 12px">${esc(c.name)} <small>(${c.students.length})</small></span></label>`).join('')}</div>
+      <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="lk-ok">Simpan</button></div>`);
+    $('#lk-ok', m).onclick = () => {
+      const want = $$('.pz-num input:checked', m).map(x => x.value).concat([a.classId]);
+      if (!a.linkId) a.linkId = S.uid('lk');
+      want.forEach(cid => {
+        if (linkedAsm(a).some(x => x.classId === cid)) return;
+        const copy = Object.assign({}, a, { id: S.uid('a'), classId: cid, created: Date.now() }, ownerStamp());
+        delete copy.tpIds; copy.tpIds = (a.tpIds || []).slice();
+        s.assessments.push(copy);
+      });
+      linkedAsm(a).forEach(x => { if (want.indexOf(x.classId) < 0 && x.id !== a.id) { x.examOpen = false; delete x.linkId; } });
+      S.save(); closeModal(); toast('Token ' + a.examCode + ' berlaku untuk ' + want.length + ' kelas.'); done();
+    };
+  }
   function examPanel(a) {
     const cls = S.cls(a.classId); const subs = st().submissions[a.id] || {};
     const done = cls.students.filter(m => subs[m.id]).length;
@@ -1139,6 +1164,7 @@ B. VII B</pre></div></div></div>
             <label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-act="exam-opt" data-k="hideScore" ${a.hideScore ? 'checked' : ''}> Sembunyikan nilai dari murid</label>
             ${a.examOpen ? '<button class="btn ghost sm" data-act="exam-newcode">↻ Ganti Token</button>' : ''}
           </div>
+          ${a.examOpen ? `<div class="small" style="margin:4px 0 8px">🏫 Kelas: ${linkedAsm(a).map(x => { const c = S.cls(x.classId), sb = st().submissions[x.id] || {}; return c ? `<span class="pill ${x.id === a.id ? 'pri' : ''}">${esc(c.name)} · ${c.students.filter(m => sb[m.id]).length}/${c.students.length}</span>` : ''; }).join(' ')} <button class="btn ghost sm" data-act="exam-link">＋ Kelas lain (token sama)</button></div>` : ''}
           <div class="small muted">Sudah mengumpulkan: <b>${done}/${cls.students.length}</b>${review ? ` · <span style="color:var(--warn)">${review} perlu koreksi uraian</span>` : ''} · <a href="#" data-act="refresh">🔄 muat ulang hasil</a></div>
           <div class="bar" style="margin-top:6px"><i style="width:${cls.students.length ? done / cls.students.length * 100 : 0}%"></i></div>
         </div>
@@ -2319,9 +2345,10 @@ B. VII B</pre></div></div></div>
         <button type="button" class="mode-card" data-mode="exam"><b>📝 Ujian</b><small>Timer total, bebas pindah soal, ragu-ragu, pengawasan, soal uraian</small></button></div>
       <label class="field"><span>Paket soal</span><select id="g-qs">${s.questionSets.map(q => `<option value="${q.id}" ${preset.qsetId === q.id ? 'selected' : ''} data-g="${usable(q)}" data-e="${usableExam(q)}">${esc(q.title)}</option>`).join('')}</select></label>
       <label class="field"><span>Judul kuis</span><input id="g-title" placeholder="(sama dengan judul paket soal)" value="${esc(preset.title || '')}"></label>
-      <div class="row"><label class="field"><span>Peserta</span><select id="g-cls"><option value="">Bebas — murid mengetik nama panggilan</option>${s.classes.map(c => `<option value="${c.id}" ${(preset.classId || '') === c.id ? 'selected' : ''}>Kelas ${esc(c.name)} — pilih nama (nilai bisa disimpan)</option>`).join('')}</select></label>
+      <div class="row"><label class="field"><span>Peserta</span><select id="g-cls"><option value="">Bebas — murid mengetik nama panggilan</option>${s.classes.map(c => `<option value="${c.id}" ${(preset.classId || '') === c.id && !(preset.classIds && preset.classIds.length > 1) ? 'selected' : ''}>Kelas ${esc(c.name)} — pilih nama (nilai bisa disimpan)</option>`).join('')}${s.classes.length > 1 ? `<option value="__multi" ${preset.classIds && preset.classIds.length > 1 ? 'selected' : ''}>🏫 Beberapa kelas sekaligus…</option>` : ''}</select></label>
       <label class="field only-game" style="max-width:170px"><span>Waktu per soal</span><select id="g-time">${[10, 15, 20, 30, 45, 60, 90, 120].map(t => `<option value="${t}" ${(preset.time || 20) === t ? 'selected' : ''}>${t} detik</option>`).join('')}</select></label>
       <label class="field only-exam" style="max-width:170px"><span>Durasi ujian</span><select id="g-dur">${[[15, '15 menit'], [30, '30 menit'], [45, '45 menit'], [60, '60 menit'], [90, '90 menit'], [120, '120 menit'], [0, 'Tanpa batas']].map(([v, l]) => `<option value="${v}" ${(preset.duration == null ? 60 : preset.duration) === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label></div>
+      <div class="field hidden" id="g-multi"><span>Kelas peserta (centang semua yang ikut)</span><div class="pz-nums">${s.classes.map(c => `<label class="pz-num"><input type="checkbox" value="${c.id}" ${(preset.classIds || []).indexOf(c.id) >= 0 ? 'checked' : ''}><span style="padding:0 12px">${esc(c.name)} <small>(${c.students.length})</small></span></label>`).join('')}</div></div>
       <label class="field"><span>Mapel (untuk menyimpan nilai)</span><select id="g-subj">${s.subjects.map(x => `<option value="${x.id}" ${(preset.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <div class="grid g2 small" style="gap:6px">
         <label style="display:flex;gap:8px"><input type="checkbox" id="g-sq" checked> Acak urutan soal per murid</label>
@@ -2352,6 +2379,7 @@ B. VII B</pre></div></div></div>
       paintMusic();
     };
     const paintMusic = () => { const on = $('#g-music-on', m).checked; $('#g-music', m).disabled = !on; $('#g-music-row', m).style.opacity = on ? 1 : .45; };
+    let clsTouched = !!(preset.classId || (preset.classIds && preset.classIds.length));
     const paint = () => {
       fillMusic();
       $$('.mode-card', m).forEach(c => c.classList.toggle('on', c.dataset.mode === mode));
@@ -2362,21 +2390,24 @@ B. VII B</pre></div></div></div>
         ? `${o ? o.dataset.e : 0} soal dipakai — semua 17 jenis soal bisa dipakai (uraian, menggambar & rekam suara dikoreksi guru). Pilih <b>kelas</b> agar murid masuk dengan nama & NIS dan nilainya bisa disimpan.`
         : `${o ? o.dataset.g : 0} soal dipakai. Uraian, menggambar, rekam suara, dan soal yang kuncinya belum lengkap tidak dipakai di mode permainan (pakai mode Ujian).`;
       $('#g-ok', m).textContent = mode === 'exam' ? 'Buat & Buka Layar Pengawas' : 'Buat & Buka Layar Kuis';
-      if (mode === 'exam' && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
+      if (mode === 'exam' && !clsTouched && !$('#g-cls', m).value && s.classes[0]) $('#g-cls', m).value = s.classes[0].id;
+      $('#g-multi', m).classList.toggle('hidden', $('#g-cls', m).value !== '__multi');
     };
     $$('.mode-card', m).forEach(c => c.onclick = () => { mode = c.dataset.mode; paint(); });
     $('#g-music-on', m).onchange = () => { paintMusic(); if (!$('#g-music-on', m).checked && window.Music) Music.stop(); };
     $('#g-music', m).onchange = e => { if (window.Music) { Music.unlock(); Music.setVolume(0.45); if (e.target.value) { Music.play(e.target.value); clearTimeout(window.__mp); window.__mp = setTimeout(() => Music.stop(), 6000); } else Music.stop(); } };
     $('#g-qs', m).onchange = paint;
+    $('#g-cls', m).onchange = () => { clsTouched = true; paint(); };
     paint();
     $('#g-ok', m).onclick = async () => {
+      if ($('#g-cls', m).value === '__multi' && $$('#g-multi input:checked', m).length < 1) return toast('Centang kelas yang ikut.', 'bad');
       const b = $('#g-ok', m); b.disabled = true;
       try {
         if (window.Music) Music.stop();
         const musicOn = $('#g-music-on', m).checked, track = $('#g-music', m).value, hostOn = $('#g-music-host', m).checked;
         localStorage.setItem('kuis-musik-def-' + mode, JSON.stringify({ on: musicOn, track, host: hostOn }));
         hostAutoMusic = hostOn ? track : null;
-        const r = await S.api('games', { body: { mode, music: musicOn ? track : '', qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value || null, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
+        const r = await S.api('games', { body: { mode, music: musicOn ? track : '', qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value === '__multi' ? null : ($('#g-cls', m).value || null), classIds: $('#g-cls', m).value === '__multi' ? $$('#g-multi input:checked', m).map(x => x.value) : undefined, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
           duration: +$('#g-dur', m).value, showResult: $('#g-sr', m).checked, maxViolations: +$('#g-viol', m).value,
           shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
         closeModal();
@@ -2414,7 +2445,7 @@ B. VII B</pre></div></div></div>
         save: () => saveGameScores(out.data),
         xls: () => exportTable($('#res-table'), 'Kuis_' + out.data.game.title.replace(/[^\w\s-]/g, '')),
         music: () => hostMusic(),
-        again: () => { const g = out.data.game; newGameModal({ music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
+        again: () => { const g = out.data.game; newGameModal({ music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, classIds: gameClassIds(g), subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
         reset: async el => { if (!await confirmBox(`Ulang ujian untuk <b>${esc(el.dataset.n)}</b>? Jawaban, nilai, dan catatan pelanggarannya dihapus sehingga ia bisa mengerjakan dari awal.`, 'Ulang Ujian')) return; try { await S.api('games/' + id + '/reset', { body: { playerId: +el.dataset.id } }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
         review: el => examReviewModal(out, +el.dataset.id)
       }
@@ -2428,11 +2459,13 @@ B. VII B</pre></div></div></div>
     $$('[data-act=start],[data-act=end],[data-act=kick],[data-act=reset]', box).forEach(b => b.remove());
     box.insertAdjacentHTML('afterbegin', `<div class="note warn" style="margin-bottom:12px">👁 <b>Hanya lihat.</b> Kuis ini dibuat oleh <b>${esc(d.game.creatorName || 'guru lain')}</b>. Hanya pembuatnya atau admin sekolah yang bisa memulai, mengakhiri, atau mengoreksi.</div>`);
   }
+  const gameClassIds = g => (g.settings && g.settings.classIds && g.settings.classIds.length ? g.settings.classIds : g.classId ? [g.classId] : []);
+  const gameClassNames = g => gameClassIds(g).map(id => S.cls(id)).filter(Boolean).map(c => c.name).join(', ');
   function renderHost0(d) {
     const g = d.game, ps = d.players, total = d.questions.length, box = $('#host');
     if (!box) return;
     if (g.settings.mode === 'exam') return renderExamHost(d, box);
-    setTitle('🎮 ' + esc(g.title), `${total} soal · ${g.settings.time} detik/soal${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ' · nama bebas'}`);
+    setTitle('🎮 ' + esc(g.title), `${total} soal · ${g.settings.time} detik/soal${gameClassNames(g) ? ' · Kelas ' + esc(gameClassNames(g)) : ' · nama bebas'}`);
     const link = playLink(g.code);
     const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><button class="btn ghost sm" data-act="music">${window.Music && Music.current() ? '🎵 Musik: ' + esc((Music.TRACKS.find(x => x.id === Music.current()) || {}).name || '') : '🎵 Musik'}</button><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>`;
     const finished = ps.filter(p => p.finished).length;
@@ -2478,7 +2511,7 @@ B. VII B</pre></div></div></div>
   const mmss = ms => { if (ms === null || ms === undefined) return '–'; const s2 = Math.ceil(ms / 1000); return String(Math.floor(s2 / 60)).padStart(2, '0') + ':' + String(s2 % 60).padStart(2, '0'); };
   function renderExamHost(d, box) {
     const g = d.game, ps = d.players, total = d.questions.length, set = g.settings;
-    setTitle('📝 ' + esc(g.title), `Mode Ujian · ${total} soal · ${set.duration ? set.duration + ' menit' : 'tanpa batas waktu'}${g.classId && S.cls(g.classId) ? ' · Kelas ' + esc(S.cls(g.classId).name) : ''}`);
+    setTitle('📝 ' + esc(g.title), `Mode Ujian · ${total} soal · ${set.duration ? set.duration + ' menit' : 'tanpa batas waktu'}${gameClassNames(g) ? ' · Kelas ' + esc(gameClassNames(g)) : ''}`);
     const link = playLink(g.code);
     const top = `<div class="btns no-print" style="margin-bottom:12px"><a class="btn ghost sm" href="#/kuis">← Semua Kuis</a><button class="btn ghost sm" data-act="fs">⛶ Layar Penuh</button><button class="btn ghost sm" data-act="music">${window.Music && Music.current() ? '🎵 Musik: ' + esc((Music.TRACKS.find(x => x.id === Music.current()) || {}).name || '') : '🎵 Musik'}</button><span class="pill ${GAME_STATUS[g.status][0]}">${g.status === 'running' ? '● Ujian berlangsung' : g.status === 'lobby' ? 'Menunggu peserta' : 'Selesai'}</span></div>`;
     const st0 = p => p.finished ? ['ok', '✔ Selesai'] : p.started_ms ? ['pri', '✍ Mengerjakan'] : ['', 'Belum mulai'];
@@ -2567,29 +2600,105 @@ B. VII B</pre></div></div></div>
 
   function saveGameScores(d) {
     const s = st(); const g = d.game, graded = d.questions.filter(q => q.type !== 'slide' && q.type !== 'polling'), total = graded.length;
-    const cls = S.cls(g.classId);
-    if (!cls) return toast('Kelas kuis ini tidak ditemukan.', 'bad');
-    const m = modal(`<h2>Simpan sebagai Nilai</h2><p class="small muted">${g.settings.mode === 'exam' ? 'Nilai tiap murid = nilai ujian (poin diperoleh ÷ total poin × 100), termasuk hasil koreksi uraian.' : 'Nilai tiap murid = jumlah benar ÷ ' + total + ' soal × 100 (jawaban benar sebagian dihitung sebagian).'} Murid yang tidak ikut dibiarkan kosong.</p>
+    const classes = gameClassIds(g).map(id => S.cls(id)).filter(Boolean);
+    if (!classes.length) return toast('Kelas kuis ini tidak ditemukan.', 'bad');
+    const cls = classes[0];
+    const m = modal(`<h2>Simpan sebagai Nilai</h2>${classes.length > 1 ? `<p class="small" style="margin-top:0">🏫 Nilai disimpan ke <b>${classes.length} kelas</b> (${classes.map(c => esc(c.name)).join(', ')}) — satu asesmen untuk tiap kelas.</p>` : ''}<p class="small muted">${g.settings.mode === 'exam' ? 'Nilai tiap murid = nilai ujian (poin diperoleh ÷ total poin × 100), termasuk hasil koreksi uraian.' : 'Nilai tiap murid = jumlah benar ÷ ' + total + ' soal × 100 (jawaban benar sebagian dihitung sebagian).'} Murid yang tidak ikut dibiarkan kosong.</p>
       <label class="field"><span>Jenis asesmen</span><select id="sv-type">${['formatif', 'slm', 'diagnostik', 'sts', 'sas', 'sat'].map(k => `<option value="${k}">${T[k].name} (${T[k].short})</option>`).join('')}</select></label>
       <label class="field"><span>Mapel</span><select id="sv-subj">${s.subjects.map(x => `<option value="${x.id}" ${(g.subjectId || s.ui.subjectId) === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
       <label class="field"><span>Judul</span><input id="sv-title" value="${esc((g.settings.mode === 'exam' ? '' : 'Kuis Seru — ') + g.title)}"></label>
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="sv-ok">Simpan Nilai</button></div>`);
     $('#sv-ok', m).onclick = () => {
       const type = $('#sv-type', m).value;
-      const a = Object.assign({ id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() }, ownerStamp());
-      s.assessments.push(a);
+      const made = [];
       let n = 0;
       const isExam = g.settings.mode === 'exam';
+      classes.forEach(cls => {
+      const a = Object.assign({ id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() }, ownerStamp());
+      s.assessments.push(a); made.push(a);
       d.players.forEach(p => {
         if (!p.student_id || !cls.students.some(x => x.id === p.student_id)) return;
         const v = isExam ? p.exam_score : total ? Math.round(graded.reduce((t, q) => { const a = (p.answers || {})[q.id]; return t + (a ? (a.f !== undefined ? +a.f : a.ok ? 1 : 0) : 0); }, 0) / total * 100) : 0;
         if (v === null || v === undefined) return;
         S.setScore(a.id, p.student_id, Math.round(v * 100) / 100); n++;
       });
-      S.save(); closeModal(); toast(n + ' nilai disimpan ke ' + T[type].name + '.');
-      s.ui.classId = cls.id; s.ui.subjectId = a.subjectId;
-      location.hash = '#/asesmen/' + type + '/' + a.id;
+      });
+      S.save(); closeModal(); toast(n + ' nilai disimpan ke ' + T[type].name + (made.length > 1 ? ' (' + made.length + ' kelas)' : '') + '.');
+      s.ui.classId = made[0].classId; s.ui.subjectId = made[0].subjectId;
+      location.hash = '#/asesmen/' + type + '/' + made[0].id;
     };
+  }
+
+  /* ================= Ujian berjalan & riwayat ================= */
+  let monitorPoll = null, monitorFilter = 'all';
+  const sinceText = t => { if (!t) return ''; const d = (Date.now() - new Date(String(t).replace(' ', 'T')).getTime()) / 60000; return d < 1 ? 'baru saja' : d < 60 ? Math.floor(d) + ' menit lalu' : d < 1440 ? Math.floor(d / 60) + ' jam lalu' : tgl(t); };
+  function viewMonitor() {
+    setTitle('📡 Ujian Berjalan & Riwayat', 'Pantau semua ujian & kuis yang sedang berlangsung di sekolah — diperbarui otomatis');
+    renderCtx(false);
+    const out = {
+      html: `<div class="btns no-print" style="margin-bottom:12px"><div class="tabs" style="margin:0"><button class="${monitorFilter === 'all' ? 'on' : ''}" data-act="mf" data-f="all">Semua guru</button><button class="${monitorFilter === 'mine' ? 'on' : ''}" data-act="mf" data-f="mine">Milik saya</button></div>
+        <span class="small muted" id="mon-upd" style="margin-left:auto"></span><button class="btn ghost sm" data-act="mrefresh">🔄 Muat ulang</button></div><div id="mon" class="muted">Memuat…</div>`,
+      async mount(v) {
+        const load = async () => {
+          const box = $('#mon'); if (!box) return;
+          let d; try { d = await S.api('monitor'); } catch (e) { box.innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
+          out.data = d; draw(d);
+          const u = $('#mon-upd'); if (u) u.textContent = 'Diperbarui ' + new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        };
+        out.load = load;
+        await load();
+        clearInterval(monitorPoll); monitorPoll = setInterval(load, 8000);
+      },
+      actions: {
+        mf: el => { monitorFilter = el.dataset.f; route(); },
+        mrefresh: () => out.load && out.load(),
+        'mon-end': async el => {
+          if (!await confirmBox('Akhiri kuis/ujian ini sekarang? Lembar yang belum dikumpulkan akan dikumpulkan otomatis.', 'Akhiri')) return;
+          try { await S.api('games/' + el.dataset.id + '/end', { body: {} }); toast('Diakhiri.'); out.load(); } catch (e) { toast(e.message, 'bad'); }
+        },
+        'mon-close': async el => {
+          const a = S.asm(el.dataset.id); if (!a) return toast('Asesmen tidak ditemukan. Muat ulang halaman.', 'bad');
+          if (!canEditAsm(a)) return toast('Hanya pembuat atau admin sekolah yang bisa menutup ujian ini.', 'bad');
+          if (!await confirmBox(`Tutup ujian token <b>${esc(a.examCode)}</b>? Murid yang belum mengumpulkan tidak bisa masuk lagi.`, 'Tutup')) return;
+          linkedAsm(a).forEach(x => { if (canEditAsm(x)) x.examOpen = false; }); S.save(); await S.flush(); toast('Ujian ditutup.'); out.load();
+        }
+      }
+    };
+    function draw(d) {
+      const mine = x => monitorFilter !== 'mine' || +x.ownerId === +S.user.id;
+      const games = d.games.filter(mine), tokens = d.tokens.filter(mine);
+      // ujian token yang berbagi token digabung jadi satu kartu
+      const tokGroups = []; const seen = {};
+      tokens.forEach(t => { const k = t.open && t.linkId ? 'L' + t.linkId : 'A' + t.id; if (seen[k]) { const g = seen[k]; g.classes = g.classes.concat(t.classes); g.expected += t.expected; g.finished += t.finished; g.ids.push(t.id); if (t.firstAt && (!g.firstAt || t.firstAt < g.firstAt)) g.firstAt = t.firstAt; if (t.lastAt && (!g.lastAt || t.lastAt > g.lastAt)) g.lastAt = t.lastAt; if (t.avg !== null) { g._s += t.avg * t.finished; g._n += t.finished; } return; } const g = Object.assign({}, t, { ids: [t.id], _s: t.avg !== null ? t.avg * t.finished : 0, _n: t.avg !== null ? t.finished : 0 }); seen[k] = g; tokGroups.push(g); });
+      tokGroups.forEach(g => { g.avg = g._n ? Math.round(g._s / g._n * 10) / 10 : null; });
+      const live = games.filter(g => g.status !== 'ended').concat(tokGroups.filter(t => t.open));
+      const hist = games.filter(g => g.status === 'ended').concat(tokGroups.filter(t => !t.open)).sort((a, b) => String(b.endedAt || b.lastAt || b.createdAt).localeCompare(String(a.endedAt || a.lastAt || a.createdAt)));
+      const kindPill = x => x.kind === 'token' ? '<span class="pill pri">🔑 Ujian Token</span>' : x.mode === 'exam' ? '<span class="pill pri">📝 Mode Ujian</span>' : '<span class="pill ok">🎮 Permainan</span>';
+      const card = x => {
+        const total = x.expected || x.players || 0, done = x.finished, pct = total ? Math.min(100, Math.round(done / total * 100)) : 0;
+        const status = x.kind === 'token' ? '● Token dibuka' : x.status === 'lobby' ? '⏳ Menunggu dimulai' : '● Berlangsung';
+        const stale = x.kind !== 'token' && (Date.now() - new Date(String(x.startedAt || x.createdAt).replace(' ', 'T')).getTime()) > 86400000;
+        return `<div class="card mon-card"><div class="card-head"><h3>${esc(x.title)}</h3><span class="pill ${x.status === 'lobby' ? 'warn' : 'ok'} mon-live">${status}</span></div>
+          <div class="btns" style="gap:6px;margin-bottom:8px">${stale ? '<span class="pill warn" title="Mungkin lupa diakhiri">⚠ lebih dari sehari</span>' : ''}${kindPill(x)}${x.classes.length ? `<span class="pill">🏫 ${x.classes.map(esc).join(', ')}</span>` : '<span class="pill">nama bebas</span>'}<span class="pill">${x.kind === 'token' ? 'Token' : 'Kode'} <b>${esc(x.code)}</b></span>${x.owner ? `<span class="pill">👤 ${esc(x.owner)}</span>` : ''}</div>
+          <div class="mon-stats"><div><b>${x.kind === 'token' ? done : x.players}</b><small>${x.kind === 'token' ? 'mengumpulkan' : 'bergabung'}</small></div>${x.kind === 'token' ? '' : `<div><b>${x.working}</b><small>${x.mode === 'exam' ? 'sedang mengerjakan' : 'bermain'}</small></div><div><b>${done}</b><small>selesai</small></div>`}<div><b>${total || '–'}</b><small>${x.expected ? 'murid di kelas' : 'peserta'}</small></div>${x.violations ? `<div><b style="color:var(--bad)">${x.violations}</b><small>pelanggaran</small></div>` : ''}${x.avg !== null && x.avg !== undefined ? `<div><b>${fmt(x.avg, x.kind !== 'token' && x.mode === 'game' ? 0 : 1)}</b><small>${x.kind !== 'token' && x.mode === 'game' ? 'rata-rata poin' : 'rata-rata nilai'}</small></div>` : ''}</div>
+          <div class="bar" style="margin:8px 0"><i style="width:${pct}%"></i></div>
+          <div class="small muted">${x.kind === 'token' ? (x.firstAt ? 'Pengumpulan pertama ' + sinceText(x.firstAt) : 'Belum ada yang mengumpulkan') : x.startedAt ? 'Dimulai ' + sinceText(x.startedAt) : 'Dibuat ' + sinceText(x.createdAt)}${x.duration ? ' · durasi ' + x.duration + ' menit' : ''}</div>
+          <div class="btns" style="margin-top:10px">${x.kind === 'token' ? `<a class="btn sm" href="#/asesmen/${x.type}/${x.id}">👁 Buka Nilai & Token</a><button class="btn danger sm" data-act="mon-close" data-id="${esc(x.id)}">■ Tutup Ujian</button>` : `<a class="btn sm" href="#/kuis/${x.id}">👁 Buka Layar ${x.mode === 'exam' ? 'Pengawas' : 'Kuis'}</a>${+x.ownerId === +S.user.id || S.user.role === 'admin' ? `<button class="btn danger sm" data-act="mon-end" data-id="${x.id}">■ Akhiri</button>` : ''}`}</div></div>`;
+      };
+      const row = x => `<tr><td class="small">${x.kind === 'token' ? (x.lastAt ? tgl(x.lastAt) : '–') : tgl(x.endedAt || x.createdAt)}</td><td><b>${esc(x.title)}</b></td><td>${kindPill(x)}</td><td>${x.classes.map(esc).join(', ') || '<span class="muted">nama bebas</span>'}</td>
+        <td class="num">${x.finished}${x.expected ? '/' + x.expected : ''}</td><td class="num">${x.avg !== null && x.avg !== undefined ? fmt(x.avg, x.kind !== 'token' && x.mode === 'game' ? 0 : 1) + (x.kind !== 'token' && x.mode === 'game' ? ' poin' : '') : '–'}</td><td class="small">${esc(x.owner || '')}</td>
+        <td>${x.kind === 'token' ? `<a class="btn ghost sm" href="#/asesmen/${x.type}/${x.id}">📊 Nilai</a>` : `<a class="btn ghost sm" href="#/kuis/${x.id}">📊 Hasil</a>`}</td></tr>`;
+      $('#mon').innerHTML = `<div class="grid g4 mon-top">
+          <div class="card stat"><div class="num">${live.length}</div><div class="lbl">ujian/kuis berjalan</div></div>
+          <div class="card stat"><div class="num">${live.reduce((t, x) => t + (x.kind === 'token' ? 0 : x.working || 0), 0)}</div><div class="lbl">murid sedang mengerjakan</div></div>
+          <div class="card stat"><div class="num">${live.reduce((t, x) => t + (x.finished || 0), 0)}</div><div class="lbl">sudah selesai</div></div>
+          <div class="card stat"><div class="num">${hist.length}</div><div class="lbl">riwayat</div></div></div>
+        <h2 style="margin:18px 0 10px">● Sedang berjalan</h2>
+        ${live.length ? `<div class="grid auto">${live.map(card).join('')}</div>` : '<div class="card empty"><div class="big">😴</div>Tidak ada ujian atau kuis yang sedang berjalan. Buat dari menu <a href="#/kuis">Kuis Seru</a> atau buka token di halaman asesmen.</div>'}
+        <h2 style="margin:22px 0 10px">🕘 Riwayat</h2>
+        ${hist.length ? `<div class="card"><div class="table-wrap"><table><thead><tr><th>Tanggal</th><th>Judul</th><th>Jenis</th><th>Kelas</th><th class="num">Selesai</th><th class="num">Rata-rata</th><th>Guru</th><th></th></tr></thead><tbody>${hist.map(row).join('')}</tbody></table></div></div>` : '<div class="card empty">Belum ada riwayat ujian.</div>'}`;
+    }
+    return out;
   }
 
   /* ================= Panel Pemilik Platform ================= */
