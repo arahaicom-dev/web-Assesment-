@@ -150,6 +150,24 @@ t('bentuk lain: "s.d.", "dan", dan tanpa nomor (1 soal)', () => {
   assert.strictEqual(c.questions[0].passage, undefined);
 });
 
+t('tabel dari PDF/Excel menjadi baris tabel; pilihan sebaris bukan tabel', () => {
+  const a = P.parse('3. Tabel jumlah murid:\nKelas   Jumlah\nIV A   15\nIV B   16\nKelas terbanyak adalah ....\nA. IV A\nB. IV B');
+  assert.strictEqual(a.questions[0].text, 'Tabel jumlah murid:\n| Kelas | Jumlah |\n| IV A | 15 |\n| IV B | 16 |\nKelas terbanyak adalah ....');
+  const b = P.parse('1. Data:\nNama\tNilai\nAni\t80\nBudi\t70\nSiapa?\nA. Ani\nB. Budi');
+  assert.ok(/\| Ani \| 80 \|/.test(b.questions[0].text));
+  const c = P.parse('1. Q?\nA. 2   B. 4   C. 6   D. 8');
+  assert.strictEqual(c.questions[0].options.length, 4);
+});
+t('petunjuk umum sebelum soal pertama diambil (bernomor & berbutir)', () => {
+  const a = P.parse('PETUNJUK UMUM\n1. Berdoalah.\n2. Tulis nama\ndengan jelas.\nI. PILIHAN GANDA\n1. Ibu kota?\nA. a\nB. b');
+  assert.strictEqual(a.instructions, '1. Berdoalah.\n2. Tulis nama dengan jelas.'); assert.strictEqual(a.questions.length, 1);
+  const b = P.parse('Petunjuk Pengerjaan:\n1. Bacalah doa.\n2. Kerjakan yang mudah.\n1. Soal satu?\nA. a\nB. b\n2. Soal dua?\nA. a\nB. b');
+  assert.strictEqual(b.questions.length, 2); assert.ok(/Bacalah doa/.test(b.instructions));
+  const c = P.parse('PETUNJUK\n- Gunakan pensil\n1. Soal?\nA. a\nB. b');
+  assert.strictEqual(c.instructions, '• Gunakan pensil'); assert.strictEqual(c.questions.length, 1);
+  assert.strictEqual(P.parse('Petunjuk: Pilihlah jawaban yang tepat!\n1. Soal?\nA. a\nB. b').instructions, '');
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur

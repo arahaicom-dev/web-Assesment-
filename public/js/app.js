@@ -131,10 +131,36 @@
           <li><b>Koreksi & nilai</b> — soal otomatis langsung bernilai; uraian, gambar, dan rekaman dinilai di tombol <b>📝 Koreksi</b>. Nilai akhir = poin diperoleh ÷ total poin × 100.</li>
         </ol>
         <div class="btns no-print" style="margin-top:10px"><button class="btn ghost sm" data-act="print">🖨 Cetak / Simpan PDF</button></div></div></div>
-      <div class="pd-toc"><b>📖 Lainnya</b><a class="chip" href="#/panduan-soal/teks">📖 Teks bacaan untuk beberapa soal</a></div>
+      <div class="pd-toc"><b>📖 Lainnya</b><a class="chip" href="#/panduan-soal/teks">📖 Teks bacaan untuk beberapa soal</a><a class="chip" href="#/panduan-soal/tabel">▦ Tabel & 📋 Petunjuk soal</a></div>
       ${groups.map(([g, ts]) => `<div class="pd-toc"><b>${g}</b>${ts.map(t => `<a class="chip" href="#/panduan-soal/${t}">${QT.TYPES[t].icon} ${TYPE_LABEL[t]}</a>`).join('')}</div>`).join('')}
       <div class="card small"><b>Penilaian sebagian:</b> pada PG Kompleks, Menjodohkan, Mengurutkan, Mengelompokkan, Seret ke Kalimat, Pilihan dalam Kalimat, dan Label Gambar, murid mendapat poin sesuai bagian yang benar. Contoh: soal 4 poin, 3 dari 4 pasangan benar → 3 poin. Di Kuis Permainan, jawaban benar sebagian juga mendapat poin sebagian.</div>
       ${teksGuideHTML()}
+      <div class="card" id="pd-tabel"><div class="pd-head"><span class="pd-ic">▦</span><div><h3>Tabel & Petunjuk Soal</h3><div class="small muted">tabel di soal/teks bacaan, dan halaman petunjuk sebelum ujian</div></div></div>
+        <div class="pd-grid"><div>
+          <h4>▦ Tabel</h4><ul>
+            <li>Dari PDF/Word: tabel dikenali otomatis bila kolomnya berjarak (minimal 2 baris & 2 kolom).</li>
+            <li>Tempel dari Excel (kolom dipisah Tab) juga dikenali.</li>
+            <li>Ketik sendiri: satu baris tabel per baris, kolom dipisah <span class="kbd">|</span>, mis. <span class="kbd">| Kelas | Jumlah |</span>. Baris pertama menjadi judul kolom. Tombol <b>▦</b> di editor menyisipkan contoh tabel.</li>
+          </ul>
+          <h4>📋 Petunjuk soal</h4><ul>
+            <li>Di PDF: tulis judul <span class="kbd">PETUNJUK UMUM</span> / <span class="kbd">Petunjuk Pengerjaan</span> sebelum soal pertama, lalu poin-poinnya (1., 2., … atau •). Diambil otomatis.</li>
+            <li>Di editor paket soal: bagian <b>📋 Petunjuk soal</b> (kosong = petunjuk standar).</li>
+            <li>Murid membaca petunjuk <b>setelah memasukkan nama/NIS</b>, mencentang "Saya sudah membaca petunjuk", lalu menekan <b>Mulai</b>. <b>Waktu ujian baru berjalan setelah Mulai ditekan.</b></li>
+            <li>Cara menjawab tiap jenis soal yang ada di ujian ditambahkan otomatis.</li>
+          </ul></div>
+          <div><h4>📄 Contoh</h4><pre class="pd-pre">PETUNJUK UMUM
+1. Berdoalah sebelum mengerjakan.
+2. Tulis nama dan NIS dengan benar.
+3. Periksa kembali jawabanmu.
+
+I. PILIHAN GANDA
+1. Perhatikan tabel berikut!
+Kelas      Jumlah murid
+VII A      32
+VII B      30
+Kelas dengan murid terbanyak adalah ....
+A. VII A
+B. VII B</pre></div></div></div>
       ${QT.ORDER.map(t => `<div class="card">${guideHTML(t)}</div>`).join('')}`,
       mount(v) {
         mountGuideDemos(v);
@@ -1187,7 +1213,11 @@
           <div class="big" style="font-size:54px">📝</div><h2>${esc(a.title)}</h2>
           <p>Halo <b>${esc(stu.name)}</b>! Kamu akan mengerjakan <b>${q.questions.length} soal</b> ${esc(subj.name)}.</p>
           <p class="muted small">${typeSummary(q.questions)}${a.duration ? ` · Waktu: ${a.duration} menit` : ''}</p>
-          <div class="btns" style="justify-content:center"><a class="btn ghost" href="#/ujian/${a.id}">Bukan saya</a><button class="btn lg" data-act="start">Mulai Mengerjakan ▶</button></div></div></div>`,
+          <div style="text-align:left">${QT.instructionsHTML(q.instructions, q.questions.map(x => x.type))}</div>
+          <label class="ins-ok"><input type="checkbox" id="ins-ok"> Saya sudah membaca petunjuk</label>
+          <p class="small muted">⏱ Waktu baru mulai dihitung setelah tombol <b>Mulai</b> ditekan.</p>
+          <div class="btns" style="justify-content:center"><a class="btn ghost" href="#/ujian/${a.id}">Bukan saya</a><button class="btn lg" data-act="start" id="ins-go" disabled>Mulai Mengerjakan ▶</button></div></div></div>`,
+        mount(v) { const c = $('#ins-ok', v); c.onchange = () => { $('#ins-go', v).disabled = !c.checked; }; },
         actions: { start: () => { ex.started = true; ex.start = Date.now(); route(); } }
       };
     }
@@ -1440,7 +1470,7 @@
     return q && q.ownerId === S.user.id;
   }
   function previewQset(q) {
-    const m = modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal · ${typeSummary(q.questions)}</p>${q.questions.map((x, k) => previewCard(x, k, q.questions)).join('')}
+    const m = modal(`<h2>${esc(q.title)}</h2><p class="small muted" style="margin-top:0">${q.ownerName ? 'Dibuat oleh ' + esc(q.ownerName) + ' · ' : ''}${q.questions.length} soal · ${typeSummary(q.questions)}</p>${QT.instructionsHTML(q.instructions, q.questions.map(x => x.type))}${q.questions.map((x, k) => previewCard(x, k, q.questions)).join('')}
       <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
     mountPreviews(m, q.questions);
   }
@@ -1519,7 +1549,7 @@
   }
 
   function startDraft(res, title, source, rawLines, thumbs) {
-    importDraft = { id: S.uid('qs'), title, source, questions: res.questions, warnings: res.warnings, stats: res.stats, raw: rawLines, thumbs: thumbs || [], created: Date.now(), isNew: true };
+    importDraft = { id: S.uid('qs'), title, source, instructions: res.instructions || '', questions: res.questions, warnings: res.warnings, stats: res.stats, raw: rawLines, thumbs: thumbs || [], created: Date.now(), isNew: true };
     if (!res.questions.length) toast('Tidak ada soal bernomor yang dikenali. Periksa teks mentah atau tambah soal manual.', 'bad');
     location.hash = '#/bank-soal/draft';
   }
@@ -1532,7 +1562,7 @@
     if (!src) { location.hash = '#/bank-soal'; return { html: '' }; }
     if (!isDraft && !canEditQset(src)) { toast('Paket soal ini milik ' + (src.ownerName || 'guru lain') + '. Duplikat dulu untuk mengedit salinan Anda sendiri.', 'bad'); location.hash = '#/bank-soal'; return { html: '' }; }
     // Bekerja pada salinan agar bisa dibatalkan
-    if (!src._work) src._work = JSON.parse(JSON.stringify({ title: src.title, questions: src.questions }));
+    if (!src._work) src._work = JSON.parse(JSON.stringify({ title: src.title, instructions: src.instructions || '', questions: src.questions }));
     const w = src._work;
     const pdfDoc = (isDraft && importDraft.pdfDoc) || editorPdf;
     setTitle(isDraft && src.isNew ? '✏️ Buat Paket Soal Baru' : isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft && src.isNew ? 'Isi soal, tambah jenis soal lain di bawah, lalu simpan ke Bank Soal' : isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
@@ -1545,7 +1575,7 @@
           ${q.type === 'slide' || q.type === 'polling' ? '<span class="pill">tidak dinilai</span>' : `<label class="small">Poin <input type="number" min="0" step="0.5" data-qt="points" value="${+q.points || 0}" style="width:70px"></label>`}
           <button class="btn ghost sm" data-act="guide" data-t="${q.type}" title="Cara membuat soal jenis ini">❓ Panduan</button>
           ${QT.hasKey(q) ? '' : '<span class="pill bad">Kunci belum lengkap</span>'}
-          <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}${q.passage ? '' : `<button class="btn ghost sm" data-act="pass-add" data-i="${i}" title="Tambahkan teks bacaan untuk soal ini (dan soal lain)">📖</button>`}<button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
+          <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}${q.passage ? '' : `<button class="btn ghost sm" data-act="pass-add" data-i="${i}" title="Tambahkan teks bacaan untuk soal ini (dan soal lain)">📖</button>`}<button class="btn ghost sm" data-act="ins-table" data-i="${i}" title="Sisipkan tabel">▦</button><button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
         <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
         ${q.image ? `<div class="q-img-row">${q.type === 'titik' || q.type === 'label' ? '' : `<img src="${q.image}" class="zoomable" alt="gambar soal">`}<button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
         ${q.passage ? `<div class="passage-ed"><div class="btns" style="align-items:center"><b>📖 Teks bacaan</b><span class="small muted">dipakai soal no. ${numsText(passageNums(w.questions, q))}</span>
@@ -1560,6 +1590,9 @@
       html: `
       <div class="card"><div class="row">
         <label class="field" style="flex:3"><span>Judul paket soal</span><input id="qs-title" value="${esc(w.title)}"></label>
+        <details class="field ins-ed" style="flex-basis:100%" ${w.instructions ? 'open' : ''}><summary><b>📋 Petunjuk soal</b> <span class="small muted">— dibaca murid setelah memasukkan NIS, sebelum waktu ujian berjalan${w.instructions ? '' : ' (kosong = petunjuk standar)'}</span></summary>
+          <textarea id="qs-instr" style="min-height:90px;margin-top:6px" placeholder="${esc(QT.DEFAULT_INSTR.map((x, k) => (k + 1) + '. ' + x).join('\n'))}">${esc(w.instructions || '')}</textarea>
+          <div class="small muted">Satu petunjuk per baris. Tabel (<span class="kbd">| a | b |</span>) dan pecahan (<span class="kbd">1/2</span>) juga bisa. Cara menjawab tiap jenis soal ditambahkan otomatis.</div></details>
         ${!pdfDoc && window.pdfjsLib ? '<button class="btn ghost" data-act="openpdf" style="margin-bottom:12px" title="Buka PDF soal untuk memotong gambarnya">📄 Buka PDF (ambil gambar)</button>' : ''}
         <div class="btns" style="margin-bottom:12px"><a class="btn ghost" href="#/bank-soal" data-act="cancel">Batal</a><button class="btn soft" data-act="preview">👁 Pratinjau Murid</button><button class="btn ok" data-act="save">💾 Simpan${isDraft ? ' ke Bank Soal' : ''}</button></div></div>
         <div class="btns"><span class="pill pri">${w.questions.length} soal</span>${QT.ORDER.filter(t => w.questions.some(x => x.type === t)).map(t => `<span class="pill">${QT.TYPES[t].icon} ${TYPE_LABEL[t]} ${w.questions.filter(x => x.type === t).length}</span>`).join('')}<span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<span class="pill bad">${noKey} soal kuncinya belum lengkap</span>` : '<span class="pill ok">Semua kunci lengkap</span>'}
@@ -1578,6 +1611,7 @@
       mount(v) {
         if (window.innerWidth < 1000) $('#ed-grid', v).style.gridTemplateColumns = '1fr';
         $('#qs-title', v).addEventListener('input', e => { w.title = e.target.value; });
+        $('#qs-instr', v).addEventListener('input', e => { w.instructions = e.target.value; });
         $$('.q-card', v).forEach(card => {
           const q = w.questions[+card.dataset.qi];
           $$('[data-qt]', card).forEach(inp => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => {
@@ -1603,6 +1637,7 @@
         guide: el => guideModal(el.dataset.t),
         'pass-add': el => passageModal(w, +el.dataset.i, keepScroll),
         'pass-link': el => passageModal(w, +el.dataset.i, keepScroll),
+        'ins-table': el => { const q = w.questions[+el.dataset.i]; q.text = (q.text ? q.text.replace(/\s+$/, '') + '\n' : '') + '| Kolom 1 | Kolom 2 |\n| isi | isi |\n| isi | isi |'; keepScroll(); toast('Tabel disisipkan. Ubah isinya di kotak pertanyaan: satu baris = satu baris tabel, pisahkan kolom dengan |'); },
         'pass-off': el => { const q = w.questions[+el.dataset.i]; delete q.passage; keepScroll(); },
         'pass-img': async el => {
           const f = await pickFile('image/*'); if (!f) return;
@@ -1633,7 +1668,7 @@
           $('#p-ok', m).onclick = () => { w.questions.forEach(q => { const inp = $('#p-' + q.type, m); if (inp) q.points = +inp.value || 0; }); closeModal(); keepScroll(); };
         },
         preview: () => {
-          const m = modal(`<h2>Pratinjau: ${esc(w.title)}</h2><p class="small muted" style="margin-top:0">Tampilan seperti di HP murid — boleh dicoba. Pilihan diacak saat murid mengerjakan.</p>${w.questions.map((x, k) => previewCard(x, k, w.questions)).join('')}
+          const m = modal(`<h2>Pratinjau: ${esc(w.title)}</h2><p class="small muted" style="margin-top:0">Tampilan seperti di HP murid — boleh dicoba. Pilihan diacak saat murid mengerjakan.</p>${QT.instructionsHTML(w.instructions, w.questions.map(x => x.type))}${w.questions.map((x, k) => previewCard(x, k, w.questions)).join('')}
             <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
           mountPreviews(m, w.questions);
         },
@@ -1641,13 +1676,13 @@
           const title = ($('#qs-title').value || '').trim() || 'Paket Soal';
           const questions = w.questions.map((q, i) => { const o = Object.assign({}, q, { num: i + 1 }); delete o.line; return o; });
           if (isDraft) {
-            const obj = Object.assign({ id: src.id, title, source: src.source, questions, created: Date.now() }, ownerStamp());
+            const obj = Object.assign({ id: src.id, title, source: src.source, instructions: (w.instructions || '').trim(), questions, created: Date.now() }, ownerStamp());
             st().questionSets.push(obj); importDraft = null; S.save();
             toast('Paket soal disimpan ke Bank Soal.');
             location.hash = '#/bank-soal';
             setTimeout(() => useQset(obj.id), 300);
           } else {
-            src.title = title; src.questions = questions; delete src._work; S.save();
+            src.title = title; src.questions = questions; src.instructions = (w.instructions || '').trim(); delete src._work; S.save();
             toast('Perubahan disimpan.'); location.hash = '#/bank-soal';
           }
         }

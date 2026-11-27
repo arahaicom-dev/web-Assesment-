@@ -40,7 +40,8 @@
   function normalizeText(text) {
     return String(text || '')
       .replace(/\r\n?/g, '\n')
-      .replace(/[   \t]/g, ' ')
+      .replace(/\t/g, '   ')
+      .replace(/[   ]/g, ' ')
       .replace(/[‘’‛]/g, "'")
       .replace(/[“”‟]/g, '"')
       .replace(/[‐-–]/g, '-')
@@ -128,6 +129,35 @@
     const u = L.filter((x, i) => L.indexOf(x) === i).sort();
     return u.length >= 2 ? u.join(',') : null;
   }
+  /* ---------- Tabel: baris dengan kolom berjarak lebar → "| a | b |" ---------- */
+  const cellsOf = l => String(l).trim().split(/\s{3,}|\t+/).map(x => x.trim()).filter(Boolean);
+  const isTableRow = l => {
+    const t = String(l).trim();
+    if (/^\|.*\|$/.test(t)) return true;
+    if (/^\(?[A-Ha-h]\s*[.)\]]\s/.test(t) || /^\(?\d{1,3}\s*[.)\]]\s+\D/.test(t)) return false;
+    const c = cellsOf(t);
+    return c.length >= 2 && c.length <= 10 && c.every(x => x.length <= 60);
+  };
+  /** Ubah deret ≥2 baris berkolom menjadi baris tabel berformat pipa. */
+  function tableize(lines) {
+    const out = [];
+    for (let i = 0; i < lines.length;) {
+      if (isTableRow(lines[i])) {
+        let j = i; while (j < lines.length && isTableRow(lines[j])) j++;
+        const rows = lines.slice(i, j).map(l => /^\|.*\|$/.test(l.trim()) ? l.trim().slice(1, -1).split('|').map(x => x.trim()) : cellsOf(l));
+        const w = Math.max(...rows.map(r => r.length)), consistent = rows.filter(r => r.length === w).length >= Math.max(2, rows.length * 0.6);
+        if (j - i >= 2 && consistent) {
+          rows.forEach(r => { while (r.length < w) r.push(''); out.push('| ' + r.join(' | ') + ' |'); });
+          i = j; continue;
+        }
+        for (let k = i; k < j; k++) out.push(lines[k]);
+        i = j; continue;
+      }
+      out.push(lines[i]); i++;
+    }
+    return out;
+  }
+
   /** Buang huruf pilihan yang tertulis dua kali, mis. "a) A. 15/16" → "15/16". */
   function stripDupLabel(o) {
     const re = new RegExp('^\\(?' + o.label + '\\s*[.)\\]]\\s*', 'i');
@@ -136,7 +166,7 @@
     return t;
   }
   function finalizeQuestion(q) {
-    q.text = q.text.replace(/\s{2,}/g, ' ').trim();
+    q.text = tableize(q.text.split('\n')).map(l => l.replace(/\s{2,}/g, ' ')).join('\n').trim();
     q.options.forEach(o => { o.text = o.text.replace(/\s{2,}/g, ' ').trim(); });
     // Opsi yang mungkin masih menempel di teks soal (mis. dari PDF yang satu baris)
     if (q.options.length === 0) {
@@ -329,6 +359,8 @@
     const push = () => { if (cur) { questions.push(cur); } };
     const passages = [];
     let reading = null;      // teks bacaan yang sedang dikumpulkan
+    let instr = null;        // petunjuk umum sebelum soal pertama: {lines, last, done}
+    const INSTR_HEAD = /^(?:[IVX]{1,4}\s*[.)]\s*|[A-H]\s*[.)]\s*)?(petunjuk(?:\s+(?:umum|pengerjaan(?:\s+soal)?|khusus|mengerjakan(?:\s+soal)?))?|tata\s+tertib(?:\s+ujian)?|aturan\s+ujian)\s*[:.!]?\s*(.*)$/i;
     const addPassageLine = l => { reading.lines.push(l); };
 
     for (let i = 0; i < lines.length; i++) {
@@ -345,6 +377,30 @@
           if (t.includes(':') && restKey.trim()) keyFirst = restKey;
           break;
         }
+      }
+
+      // Petunjuk umum (sebelum soal pertama) — dibaca murid sebelum ujian dimulai
+      if (!instr && !cur && !questions.length) {
+        const ih = t.match(INSTR_HEAD);
+        if (ih && !/^(pilih|isi|jawab|beri|lengkap|jodoh|pasang|tentukan|tulis)/i.test(ih[2] || '')) {
+          instr = { lines: [], last: 0, done: false };
+          if (ih[2]) instr.lines.push(ih[2]);
+          continue;
+        }
+      }
+      if (instr && !instr.done) {
+        const nm = t.match(/^\(?(\d{1,2})\s*[.)]\s+(.*)$/);
+        let item = false;
+        if (sectionTypeOf(t) || stimulusHeader(t)) item = false;
+        else if (nm) item = instr.last === 0 ? instr.lines.length === 0 && +nm[1] === 1 : +nm[1] === instr.last + 1;
+        else item = true;
+        if (item) {
+          if (nm) { instr.last = +nm[1]; instr.lines.push(nm[1] + '. ' + nm[2]); }
+          else if (instr.last > 0 && !/^[-•*]/.test(t)) instr.lines[instr.lines.length - 1] += ' ' + t;
+          else instr.lines.push(t.replace(/^[-•*]\s*/, '• '));
+          continue;
+        }
+        instr.done = true;
       }
 
       // Teks bacaan untuk beberapa soal
@@ -494,12 +550,13 @@
     // Teks bacaan → judul + paragraf, lalu pasangkan ke soal yang disebut
     passages.forEach(ps => {
       let ls = ps.lines.slice();
-      if (ls.length > 1 && looksTitle(ls[0])) ps.title = ls.shift().replace(/[:.]\s*$/, '');
+      if (ls.length > 1 && looksTitle(ls[0]) && !isTableRow(ls[0])) ps.title = ls.shift().replace(/[:.]\s*$/, '');
+      ls = tableize(ls);
       const maxLen = Math.max(1, ...ls.map(l => l.length));
       ps.text = ls.reduce((acc, l, k) => {
         if (!k) return l;
         const prev = ls[k - 1];
-        const para = (/[.!?:"')]$/.test(prev) && (prev.length < maxLen * 0.78 || (/^[A-Z"'(]/.test(l) && prev.length < maxLen * 0.93))) || /^[-•*]\s|^\(?[a-z0-9]{1,2}[.)]\s/i.test(l);
+        const para = /^\|/.test(l) || /^\|/.test(prev) || (/[.!?:"')]$/.test(prev) && (prev.length < maxLen * 0.78 || (/^[A-Z"'(]/.test(l) && prev.length < maxLen * 0.93))) || /^[-•*]\s|^\(?[a-z0-9]{1,2}[.)]\s/i.test(l);
         return acc + (para ? '\n' : ' ') + l;
       }, '').replace(/⁄/g, '/');
       let targets;
@@ -537,6 +594,7 @@
       questions,
       warnings,
       keyLine: keyStart >= 0 ? keyStart - 1 : -1,
+      instructions: instr ? instr.lines.join('\n').trim() : '',
       passages: passages.map(ps => ({ id: ps.id, line: ps.line, endLine: ps.endLine })),
       stats: { total: questions.length, pg: count('pg'), bs: count('bs'), isian: count('isian'), uraian: count('uraian'), keysApplied, byType }
     };
@@ -709,6 +767,7 @@
         r.items.sort((a, b) => a.x - b.x);
         let s = '', prevEnd = null;
         for (const it of r.items) {
+          if (!it.str.trim()) continue; // spasi sisipan pdf.js: jarak dihitung dari posisi teks sebenarnya
           if (prevEnd !== null) {
             const gap = it.x - prevEnd;
             const sz = it.h || 10;
@@ -801,12 +860,17 @@
     const used = new Set(), out = [];
     const cand = items.filter(it => FRAC_TOKEN.test(it.str) && /[0-9a-z]/i.test(it.str));
     const cx = it => it.x + it.w / 2;
+    // garis yang bersambung dengan garis lain sejajar (bingkai/sel tabel) bukan garis pecahan
+    const yc = b => (b.y1 + b.y2) / 2;
+    const isGrid = b => bars.some(o => o !== b && Math.abs(yc(o) - yc(b)) < 1.2 && (Math.abs(o.x1 - b.x2) < 3 || Math.abs(o.x2 - b.x1) < 3));
     for (const bar of bars) {
       const by = (bar.y1 + bar.y2) / 2, bw = bar.x2 - bar.x1;
+      if (isGrid(bar)) continue;
       const inX = it => cx(it) >= bar.x1 - 2 && cx(it) <= bar.x2 + 2 && it.w <= bw + 6;
       const above = cand.filter(it => !used.has(it) && inX(it) && it.y > by - 1 && it.y - by < (it.h || 10) * 1.1).sort((a, b) => a.y - b.y)[0];
       const below = cand.filter(it => !used.has(it) && inX(it) && it.y < by && by - it.y < (it.h || 10) * 1.6 && by - (it.y + (it.h || 10) * 0.75) < (it.h || 10) * 0.7).sort((a, b) => b.y - a.y)[0];
       if (!above || !below || above === below) continue;
+      if (bw > Math.max(above.w, below.w) * 1.8 + 8) continue; // garis jauh lebih lebar dari angkanya → garis tabel/hiasan
       used.add(above); used.add(below);
       const h = Math.max(above.h || 10, below.h || 10);
       out.push({ str: above.str.trim() + '⁄' + below.str.trim(), x: Math.min(above.x, below.x, bar.x1), y: by - h * 0.3, w: Math.max(bw, above.w, below.w), h, frac: true });
@@ -849,6 +913,6 @@
 
   return {
     parse, grade, gradeOne, isAnswered, blanksOf, parseJ, matchShort, suggestEssay, normBS, normAnswer, MANUAL_TYPES, UNGRADED_TYPES, itemsToLines, layoutLines, assignImages, extractPdf,
-    normalizeText, splitInlineOptions, DEFAULT_POINTS
+    normalizeText, splitInlineOptions, tableize, DEFAULT_POINTS
   };
 });

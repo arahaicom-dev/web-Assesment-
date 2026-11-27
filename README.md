@@ -128,6 +128,11 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Tabel & halaman petunjuk sebelum ujian (v5.11)
+
+- **Tabel** dari PDF/Word (bergaris maupun tidak) dan dari Excel (tempel, dipisah Tab) dikenali otomatis dan tampil sebagai tabel rapi di soal & teks bacaan. Bisa juga diketik: `| Kelas | Jumlah |` per baris (tombol ▦ di editor). Garis tabel tidak lagi disangka garis pecahan.
+- **Petunjuk soal**: bagian `PETUNJUK UMUM` / `Petunjuk Pengerjaan` di PDF (sebelum soal pertama) diambil otomatis; bisa diubah di editor paket soal (kosong = petunjuk standar). Murid membaca petunjuk + cara menjawab tiap jenis soal **setelah memasukkan NIS**, wajib mencentang "Saya sudah membaca petunjuk", lalu menekan Mulai — **waktu ujian baru berjalan setelah Mulai**. Di Kuis Seru, petunjuk juga tampil di ruang tunggu.
+
 ## Teks bacaan untuk beberapa soal (v5.10)
 
 Tulis baris petunjuk seperti `Bacalah teks berikut untuk menjawab soal nomor 6–10!` sebelum teksnya (judul opsional di baris berikutnya), lalu lanjutkan dengan soal nomor 6. Teks otomatis dipasangkan ke soal 6–10, tampil di atas setiap soal itu (bisa disembunyikan murid), dan saat soal diacak kelompoknya tetap berdekatan. Bentuk lain yang dikenali: `… soal no. 6 s.d. 10`, `… nomor 6, 7, dan 8`, `Teks berikut untuk menjawab soal 11-13`. Tanpa nomor (`Bacalah teks berikut!`) → hanya untuk 1 soal sesudahnya. Di editor: tombol 📖 pada soal. Aturan lengkap: menu **Panduan Jenis Soal → Teks bacaan**.

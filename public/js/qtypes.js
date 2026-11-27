@@ -5,6 +5,24 @@
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   /** Teks aman + pecahan "a/b" ditampilkan bersusun (tanggal 12/03/2024 & satuan km/jam tidak diubah). */
   function rich(t) {
+    const txt = String(t == null ? '' : t);
+    if (/^\s*\|.*\|\s*$/m.test(txt)) {
+      // blok tabel "| a | b |" → <table>; baris pemisah "|---|" diabaikan
+      const lines = txt.split('\n'), out = []; let buf = [];
+      const flush = () => { if (buf.length) { out.push({ t: buf.join('\n') }); buf = []; } };
+      for (let i = 0; i < lines.length;) {
+        if (/^\s*\|.*\|\s*$/.test(lines[i])) {
+          flush(); const rows = [];
+          while (i < lines.length && /^\s*\|.*\|\s*$/.test(lines[i])) { if (!/^\s*\|[\s:|-]+\|\s*$/.test(lines[i])) rows.push(lines[i].trim().slice(1, -1).split('|').map(c => c.trim())); i++; }
+          out.push({ table: rows });
+        } else { buf.push(lines[i]); i++; }
+      }
+      flush();
+      return out.map(b => b.table ? `<div class="qtable-wrap"><table class="qtable">${b.table.map((r, k) => `<tr>${r.map(c => k === 0 && b.table.length > 1 ? `<th>${richLine(c)}</th>` : `<td${/^-?[\d.,/%]+$/.test(c) ? ' class="num"' : ''}>${richLine(c)}</td>`).join('')}</tr>`).join('')}</table></div>` : richLine(b.t.replace(/^\n+|\n+$/g, ''))).join('');
+    }
+    return richLine(txt);
+  }
+  function richLine(t) {
     return esc(t).replace(/(^|[\s(=+\-−×:;,\[])(-?\d{1,6}|[a-zA-Z])\/(\d{1,6}|[a-zA-Z])(?=$|[\s).,;:=+\-−×?!\]])/g,
       (m, pre, a, b) => `${pre}<span class="frac"><span class="fn">${a}</span><span class="fd">${b}</span></span>`);
   }
@@ -335,6 +353,19 @@
     return `<div style="white-space:pre-wrap">${esc(a)}</div>`;
   }
 
+  const DEFAULT_INSTR = ['Berdoalah sebelum mulai mengerjakan.', 'Pastikan nama dan NIS yang tampil sudah benar.', 'Bacalah setiap soal dan teks bacaan dengan teliti sebelum menjawab.', 'Kerjakan soal yang kamu anggap mudah terlebih dahulu. Kamu bisa pindah ke nomor soal mana pun.', 'Periksa kembali semua jawaban sebelum menekan tombol Selesai / Kumpulkan.'];
+  /**
+   * Halaman petunjuk sebelum ujian: petunjuk guru (atau standar) + cara menjawab jenis soal yang ada.
+   * types: daftar jenis soal di ujian; opts.game = mode permainan (tanpa pindah nomor).
+   */
+  function instructionsHTML(text, types, opts) {
+    opts = opts || {};
+    const own = String(text || '').trim();
+    const list = own ? `<div class="ins-text">${rich(own)}</div>` : `<ol class="ins-list">${DEFAULT_INSTR.filter((x, k) => !(opts.game && k === 3)).map(x => `<li>${esc(x)}</li>`).join('')}</ol>`;
+    const uniq = []; (types || []).forEach(t => { if (TYPES[t] && uniq.indexOf(t) < 0) uniq.push(t); });
+    const how = uniq.map(t => `<li><span class="ins-ic">${TYPES[t].icon}</span><b>${esc(TYPES[t].label)}</b> — ${esc(HINT[t] || (t === 'pg' ? 'Ketuk satu jawaban yang paling tepat.' : t === 'bs' ? 'Ketuk Benar atau Salah.' : t === 'isian' ? 'Ketik jawaban singkat.' : t === 'uraian' ? 'Tulis jawaban lengkap dengan kalimatmu sendiri.' : t === 'slide' ? 'Baca materinya, lalu lanjut.' : ''))}</li>`).join('');
+    return `<div class="ins-box"><h3>📋 Petunjuk Pengerjaan</h3>${list}${how ? `<h4>✍️ Cara menjawab setiap jenis soal</h4><ul class="ins-how">${how}</ul>` : ''}</div>`;
+  }
   /** Kotak teks bacaan (stimulus) di atas soal. */
   function passageHTML(v, opts) {
     const ps = v && v.passage; if (!ps) return '';
@@ -342,7 +373,7 @@
     return `<details class="passage" ${opts.closed ? '' : 'open'}><summary><span class="pz-ic">📖</span><b>${esc(ps.title || 'Teks bacaan')}</b>${opts.note ? `<span class="pz-note">${esc(opts.note)}</span>` : ''}<span class="pz-tog"></span></summary>
       <div class="passage-body">${ps.image ? `<img src="${ps.image}" class="zoomable q-img" alt="">` : ''}${ps.text ? `<div class="pz-text">${rich(ps.text)}</div>` : ''}</div></details>`;
   }
-  const QT = { rich, passageHTML, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
+  const QT = { rich, passageHTML, instructionsHTML, DEFAULT_INSTR, TYPES, ORDER, publicView, mount, editor, bindEditor, convert, blank, hasKey, keyText, answerHTML, segs };
   if (typeof window !== 'undefined') window.QT = QT;
   if (typeof module !== 'undefined' && module.exports) module.exports = QT;
 })();

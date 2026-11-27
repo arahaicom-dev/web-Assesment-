@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.10.0');
+define('APP_VERSION', '5.11.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -601,7 +601,8 @@ try {
         'time' => max(5, min(300, (int)prop($body, 'time', 20))),
         'shuffleQ' => (bool)prop($body, 'shuffleQ', true), 'shuffleOpt' => (bool)prop($body, 'shuffleOpt', true),
         'showAnswer' => (bool)prop($body, 'showAnswer', true), 'speedBonus' => (bool)prop($body, 'speedBonus', true),
-        'qsetId' => (string)$set->id
+        'qsetId' => (string)$set->id,
+        'instructions' => str_cut(prop($set, 'instructions', ''), 6000)
       );
       do { $code = (string)random_int(100000, 999999); } while (one("SELECT id FROM games WHERE code = ? AND status <> 'ended'", array($code)));
       $title = str_cut(prop($body, 'title', '') ?: prop($set, 'title', 'Kuis'), 200);
@@ -709,7 +710,8 @@ try {
 
     if ($act === '' && $method === 'GET') {
       $info = array('title' => $g['title'], 'status' => $g['status'], 'count' => count($qsAll), 'time' => $set['time'], 'players' => $count(), 'needName' => !$g['class_id'],
-        'mode' => isset($set['mode']) ? $set['mode'] : 'game', 'music' => isset($set['music']) ? $set['music'] : '', 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0, 'maxViolations' => isset($set['maxViolations']) ? (int)$set['maxViolations'] : 0);
+        'mode' => isset($set['mode']) ? $set['mode'] : 'game', 'music' => isset($set['music']) ? $set['music'] : '', 'duration' => isset($set['duration']) ? (int)$set['duration'] : 0, 'maxViolations' => isset($set['maxViolations']) ? (int)$set['maxViolations'] : 0,
+        'instructions' => isset($set['instructions']) ? $set['instructions'] : '', 'types' => array_values(array_unique(array_map(function ($x) { return $x['type']; }, $qsAll))));
       $st = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($g['tenant_id'], 'settings', 'main'));
       $info['schoolName'] = $st ? prop(json_decode($st['data']), 'schoolName', '') : '';
       $r = $roster();
@@ -921,7 +923,7 @@ try {
       $qs = array();
       foreach ($questions as $qq) if (in_array(prop($qq, 'type'), q_types(), true)) $qs[] = public_q($qq, $a->id . $sid, false);
       if (prop($a, 'shuffle')) { mt_srand(crc32($a->id . $sid)); $qs = shuffle_keep_passages($qs, function ($q) { return isset($q['passage']['id']) ? $q['passage']['id'] : null; }); mt_srand(); }
-      out(array('submitted' => false, 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
+      out(array('submitted' => false, 'instructions' => (string)prop($ex['qset'], 'instructions', ''), 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
     }
 
     if ($action === 'media' && $method === 'POST') {

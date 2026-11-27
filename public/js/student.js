@@ -87,14 +87,18 @@
       const r = await api('exam/' + encodeURIComponent(S.token) + '/start', { studentId: st.id, nis });
       S.student = st; S.nis = nis;
       if (r.submitted) return showResult(r.result, true);
-      S.questions = r.questions; S.duration = r.duration; S.answers = {}; S.idx = 0; S.startedAt = 0;
+      S.questions = r.questions; S.duration = r.duration; S.instructions = r.instructions || ''; S.answers = {}; S.idx = 0; S.startedAt = 0;
       restore();
       if (S.startedAt) return renderQ();
       view.innerHTML = `<div class="card tilt" style="max-width:600px;margin:20px auto;text-align:center"><div style="font-size:52px">📝</div>
         <h2>${esc(S.info.assessment.title)}</h2><p>Halo <b>${esc(st.name)}</b>! Ada <b>${S.questions.length} soal</b>.</p>
         <p class="muted small">${QT.ORDER.map(t => { const n = S.questions.filter(q => q.type === t).length; return n ? n + ' ' + TYPE[t] : ''; }).filter(Boolean).join(' · ')}${S.duration ? ' · Waktu ' + S.duration + ' menit' : ''}</p>
+        <div style="text-align:left">${QT.instructionsHTML(S.instructions, S.questions.map(q => q.type))}</div>
         <p class="small muted">Jawaban tersimpan otomatis di perangkat ini. Jangan lupa tekan <b>Kumpulkan</b> di akhir.</p>
-        <button class="btn lg" id="go">Mulai Mengerjakan ▶</button></div>`;
+        <label class="ins-ok"><input type="checkbox" id="ins-ok"> Saya sudah membaca petunjuk</label>
+        <p class="small muted">⏱ Waktu${S.duration ? ' ' + S.duration + ' menit' : ''} baru mulai dihitung setelah tombol <b>Mulai</b> ditekan.</p>
+        <button class="btn lg" id="go" disabled>Mulai Mengerjakan ▶</button></div>`;
+      $('#ins-ok').onchange = e => { $('#go').disabled = !e.target.checked; };
       $('#go').onclick = () => { S.startedAt = Date.now(); persist(); renderQ(); };
     } catch (err) {
       if (err.status === 401) stepNis(st, err.message);

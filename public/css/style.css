@@ -885,3 +885,27 @@ a, button, .btn, [data-act], .exam-opt, .kz-opt, .qt-card, .qt-chip, .qt-pick, .
 .pz-num span { min-width: 38px; height: 36px; display: grid; place-items: center; border-radius: 10px; border: 2px solid var(--border); background: var(--surface); font-weight: 800; cursor: pointer; }
 .pz-num input:checked + span { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .pz-num.other span { text-decoration: line-through; opacity: .7; }
+
+/* tabel di soal / teks bacaan */
+.qtable-wrap { overflow-x: auto; margin: 8px 0 10px; -webkit-overflow-scrolling: touch; }
+.qtable { border-collapse: collapse; min-width: 50%; font-size: .95em; background: var(--surface); border-radius: 10px; overflow: hidden; box-shadow: 0 0 0 1px var(--border); white-space: normal; }
+.qtable th, .qtable td { border: 1px solid var(--border); padding: 7px 12px; text-align: left; vertical-align: top; }
+.qtable th { background: var(--primary-soft); font-weight: 800; }
+.qtable td.num { text-align: center; font-variant-numeric: tabular-nums; }
+.qtable tr:nth-child(even) td { background: var(--surface-2); }
+.kz-q-card .qtable { margin: 0 auto; color: var(--text); }
+
+/* petunjuk sebelum ujian */
+.ins-box { border: 2px solid var(--border); border-radius: 16px; padding: 14px 16px; background: var(--surface); margin: 12px 0; text-align: left; }
+.ins-box h3 { margin: 0 0 8px; font-size: 1.05rem; }
+.ins-box h4 { margin: 14px 0 6px; font-size: .95rem; }
+.ins-list, .ins-how { margin: 0; padding-left: 22px; line-height: 1.7; }
+.ins-how { list-style: none; padding-left: 0; }
+.ins-how li { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; border-bottom: 1px dashed var(--border); }
+.ins-how li:last-child { border-bottom: 0; }
+.ins-ic { flex: none; }
+.ins-text { white-space: pre-line; line-height: 1.7; }
+.ins-ok { display: flex; gap: 10px; align-items: center; justify-content: center; margin: 12px auto 4px; padding: 10px 14px; border-radius: 12px; border: 2px solid var(--primary); background: var(--primary-soft); font-weight: 700; cursor: pointer; max-width: 460px; }
+.ins-ok input { width: 20px; height: 20px; accent-color: var(--primary); }
+button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: grayscale(.3); }
+.ins-ed summary { cursor: pointer; padding: 6px 0; }

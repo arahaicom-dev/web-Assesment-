@@ -180,8 +180,10 @@
   function lobby(s) {
     stopAll();
     SND.start();
+    const ins = G.info ? QT.instructionsHTML(G.info.instructions, G.info.types, { game: !isExam() }) : '';
+    view.innerHTML = `<div id="lb-live"></div>${ins ? `<div class="kz-card" style="max-width:720px;margin:14px auto 0;text-align:left">${ins}<p class="small muted" style="margin:8px 0 0">Baca petunjuk ini sambil menunggu. ${isExam() ? 'Waktu ujian baru berjalan setelah kamu menekan <b>Mulai Ujian</b>.' : 'Kuis dimulai saat guru menekan Mulai.'}</p></div>` : ''}`;
     const draw = st => {
-      view.innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:720px;margin:3vh auto 0">
+      $('#lb-live').innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:720px;margin:3vh auto 0">
         <div class="kz-big-ico bounce">${esc(G.me.avatar || '🙂')}</div>
         <h2>Halo, ${esc(G.me.nickname)}!</h2><p class="muted">Kamu sudah masuk. Tunggu guru memulai ${isExam() ? 'ujian' : 'kuis'}…</p>
         <div class="kz-dots"><i></i><i></i><i></i></div>
@@ -312,6 +314,7 @@
     view.innerHTML = `<div class="kz-card pop exam-rules">
       <div class="kz-big-ico">📝</div><h2>${esc(i.title)}</h2>
       <div class="exam-facts"><div><b>${i.count}</b><small>soal</small></div><div><b>${i.duration ? i.duration : '∞'}</b><small>${i.duration ? 'menit' : 'tanpa batas'}</small></div><div><b>${i.maxViolations || '–'}</b><small>batas pelanggaran</small></div></div>
+      <div style="text-align:left">${QT.instructionsHTML(i.instructions, i.types)}</div>
       <h3>Peraturan ujian</h3>
       <ol class="small" style="text-align:left;line-height:1.7">
         <li>Waktu mulai dihitung saat kamu menekan <b>Mulai Ujian</b>${i.duration ? ` dan berakhir otomatis setelah ${i.duration} menit` : ''}.</li>
@@ -320,7 +323,9 @@
         <li><b>Jangan keluar dari halaman ini</b> (pindah aplikasi/tab). Setiap kali keluar tercatat sebagai pelanggaran${i.maxViolations ? ` dan setelah ${i.maxViolations} kali ujian <b>dikumpulkan otomatis</b>` : ''}.</li>
         <li>Tekan <b>Selesai</b> jika sudah yakin dengan semua jawaban.</li>
       </ol>
-      <button class="btn lg kz-go" id="go">Mulai Ujian ▶</button></div>`;
+      <label class="ins-ok"><input type="checkbox" id="ins-ok"> Saya sudah membaca petunjuk dan peraturan</label>
+      <button class="btn lg kz-go" id="go" disabled>Mulai Ujian ▶</button></div>`;
+    $('#ins-ok').onchange = e => { $('#go').disabled = !e.target.checked; };
     $('#go').onclick = () => { const el = document.documentElement; if (el.requestFullscreen) el.requestFullscreen().catch(() => {}); examStart(); };
   }
 

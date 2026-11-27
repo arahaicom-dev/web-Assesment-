@@ -291,7 +291,7 @@ router.post('/exam/:code/start', wrap(async (req, res) => {
   }
   let questions = ex.qset.questions.filter(q => QT.TYPES[q.type]).map(q => QT.publicView(q, ex.a.id + studentId + q.id));
   if (ex.a.shuffle) questions = shuffle(questions, ex.a.id + studentId);
-  res.json({ submitted: false, student: { id: chk.st.id, name: chk.st.name }, questions, duration: +ex.a.duration || 0, serverTime: Date.now() });
+  res.json({ submitted: false, instructions: ex.qset.instructions || '', student: { id: chk.st.id, name: chk.st.name }, questions, duration: +ex.a.duration || 0, serverTime: Date.now() });
 }));
 
 router.post('/exam/:code/submit', wrap(async (req, res) => {
