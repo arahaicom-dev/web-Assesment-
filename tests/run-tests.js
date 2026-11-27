@@ -179,6 +179,17 @@ t('gaya AKM: petunjuk umum bukan teks bacaan; kasus per bagian hanya untuk nomor
   assert.strictEqual(r.questions.find(q => q.num === 8).answer, 'Rp17.500');
 });
 
+t('essay dengan bagian a, b, c tidak dibaca pilihan ganda', () => {
+  const a = P.parse('I. PILIHAN GANDA\n1. Ibu kota?\nA. Bandung\nB. Jakarta\nC. Surabaya\nD. Medan\nII. ESAI\n2. Sebuah keluarga memakai listrik:\nLampu   20 watt   5 jam\nTV   100 watt   3 jam\nHitunglah:\na. Energi listrik lampu dalam Wh.\nb. Energi listrik TV dalam Wh.\nKUNCI JAWABAN\n1. B\n2. a. 100 Wh b. 300 Wh');
+  assert.strictEqual(a.questions[0].type, 'pg');
+  assert.strictEqual(a.questions[1].type, 'uraian'); assert.strictEqual(a.questions[1].options.length, 0);
+  assert.ok(/\na\. Energi listrik lampu dalam Wh\.\nb\. Energi/.test(a.questions[1].text)); assert.strictEqual(a.questions[1].answer, 'a. 100 Wh b. 300 Wh');
+  const b = P.parse('1. Hitunglah:\na. Luas persegi bersisi 4 cm.\nb. Keliling persegi bersisi 4 cm.\n2. Jawablah!\na. Apa itu fotosintesis?\nb. Mengapa daun hijau?\n3. Tentukan hasil dari:\nA. 5\nB. 6\nC. 7\n4. Sikap yang tepat adalah sebagai berikut:\nA. Menghargai pendapat teman.\nB. Mengejek teman.');
+  assert.deepStrictEqual(b.questions.map(q => q.type), ['uraian', 'uraian', 'pg', 'pg']);
+  const c = P.parse('1. Soal?\nA. a\nB. b\nKUNCI\n1. a. teks panjang b. teks lain');
+  assert.strictEqual(c.questions[0].type, 'uraian');
+});
+
 t('sub-daftar pernyataan tidak dianggap soal baru', () => {
   const r = P.parse(`1. Perhatikan pernyataan berikut!
 1) Matahari terbit dari timur

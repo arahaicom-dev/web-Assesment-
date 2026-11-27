@@ -158,6 +158,26 @@
     return out;
   }
 
+  /* ---------- Essay dengan bagian a, b, c (bukan pilihan ganda) ---------- */
+  const ASK_VERB = /\b(hitung(?:lah)?|tentukan(?:lah)?|jelaskan(?:lah)?|sebutkan(?:lah)?|uraikan(?:lah)?|tuliskan(?:lah)?|buatlah|gambarlah|bandingkan(?:lah)?|analisislah|analisis|berikan(?:lah)?|carilah|selesaikan(?:lah)?|kerjakan(?:lah)?|identifikasi(?:lah|kan)?|deskripsikan(?:lah)?|simpulkan(?:lah)?|jawablah|buktikan(?:lah)?|rancanglah|susunlah|ubahlah|lengkapilah|gambarkan(?:lah)?|klasifikasikan(?:lah)?)\b/i;
+  const ASK_OPT = /^(apa|apakah|mengapa|kenapa|bagaimana|berapa|siapa|kapan|di\s?mana|ke\s?mana|jelaskan|sebutkan|tentukan|hitung|tuliskan|uraikan|buat|gambarkan|bandingkan|berikan)\b/i;
+  /** Apakah "pilihan" a, b, c sebenarnya bagian pertanyaan essay? */
+  function looksSubParts(q, sec) {
+    if (sec === 'uraian' || sec === 'isian') return true;
+    const opts = q.options, n = opts.length;
+    const lines = q.text.split('\n').map(x => x.trim()).filter(Boolean), last = lines[lines.length - 1] || '';
+    const askStem = /:\s*$/.test(last) && (ASK_VERB.test(last) || (lines.length > 1 && ASK_VERB.test(lines[lines.length - 2]) && last.length < 40));
+    const asks = opts.filter(o => /\?\s*$/.test(o.text) || ASK_OPT.test(o.text)).length;
+    if (asks >= Math.ceil(n / 2) && asks >= 2) return true;
+    if (askStem && opts.filter(o => o.text.length >= 12 && !/^[\d\s.,/%:+\-−×x()]+$/.test(o.text)).length >= Math.ceil(n * 0.66)) return true;
+    return false;
+  }
+  /** Gabungkan bagian a, b, c ke teks soal essay. */
+  function toSubParts(q) {
+    q.text = q.text.replace(/\s+$/, '') + '\n' + q.options.map(o => o.label.toLowerCase() + '. ' + o.text).join('\n');
+    q.options = []; q.type = 'uraian'; q.answer = null; q.points = null;
+  }
+
   /** Buang huruf pilihan yang tertulis dua kali, mis. "a) A. 15/16" → "15/16". */
   function stripDupLabel(o) {
     const re = new RegExp('^\\(?' + o.label + '\\s*[.)\\]]\\s*', 'i');
@@ -193,6 +213,8 @@
       q.type = 'bs';
       if (q.answer && /^[AB]$/.test(q.answer)) q.answer = normBS(q.options[q.answer === 'A' ? 0 : 1].text);
       q.options = [];
+    } else if (q.options.length >= 2 && looksSubParts(q, sec)) {
+      toSubParts(q);
     } else if (q.options.length >= 2) {
       q.type = 'pg';
     } else {
@@ -307,7 +329,11 @@
       if (!target) continue;
       used.add(target.id);
       const v = k.value.trim();
-      if ((target.type === 'pg' || target.type === 'pgk') && multiKey(v)) { target.type = 'pgk'; target.answer = multiKey(v); applied++; }
+      if ((target.type === 'pg' || target.type === 'pgk') && (v.match(/(^|\s)\(?[a-hA-H]\s*[.)]\s+\S/g) || []).length >= 2 && !multiKey(v)
+          && !target.options.some(o => v.toLowerCase().indexOf(o.text.toLowerCase()) >= 0 && o.text.length > 2)) {
+        toSubParts(target); target.points = DEFAULT_POINTS.uraian; target.answer = v; applied++;
+      }
+      else if ((target.type === 'pg' || target.type === 'pgk') && multiKey(v)) { target.type = 'pgk'; target.answer = multiKey(v); applied++; }
       else if (target.type === 'pg' || target.type === 'pgk') {
         const lm = v.match(/^\(?([A-Ha-h])\)?(?:[.)\s]|$)/);
         if (lm) { target.answer = lm[1].toUpperCase(); applied++; }
@@ -797,7 +823,28 @@
         if (row && Math.abs(row.y - it.y) <= tol) row.items.push(it);
         else rows.push({ y: it.y, items: [it] });
       }
+      // Sel tabel: potongan teks berjarak > 0,6 tinggi huruf; baris berurutan yang awal selnya sejajar = tabel
+      rows.forEach(r => {
+        r.items.sort((a, b) => a.x - b.x);
+        const cells = []; let cur = null;
+        for (const it of r.items) {
+          if (!it.str.trim()) continue;
+          const sz = it.h || 10;
+          if (cur && it.x - cur.end <= sz * 0.6) { cur.text += (it.x - cur.end > sz * 0.15 ? ' ' : '') + it.str; cur.end = it.x + it.w; }
+          else { cur = { x: it.x, end: it.x + it.w, text: it.str }; cells.push(cur); }
+        }
+        r.cells = cells;
+      });
+      const aligned = (a, b) => a.length >= 2 && b.length >= 2 && a.filter(c => b.some(d => Math.abs(d.x - c.x) < 5)).length >= Math.min(a.length, b.length) - (Math.min(a.length, b.length) > 2 ? 1 : 0) && Math.min(a.length, b.length) >= 2;
+      for (let k = 0; k < rows.length; k++) {
+        let j = k; while (j + 1 < rows.length && aligned(rows[j].cells, rows[j + 1].cells) && Math.abs(rows[j].y - rows[j + 1].y) < (rows[j].items[0].h || 10) * 2.6) j++;
+        if (j > k && rows.slice(k, j + 1).every(r => !/^\(?[A-Ha-h]\s*[.)]\s/.test(r.cells[0].text.trim()))) {
+          for (let m = k; m <= j; m++) rows[m].tableText = rows[m].cells.map(c => c.text.trim()).join('   ');
+          k = j;
+        }
+      }
       for (const r of rows) {
+        if (r.tableText) { out.push({ text: r.tableText, y: r.y, group: gi }); continue; }
         r.items.sort((a, b) => a.x - b.x);
         let s = '', prevEnd = null;
         for (const it of r.items) {
