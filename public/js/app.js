@@ -660,7 +660,7 @@
         <div class="card">${cls ? `
           <div class="card-head"><h3>Murid ${esc(cls.name)} <span class="pill">Fase ${esc(cls.fase || '-')}</span></h3>
             <div class="btns"><button class="btn sm" data-act="add-student">+ Murid</button><button class="btn ok sm" data-act="xls-student">📥 Unggah Excel</button><button class="btn soft sm" data-act="bulk-student">📋 Tempel Daftar</button>
-            <button class="btn ghost sm" data-act="edit-class">✏️ Kelas</button><button class="btn danger sm" data-act="del-class">Hapus Kelas</button></div></div>
+            <button class="btn ghost sm" data-act="edit-class">✏️ Kelas</button>${isAdminUser() ? '<button class="btn danger sm" data-act="del-class">Hapus Kelas</button>' : ''}</div></div>
           <div class="table-wrap"><table><thead><tr><th class="num">No</th><th>NIS/NISN</th><th>Nama Murid</th><th></th></tr></thead><tbody>
           ${cls.students.map((m, i) => `<tr><td class="num">${i + 1}</td><td><input value="${esc(m.nis)}" data-f="nis" data-id="${m.id}" style="width:120px"></td><td><input value="${esc(m.name)}" data-f="name" data-id="${m.id}" style="width:100%"></td>
             <td><button class="btn ghost sm" data-act="del-student" data-id="${m.id}">🗑</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty"><div style="padding:10px 0"><div style="font-size:34px">📥</div><b>Belum ada murid.</b><br>Klik <b>Unggah Excel</b> (format apa pun: Dapodik, daftar hadir, rekap nilai…) atau seret file Excel ke sini.<br><button class="btn ok" style="margin-top:10px" data-act="xls-student">📥 Unggah File Excel</button></div></td></tr>`}
@@ -674,7 +674,7 @@
         <div class="card">${subj ? `
           <div class="card-head"><h3>Tujuan Pembelajaran (TP) — ${esc(subj.name)}</h3>
             <div class="btns"><button class="btn sm" data-act="add-tp">+ TP</button><button class="btn soft sm" data-act="bulk-tp">📋 Tempel Daftar TP</button>
-            <button class="btn ghost sm" data-act="edit-subj">✏️ Mapel</button><button class="btn danger sm" data-act="del-subj">Hapus Mapel</button></div></div>
+            <button class="btn ghost sm" data-act="edit-subj">✏️ Mapel</button>${isAdminUser() ? '<button class="btn danger sm" data-act="del-subj">Hapus Mapel</button>' : ''}</div></div>
           <p class="small muted">TP dipakai untuk menandai asesmen sumatif agar deskripsi capaian rapor tersusun otomatis.</p>
           <div class="table-wrap"><table><thead><tr><th>Kode</th><th>Deskripsi Tujuan Pembelajaran</th><th></th></tr></thead><tbody>
           ${subj.tps.map(tp => `<tr><td><input value="${esc(tp.code)}" data-tf="code" data-id="${tp.id}" style="width:90px"></td><td><input value="${esc(tp.desc)}" data-tf="desc" data-id="${tp.id}" style="width:100%"></td>
@@ -775,7 +775,7 @@
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="a-save">Simpan</button></div>`);
     const kind = $('#a-kind', m); if (kind) kind.onchange = () => { $('#cat-wrap', m).style.display = kind.value === 'nonkognitif' ? '' : 'none'; };
     $('#a-save', m).onclick = () => {
-      const obj = existing || { id: S.uid('a'), type, classId: cls.id, subjectId: subj.id, periode: S.periode(), created: Date.now() };
+      const obj = existing || Object.assign({ id: S.uid('a'), type, classId: cls.id, subjectId: subj.id, periode: S.periode(), created: Date.now() }, ownerStamp());
       obj.title = $('#a-title', m).value.trim() || defTitle;
       obj.date = $('#a-date', m).value;
       obj.tpIds = $$('.a-tp:checked', m).map(x => x.value);
@@ -806,7 +806,7 @@
       return `<div class="card tilt">
         <div class="z1">
           <div class="card-head"><h3>${esc(a.title)}</h3><span class="pill">${esc(a.date || '')}</span></div>
-          <div class="btns" style="margin-bottom:10px">${(a.tpIds || []).map(id => `<span class="pill pri">${esc(tpName(id))}</span>`).join('')}${q ? `<span class="pill ok">📄 ${q.questions.length} soal online</span>` : ''}${isNonKog(a) ? '<span class="pill warn">Non-kognitif</span>' : ''}</div>
+          <div class="btns" style="margin-bottom:10px">${ownerPill(a)}${(a.tpIds || []).map(id => `<span class="pill pri">${esc(tpName(id))}</span>`).join('')}${q ? `<span class="pill ok">📄 ${q.questions.length} soal online</span>` : ''}${isNonKog(a) ? '<span class="pill warn">Non-kognitif</span>' : ''}</div>
           ${isNonKog(a) ? `<p class="small muted">${filled}/${cls.students.length} murid terisi</p>` : `
           <div class="grid g3" style="gap:8px;margin-bottom:10px">
             <div><div class="small muted">Rata-rata</div><b style="font-size:1.3rem">${fmt(stt.avg, 1)}</b></div>
@@ -816,11 +816,11 @@
           ${type === 'diagnostik' ? '' : `<div class="small muted">Ketercapaian (KKTP ${s.settings.kktp}): ${stt.tuntas}/${stt.n} murid</div><div class="bar" style="margin:6px 0 10px"><i style="width:${stt.persen || 0}%"></i></div>`}
           <div class="small muted">${filled}/${cls.students.length} nilai terisi</div>`}
           <div class="btns" style="margin-top:12px">
-            <a class="btn sm" href="#/asesmen/${type}/${a.id}">✍️ Input Nilai</a>
+            <a class="btn sm" href="#/asesmen/${type}/${a.id}">${canEditAsm(a) ? '✍️ Input Nilai' : '👁 Lihat Nilai'}</a>
             ${S.mode === 'server' ? `<a class="btn ${q ? 'ok' : 'soft'} sm" href="#/asesmen/${type}/${a.id}">📱 Token Ujian${q && a.examOpen ? ' · ' + esc(a.examCode) : ''}</a>` : ''}
             ${q && S.mode !== 'server' ? `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Kerjakan Online</a>` : ''}
-            <button class="btn ghost sm" data-act="edit" data-id="${a.id}">⚙️</button>
-            <button class="btn ghost sm" data-act="del" data-id="${a.id}">🗑</button>
+            ${canEditAsm(a) ? `<button class="btn ghost sm" data-act="edit" data-id="${a.id}">⚙️</button>
+            <button class="btn ghost sm" data-act="del" data-id="${a.id}">🗑</button>` : ''}
           </div>
         </div></div>`;
     }).join('');
@@ -853,7 +853,7 @@
       actions: {
         new: () => assessmentModal(type),
         edit: el => assessmentModal(type, S.asm(el.dataset.id)),
-        del: async el => { const a = S.asm(el.dataset.id); if (!await confirmBox(`Hapus <b>${esc(a.title)}</b> beserta seluruh nilainya?`, 'Hapus')) return; S.deleteAssessment(a.id); S.save(); route(); },
+        del: async el => { const a = S.asm(el.dataset.id); if (!canEditAsm(a)) return toast('Hanya pembuat atau admin sekolah yang boleh menghapus.', 'bad'); if (!await confirmBox(`Hapus <b>${esc(a.title)}</b> beserta seluruh nilainya?`, 'Hapus')) return; S.deleteAssessment(a.id); S.save(); route(); },
         xls: () => exportTable($('#type-matrix'), info.short + '_' + cls.name + '_' + subj.name),
         print: () => window.print()
       }
@@ -878,6 +878,7 @@
 
     const raw = sid => S.getScore(a.id, sid);
     const obj = sid => { const v = raw(sid); return v && typeof v === 'object' ? v : { score: v }; };
+    const can = canEditAsm(a), dis = can ? '' : ' disabled';
 
     const rows = cls.students.map((m, i) => {
       const o = obj(m.id), sub = subs[m.id];
@@ -885,15 +886,15 @@
       const eff = C.toNum(raw(m.id));
       let cells;
       if (nonKog) {
-        cells = `<td><select data-cat="${m.id}"><option value="">—</option>${cats.map(c => `<option ${o.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
-          <td><input data-note="${m.id}" value="${esc(o.note || '')}" placeholder="Catatan" style="width:100%"></td>`;
+        cells = `<td><select data-cat="${m.id}"${dis}><option value="">—</option>${cats.map(c => `<option ${o.cat === c ? 'selected' : ''}>${esc(c)}</option>`).join('')}</select></td>
+          <td><input data-note="${m.id}" value="${esc(o.note || '')}" placeholder="Catatan" style="width:100%"${dis}></td>`;
       } else {
-        cells = `<td class="num"><input class="score ${scoreClass(C.toNum(o.score))}" type="number" min="0" max="100" step="any" data-score="${m.id}" value="${scoreVal}"></td>
-          ${showRemed ? `<td class="num">${C.isNum(C.toNum(o.score)) && C.toNum(o.score) < s.settings.kktp ? `<input class="score" type="number" min="0" max="100" step="any" data-remed="${m.id}" value="${C.isNum(o.remedial) ? o.remedial : ''}" title="Nilai remedial">` : '<span class="muted small">–</span>'}</td><td class="num"><b data-eff="${m.id}">${fmt(eff)}</b></td>` : ''}
+        cells = `<td class="num"><input class="score ${scoreClass(C.toNum(o.score))}" type="number" min="0" max="100" step="any" data-score="${m.id}" value="${scoreVal}"${dis}></td>
+          ${showRemed ? `<td class="num">${C.isNum(C.toNum(o.score)) && C.toNum(o.score) < s.settings.kktp ? `<input class="score" type="number" min="0" max="100" step="any" data-remed="${m.id}" value="${C.isNum(o.remedial) ? o.remedial : ''}" title="Nilai remedial"${dis}>` : '<span class="muted small">–</span>'}</td><td class="num"><b data-eff="${m.id}">${fmt(eff)}</b></td>` : ''}
           <td data-ket="${m.id}">${a.type === 'diagnostik' ? `<span class="pill">${esc(C.diagnosticGroup(eff, s.settings) || '–')}</span>` : ketPill(eff)}</td>
-          ${isF ? `<td><input data-note="${m.id}" value="${esc(o.note || '')}" placeholder="Umpan balik untuk murid" style="width:100%;min-width:200px"></td>` : ''}`;
+          ${isF ? `<td><input data-note="${m.id}" value="${esc(o.note || '')}" placeholder="Umpan balik untuk murid" style="width:100%;min-width:200px"${dis}></td>` : ''}`;
       }
-      const subCell = q ? `<td>${sub ? `<button class="btn ${sub.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${m.id}">${sub.result.needsReview ? '📝 Koreksi' : '👁 Jawaban'}</button>` : `<a class="btn ghost sm" href="#/ujian/${a.id}/${m.id}">▶</a>`}</td>` : '';
+      const subCell = q ? `<td>${sub ? `<button class="btn ${sub.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${m.id}">${sub.result.needsReview ? '📝 Koreksi' : '👁 Jawaban'}</button>` : can ? `<a class="btn ghost sm" href="#/ujian/${a.id}/${m.id}">▶</a>` : '<span class="muted small">–</span>'}</td>` : '';
       return `<tr><td class="num">${i + 1}</td><td class="muted small">${esc(m.nis || '')}</td><td class="sticky-col">${esc(m.name)}</td>${cells}${subCell}</tr>`;
     }).join('');
 
@@ -944,17 +945,17 @@
 
     return {
       html: `
-      <div class="btns no-print" style="margin-bottom:14px"><a class="btn ghost sm" href="#/asesmen/${a.type}">← Kembali ke ${info.name}</a>
-        ${q ? (S.mode === 'server' ? `<a class="btn ghost sm" href="#/ujian/${a.id}" title="Murid mengerjakan bergantian di laptop/komputer ini">💻 Kerjakan di Perangkat Ini</a>` : `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Murid Kerjakan Online (${q.questions.length} soal)</a>`) : `<button class="btn soft sm" data-act="link">📄 Hubungkan Paket Soal</button>`}
-        <button class="btn ghost sm" data-act="edit">⚙️ Ubah Asesmen</button></div>
-      ${S.mode === 'server' ? (q ? examPanel(a) : `<div class="card exam-share" style="margin-bottom:18px"><div class="card-head"><h3>📱 Ujian dari HP Murid — Token & Link</h3><span class="pill">Belum ada soal</span></div>
+      <div class="btns no-print" style="margin-bottom:14px"><a class="btn ghost sm" href="#/asesmen/${a.type}">← Kembali ke ${info.name}</a>${ownerPill(a)}
+        ${!can ? '' : q ? (S.mode === 'server' ? `<a class="btn ghost sm" href="#/ujian/${a.id}" title="Murid mengerjakan bergantian di laptop/komputer ini">💻 Kerjakan di Perangkat Ini</a>` : `<a class="btn ok sm" href="#/ujian/${a.id}">▶ Murid Kerjakan Online (${q.questions.length} soal)</a>`) : `<button class="btn soft sm" data-act="link">📄 Hubungkan Paket Soal</button>`}
+        ${can ? '<button class="btn ghost sm" data-act="edit">⚙️ Ubah Asesmen</button>' : ''}</div>
+      ${!can ? roNote(a) + (a.examOpen && a.examCode ? `<div class="card" style="margin-bottom:18px"><b>📱 Ujian online sedang dibuka</b> · token <span class="kbd">${esc(a.examCode)}</span></div>` : '') : S.mode === 'server' ? (q ? examPanel(a) : `<div class="card exam-share" style="margin-bottom:18px"><div class="card-head"><h3>📱 Ujian dari HP Murid — Token & Link</h3><span class="pill">Belum ada soal</span></div>
         <p style="margin:0 0 10px">Asesmen ini <b>belum terhubung ke paket soal</b>, jadi belum bisa dikerjakan murid secara online.</p>
         <ol class="small" style="margin:0 0 12px;padding-left:18px"><li>Unggah soal di menu <a href="#/bank-soal">Bank Soal & Unggah PDF</a> (lewati bila sudah).</li><li>Klik <b>Hubungkan Paket Soal</b> di bawah, pilih paket soalnya, lalu Simpan.</li><li>Tombol <b>Buka Ujian & Buat Token</b> serta <b>Salin Link / WhatsApp</b> akan muncul di sini.</li></ol>
         <button class="btn" data-act="link">📄 Hubungkan Paket Soal</button></div>`) : ''}
       <div class="grid" style="grid-template-columns: minmax(0,1.6fr) minmax(280px,1fr); align-items:start" id="asm-grid">
         <div class="card">
           <div class="card-head"><h3>Daftar Nilai</h3>
-            <div class="btns no-print">${nonKog ? '' : '<button class="btn soft sm" data-act="paste">📋 Tempel dari Excel</button><button class="btn ghost sm" data-act="fill">Isi Semua</button>'}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="print">🖨</button></div></div>
+            <div class="btns no-print">${nonKog || !can ? '' : '<button class="btn soft sm" data-act="paste">📋 Tempel dari Excel</button><button class="btn ghost sm" data-act="fill">Isi Semua</button>'}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="print">🖨</button></div></div>
           ${cls.students.length ? `<div class="table-wrap"><table id="score-table"><thead><tr><th class="num">No</th><th>NIS</th><th class="sticky-col">Nama Murid</th>${head}${q ? '<th>Online</th>' : ''}</tr></thead><tbody>${rows}</tbody></table></div>
           <p class="small muted no-print">Nilai tersimpan otomatis. Tekan <span class="kbd">Enter</span> untuk pindah ke murid berikutnya. ${showRemed ? `Nilai remedial dibatasi maksimal KKTP (${s.settings.kktp}) — bisa diubah di Pengaturan.` : ''}</p>` : '<div class="empty">Kelas ini belum memiliki murid. <a href="#/data">Tambah murid</a>.</div>'}
         </div>
@@ -1096,6 +1097,7 @@
     const s = st(); const q = S.qset(a.qsetId); const sub = s.submissions[a.id] && s.submissions[a.id][sid];
     const stu = S.cls(a.classId).students.find(x => x.id === sid);
     if (!q || !sub) return;
+    const canRv = canEditAsm(a);
     const manual = Object.assign({}, sub.manual || {});
     const render = () => {
       const res = P.grade(q.questions, sub.answers, manual);
@@ -1107,15 +1109,15 @@
           const ansHtml = reviewAnsHTML(qq, ans);
           if (d.status === 'tidak dinilai') return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill">tidak dinilai</span></div><div class="q-text small">${esc(qq.text)}</div>${qq.type === 'polling' ? `<div class="small" style="margin-top:6px">${ansHtml}</div>` : ''}</div>`;
           return `<div class="q-card"><div class="q-head"><span class="qn">${i + 1}</span><span class="pill">${TYPE_LABEL[qq.type]}</span><span class="pill ${pill}">${d.status}</span>
-            <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${d.pts}" data-man="${qq.id}" value="${d.got}"> / ${d.pts}</span></div>
+            <span style="margin-left:auto" class="small">Skor: <input type="number" class="score" step="0.5" min="0" max="${d.pts}" data-man="${qq.id}" value="${d.got}"${canRv ? '' : ' disabled'}> / ${d.pts}</span></div>
             <div class="q-text small">${esc(qq.text)}</div><div class="small" style="margin-top:6px">${ansHtml}</div></div>`;
         }).join('')}
-        <div class="foot"><button class="btn ghost" data-close>Tutup</button><button class="btn" id="rv-save">Simpan Koreksi</button></div>`;
+        <div class="foot">${canRv ? '' : '<span class="small muted" style="margin-right:auto">👁 Hanya lihat — koreksi oleh pembuat asesmen atau admin.</span>'}<button class="btn ghost" data-close>Tutup</button>${canRv ? '<button class="btn" id="rv-save">Simpan Koreksi</button>' : ''}</div>`;
     };
     const m = modal(render(), { wide: true, noFocus: true });
     loadMedia(m);
     $$('[data-man]', m).forEach(inp => inp.addEventListener('change', () => { manual[inp.dataset.man] = inp.value; }));
-    $('#rv-save', m).onclick = () => {
+    if (canRv) $('#rv-save', m).onclick = () => {
       $$('[data-man]', m).forEach(inp => { manual[inp.dataset.man] = inp.value; });
       sub.manual = manual;
       sub.result = P.grade(q.questions, sub.answers, manual);
@@ -1137,6 +1139,7 @@
     renderCtx(false);
     setTitle('▶ ' + esc(a.title), `${T[a.type].name} · ${esc(cls.name)} · ${esc(subj.name)}`);
     if (!q) return { html: `<div class="card empty"><div class="big">📄</div><h3>Asesmen ini belum punya paket soal</h3><a class="btn" href="#/asesmen/${a.type}/${a.id}">Kembali</a></div>` };
+    if (!canEditAsm(a)) return { html: roNote(a) + `<a class="btn ghost" href="#/asesmen/${a.type}/${a.id}">← Kembali</a>` };
     const subs = s.submissions[a.id] = s.submissions[a.id] || {};
     // Pilih murid
     if (!sid) {
@@ -1393,6 +1396,15 @@
   }
   /* ---- Hak edit paket soal ---- */
   const ownerStamp = () => (S.mode === 'server' && S.user ? { ownerId: S.user.id, ownerName: S.user.name } : {});
+  const isAdminUser = () => S.mode !== 'server' || !S.user || S.user.role === 'admin';
+  /** Boleh mengubah asesmen & nilainya? (pembuat atau admin sekolah) */
+  function canEditAsm(a) {
+    if (isAdminUser() || !a) return true;
+    return !a.ownerId || +a.ownerId === +S.user.id;
+  }
+  const canGame = g => isAdminUser() || +g.createdBy === +S.user.id || +g.created_by === +S.user.id;
+  const ownerPill = a => S.mode === 'server' && a.ownerName ? `<span class="pill ${canEditAsm(a) ? '' : 'warn'}" title="Pembuat">👤 ${esc(a.ownerName)}${S.user && +a.ownerId === +S.user.id ? ' (Anda)' : ''}</span>` : '';
+  const roNote = a => `<div class="note warn" style="margin-bottom:14px">👁 <b>Hanya lihat.</b> Asesmen ini dibuat oleh <b>${esc(a.ownerName || 'guru lain')}</b>. Anda bisa melihat nilai & rekapnya; perubahan hanya bisa dilakukan oleh pembuatnya atau admin sekolah.</div>`;
   function canEditQset(q) {
     if (S.mode !== 'server' || !S.user) return true;
     if (S.user.role === 'admin') return true;
@@ -2148,8 +2160,8 @@
         let d; try { d = await S.api('games'); } catch (e) { $('#games', v).innerHTML = `<div class="card">${esc(e.message)}</div>`; return; }
         $('#games', v).innerHTML = d.games.length ? `<div class="grid auto">${d.games.map(g => `<div class="card tilt" style="margin:0"><div class="z1">
           <div class="card-head"><h3>${esc(g.title)}</h3><span class="pill ${GAME_STATUS[g.status][0]}">${GAME_STATUS[g.status][1]}</span></div>
-          <p class="small muted" style="margin:0 0 8px"><span class="pill ${g.is_exam ? 'pri' : 'ok'}">${g.is_exam ? '📝 Ujian' : '🎮 Permainan'}</span> ${tgl(g.created_at)} · kode ${esc(g.code)} · ${g.players} ${g.is_exam ? 'peserta' : 'pemain'}${!g.is_exam && g.answered ? ` · akurasi ${Math.round(g.correct / g.answered * 100)}%` : ''}${g.class_id && S.cls(g.class_id) ? ' · ' + esc(S.cls(g.class_id).name) : ''}</p>
-          <div class="btns"><a class="btn sm" href="#/kuis/${g.id}">${g.status === 'ended' ? '📊 Hasil' : '▶ Buka Layar Kuis'}</a><button class="btn ghost sm" data-act="del" data-id="${g.id}">🗑</button></div></div></div>`).join('')}</div>`
+          <p class="small muted" style="margin:0 0 8px"><span class="pill ${g.is_exam ? 'pri' : 'ok'}">${g.is_exam ? '📝 Ujian' : '🎮 Permainan'}</span> ${tgl(g.created_at)} · kode ${esc(g.code)} · ${g.players} ${g.is_exam ? 'peserta' : 'pemain'}${g.creator ? ' · 👤 ' + esc(g.creator) : ''}${!g.is_exam && g.answered ? ` · akurasi ${Math.round(g.correct / g.answered * 100)}%` : ''}${g.class_id && S.cls(g.class_id) ? ' · ' + esc(S.cls(g.class_id).name) : ''}</p>
+          <div class="btns"><a class="btn sm" href="#/kuis/${g.id}">${g.status === 'ended' ? '📊 Hasil' : canGame(g) ? '▶ Buka Layar Kuis' : '👁 Lihat'}</a>${canGame(g) ? `<button class="btn ghost sm" data-act="del" data-id="${g.id}">🗑</button>` : ''}</div></div></div>`).join('')}</div>`
           : '<div class="card empty"><div class="big">🕹️</div>Belum ada kuis. Klik <b>Buat Kuis Seru</b> untuk memulai.</div>';
         bindTilt(v);
       },
@@ -2278,6 +2290,12 @@
   }
 
   function renderHost(d) {
+    renderHost0(d);
+    const box = $('#host'); if (!box || canGame(d.game)) return;
+    $$('[data-act=start],[data-act=end],[data-act=kick],[data-act=reset]', box).forEach(b => b.remove());
+    box.insertAdjacentHTML('afterbegin', `<div class="note warn" style="margin-bottom:12px">👁 <b>Hanya lihat.</b> Kuis ini dibuat oleh <b>${esc(d.game.creatorName || 'guru lain')}</b>. Hanya pembuatnya atau admin sekolah yang bisa memulai, mengakhiri, atau mengoreksi.</div>`);
+  }
+  function renderHost0(d) {
     const g = d.game, ps = d.players, total = d.questions.length, box = $('#host');
     if (!box) return;
     if (g.settings.mode === 'exam') return renderExamHost(d, box);
@@ -2425,7 +2443,7 @@
       <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="sv-ok">Simpan Nilai</button></div>`);
     $('#sv-ok', m).onclick = () => {
       const type = $('#sv-type', m).value;
-      const a = { id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() };
+      const a = Object.assign({ id: S.uid('a'), type, title: $('#sv-title', m).value.trim() || g.title, classId: cls.id, subjectId: $('#sv-subj', m).value, tpIds: [], date: new Date().toISOString().slice(0, 10), periode: S.periode(), created: Date.now() }, ownerStamp());
       s.assessments.push(a);
       let n = 0;
       const isExam = g.settings.mode === 'exam';

@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.7.1');
+define('APP_VERSION', '5.8.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -248,9 +248,15 @@ try {
   if ($route === 'state') {
     $u = auth(); $tid = tenant_of($u);
     $settings = '{}'; $lists = array('classes' => array(), 'subjects' => array(), 'assessments' => array(), 'questionSets' => array());
-    foreach (rows('SELECT kind, data FROM docs WHERE tenant_id = ?', array($tid)) as $d) {
-      if ($d['kind'] === 'settings') $settings = $d['data'];
-      elseif (isset($lists[$d['kind']])) $lists[$d['kind']][] = $d['data'];
+    $names = array(); foreach (rows('SELECT id, name FROM users WHERE tenant_id = ?', array($tid)) as $x) $names[(int)$x['id']] = $x['name'];
+    foreach (rows('SELECT kind, data, updated_by FROM docs WHERE tenant_id = ?', array($tid)) as $d) {
+      if ($d['kind'] === 'settings') { $settings = $d['data']; continue; }
+      if (!isset($lists[$d['kind']])) continue;
+      if ($d['kind'] === 'assessments' && $d['updated_by'] && strpos($d['data'], '"ownerId"') === false) {
+        $o = json_decode($d['data']);
+        if ($o) { $o->ownerId = (int)$d['updated_by']; $o->ownerName = isset($names[(int)$d['updated_by']]) ? $names[(int)$d['updated_by']] : ''; $d['data'] = jenc($o); }
+      }
+      $lists[$d['kind']][] = $d['data'];
     }
     $map = function ($sql, $col) use ($tid) {
       $g = array();
@@ -272,7 +278,22 @@ try {
     $u = auth(); $uid = (int)$u['id']; $tid = tenant_of($u); $n = 0; $rejected = 0;
     $isAdmin = $u['role'] === 'admin';
     // Paket soal: guru hanya boleh mengubah/menghapus miliknya sendiri; admin sekolah boleh semuanya
-    $qsOwner = function ($id) use ($tid) { $r = one('SELECT data FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, 'questionSets', $id)); if (!$r) return false; $d = json_decode($r['data']); return $d ? prop($d, 'ownerId') : null; };
+    /** Pemilik dokumen: false = belum ada, angka = id guru, null = tidak diketahui (data lama). */
+    $docOwner = function ($kind, $id) use ($tid) {
+      $r = one('SELECT data, updated_by FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, $id)); if (!$r) return false;
+      $d = json_decode($r['data']); $o = $d ? prop($d, 'ownerId') : null;
+      if ($o === null && $kind === 'assessments' && $r['updated_by']) $o = (int)$r['updated_by'];
+      return $o === null ? null : (int)$o;
+    };
+    $qsOwner = function ($id) use ($docOwner) { return $docOwner('questionSets', $id); };
+    $asmCache = array();
+    /** Boleh mengubah nilai/jawaban asesmen ini? */
+    $canAsm = function ($aid) use ($docOwner, $isAdmin, $uid, &$asmCache) {
+      if ($isAdmin) return true;
+      if (!array_key_exists($aid, $asmCache)) $asmCache[$aid] = $docOwner('assessments', $aid);
+      $o = $asmCache[$aid];
+      return $o === false || $o === null || $o === $uid;
+    };
     $theme = prop($body, 'theme');
     $onlyTheme = !prop($body, 'docs') && !prop($body, 'delDocs') && !prop($body, 'scores') && !prop($body, 'delScores') && !prop($body, 'subs') && !prop($body, 'delSubs');
     if (!$onlyTheme) require_active($u);
@@ -287,6 +308,14 @@ try {
           elseif (!$isAdmin && (int)$owner !== $uid) { $rejected++; continue; }
           else { $data->ownerId = $owner === null ? ($isAdmin ? prop($data, 'ownerId') : $uid) : $owner; }
         }
+        if ($kind === 'assessments') {
+          $owner = $docOwner('assessments', $id);
+          if ($owner === false || $owner === null) {
+            if (!$isAdmin || !prop($data, 'ownerId')) { $data->ownerId = $uid; $data->ownerName = $u['name']; }
+          } elseif (!$isAdmin && $owner !== $uid) { $rejected++; continue; }
+          else { $data->ownerId = $owner; if (!prop($data, 'ownerName')) { $on = one('SELECT name FROM users WHERE id = ?', array($owner)); $data->ownerName = $on ? $on['name'] : ''; } }
+          $asmCache[$id] = (int)$data->ownerId;
+        }
         q('INSERT INTO docs (tenant_id, kind, id, data, exam_code, updated_by) VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data), exam_code = VALUES(exam_code), updated_by = VALUES(updated_by)',
           array($tid, $kind, $id, jenc($data), $exam_code_of($kind, $data), $uid));
         $n++;
@@ -295,16 +324,20 @@ try {
         $kind = prop($d, 'kind'); $id = clean_id(prop($d, 'id'));
         if (!in_array($kind, $DOC_KINDS, true) || !$id) continue;
         if ($kind === 'questionSets' && !$isAdmin) { $owner = $qsOwner($id); if ($owner !== false && (int)$owner !== $uid) { $rejected++; continue; } }
+        if ($kind === 'assessments' && !$canAsm($id)) { $rejected++; continue; }
+        if (($kind === 'classes' || $kind === 'subjects') && !$isAdmin) { $rejected++; continue; }
         q('DELETE FROM docs WHERE tenant_id = ? AND kind = ? AND id = ?', array($tid, $kind, $id)); $n++;
       }
       foreach ((array)prop($body, 'scores', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = clean_id(prop($s, 's'));
         if (!$a || !$st) continue;
+        if (!$canAsm($a)) { $rejected++; continue; }
         q('INSERT INTO scores (tenant_id, assessment_id, student_id, value) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE value = VALUES(value)', array($tid, $a, $st, jenc(prop($s, 'v')))); $n++;
       }
       foreach ((array)prop($body, 'delScores', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = prop($s, 's');
         if (!$a) continue;
+        if (!$canAsm($a)) { $rejected++; continue; }
         if ($st === '*') q('DELETE FROM scores WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a));
         elseif (clean_id($st)) q('DELETE FROM scores WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a, $st));
         $n++;
@@ -312,11 +345,13 @@ try {
       foreach ((array)prop($body, 'subs', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = clean_id(prop($s, 's'));
         if (!$a || !$st) continue;
+        if (!$canAsm($a)) { $rejected++; continue; }
         q('INSERT INTO submissions (tenant_id, assessment_id, student_id, data) VALUES (?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data)', array($tid, $a, $st, jenc(prop($s, 'd')))); $n++;
       }
       foreach ((array)prop($body, 'delSubs', array()) as $s) {
         $a = clean_id(prop($s, 'a')); $st = prop($s, 's');
         if (!$a) continue;
+        if (!$canAsm($a)) { $rejected++; continue; }
         if ($st === '*') q('DELETE FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $a));
         elseif (clean_id($st)) q('DELETE FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a, $st));
         $n++;
@@ -530,9 +565,10 @@ try {
     $load_game = function ($id) use ($tid) { $g = one('SELECT * FROM games WHERE id = ? AND tenant_id = ?', array((int)$id, $tid)); if (!$g) bad(404, 'Kuis tidak ditemukan.'); return $g; };
 
     if (count($seg) === 1 && $method === 'GET') {
-      $list = rows('SELECT g.id, g.code, g.title, g.status, g.class_id, g.created_at, g.ended_at, (g.data LIKE \'%"mode":"exam"%\') AS is_exam, COUNT(p.id) AS players, COALESCE(SUM(p.correct),0) AS correct, COALESCE(SUM(p.answered),0) AS answered
+      $list = rows('SELECT g.id, g.code, g.title, g.status, g.class_id, g.created_at, g.ended_at, g.created_by, (g.data LIKE \'%"mode":"exam"%\') AS is_exam, COUNT(p.id) AS players, COALESCE(SUM(p.correct),0) AS correct, COALESCE(SUM(p.answered),0) AS answered
         FROM games g LEFT JOIN game_players p ON p.game_id = g.id WHERE g.tenant_id = ? GROUP BY g.id ORDER BY g.id DESC LIMIT 100', array($tid));
-      foreach ($list as &$x) { foreach (array('id', 'players', 'correct', 'answered') as $k) $x[$k] = (int)$x[$k]; $x['is_exam'] = (bool)$x['is_exam']; }
+      $nm = array(); foreach (rows('SELECT id, name FROM users WHERE tenant_id = ?', array($tid)) as $r) $nm[(int)$r['id']] = $r['name'];
+      foreach ($list as &$x) { foreach (array('id', 'players', 'correct', 'answered', 'created_by') as $k) $x[$k] = (int)$x[$k]; $x['is_exam'] = (bool)$x['is_exam']; $x['creator'] = isset($nm[$x['created_by']]) ? $nm[$x['created_by']] : ''; }
       out(array('games' => $list));
     }
 
@@ -577,6 +613,8 @@ try {
 
     $g = $load_game(isset($seg[1]) ? $seg[1] : 0);
     $act = isset($seg[2]) ? $seg[2] : '';
+    if (!($act === '' && $method === 'GET') && $u['role'] !== 'admin' && (int)$g['created_by'] !== (int)$u['id'])
+      bad(403, 'Kuis ini dibuat guru lain. Hanya pembuatnya atau admin sekolah yang bisa mengendalikan, mengoreksi, atau menghapusnya.');
     if ($act === '' && $method === 'GET') {
       $data = json_decode($g['data'], true);
       $isExam = isset($data['settings']['mode']) && $data['settings']['mode'] === 'exam';
@@ -604,7 +642,8 @@ try {
       }
       $qs = array();
       foreach ($data['questions'] as $i => $q) $qs[] = array_merge(array('answer' => null, 'options' => array(), 'points' => 1), $q, array('no' => $i + 1, 'ok' => $qstat[$q['id']]['ok'], 'n' => $qstat[$q['id']]['n']));
-      out(array('game' => array('id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'classId' => $g['class_id'], 'subjectId' => $g['subject_id'],
+      $cr = one('SELECT name FROM users WHERE id = ?', array((int)$g['created_by']));
+      out(array('game' => array('id' => (int)$g['id'], 'code' => $g['code'], 'title' => $g['title'], 'status' => $g['status'], 'classId' => $g['class_id'], 'subjectId' => $g['subject_id'], 'createdBy' => (int)$g['created_by'], 'creatorName' => $cr ? $cr['name'] : '',
         'settings' => $data['settings'], 'createdAt' => $g['created_at'], 'startedAt' => $g['started_at'], 'endedAt' => $g['ended_at']), 'questions' => $qs, 'players' => $players));
     }
     if ($act === 'start' && $method === 'POST') { q("UPDATE games SET status = 'running', started_at = NOW() WHERE id = ? AND status = 'lobby'", array($g['id'])); out(array('ok' => true)); }

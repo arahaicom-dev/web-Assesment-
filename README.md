@@ -128,6 +128,17 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Hak akses antar-guru dalam satu sekolah (v5.8)
+
+| Data | Guru lain di sekolah yang sama | Pembuat | Admin sekolah |
+|---|---|---|---|
+| Kelas, murid, mapel, TP | lihat & ubah (hapus: hanya admin) | – | semua |
+| Asesmen & nilainya | **hanya lihat** (rapor & leger tetap lengkap) | ubah & hapus | ubah & hapus |
+| Paket soal | lihat, pakai, duplikat | ubah & hapus | ubah & hapus |
+| Kuis Seru / Mode Ujian | lihat hasil | mulai, akhiri, koreksi, hapus | semua |
+
+Aturan dijaga di **server** (bukan hanya tombol yang disembunyikan). Asesmen lama yang dibuat sebelum v5.8 dianggap milik guru yang terakhir menyimpannya. Data antar-sekolah tetap terpisah total.
+
 ## Impor murid dari Excel, format apa pun (v5.7)
 
 Menu **Kelas, Murid & Mapel** → **📥 Unggah Excel** (ke kelas yang dibuka) atau **📥 Impor Kelas & Murid dari Excel** (sekaligus membuat kelas). File juga bisa diseret ke halaman. **📋 Tempel Daftar** memakai pendeteksi yang sama.

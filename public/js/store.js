@@ -197,7 +197,7 @@
         const r = await api('sync', { body: payload });
         sync.snap = next; setStatus('ok');
         if (r && r.rejected) {
-          window.App && App.toast('Sebagian perubahan paket soal ditolak: hanya pembuatnya atau admin sekolah yang boleh mengubah.', 'bad');
+          window.App && App.toast('Sebagian perubahan ditolak: paket soal, asesmen, dan nilai hanya bisa diubah oleh pembuatnya atau admin sekolah; kelas/mapel hanya bisa dihapus admin.', 'bad');
           await this.pull(true); window.App && App.route();
         }
       } catch (e) {
