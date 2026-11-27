@@ -29,7 +29,13 @@
     });
   }
   const saveKey = () => 'ujian:' + S.token + ':' + (S.student && S.student.id);
-  function persist() { try { localStorage.setItem(saveKey(), JSON.stringify({ answers: S.answers, idx: S.idx, startedAt: S.startedAt })); } catch (e) { /* */ } }
+  let syncT = null;
+  function persist() {
+    try { localStorage.setItem(saveKey(), JSON.stringify({ answers: S.answers, idx: S.idx, startedAt: S.startedAt })); } catch (e) { /* */ }
+    if (!S.student || !S.startedAt) return;
+    clearTimeout(syncT);
+    syncT = setTimeout(() => { api('exam/' + encodeURIComponent(S.token) + '/save', { studentId: S.student.id, nis: S.nis, answers: S.answers, startedAt: S.startedAt }).catch(() => {}); }, 2500);
+  }
   function restore() { try { const d = JSON.parse(localStorage.getItem(saveKey()) || 'null'); if (d) { S.answers = d.answers || {}; S.idx = d.idx || 0; S.startedAt = d.startedAt || 0; } } catch (e) { /* */ } }
 
   /* 1. Token */
@@ -93,10 +99,21 @@
       if (r.submitted) return showResult(r.result, true);
       S.questions = r.questions; S.duration = r.duration; S.instructions = r.instructions || ''; S.answers = {}; S.idx = 0; S.startedAt = 0;
       restore();
+      const rs = r.resume;
+      if (rs) {
+        if (rs.reopenedAt && (!S.startedAt || S.startedAt < rs.reopenedAt)) {
+          // guru membuka kembali ujian untuk murid ini: pakai jawaban dari server, waktu mulai lagi dari awal
+          S.answers = Object.assign({}, rs.answers || {}); S.startedAt = 0; S.idx = 0; S.reopened = true; persist();
+        } else if (!Object.keys(S.answers).length && rs.answers && Object.keys(rs.answers).length) {
+          // pindah perangkat: lanjutkan jawaban & waktu yang tersimpan di server
+          S.answers = Object.assign({}, rs.answers); if (!S.startedAt && rs.startedAt) S.startedAt = rs.startedAt;
+        }
+      }
       if (S.startedAt) return renderQ();
       view.innerHTML = `<div class="card tilt" style="max-width:600px;margin:20px auto;text-align:center"><div style="font-size:52px">📝</div>
         <h2>${esc(S.info.assessment.title)}</h2><p>Halo <b>${esc(st.name)}</b>! Ada <b>${S.questions.length} soal</b>.</p>
         <p class="muted small">${QT.ORDER.map(t => { const n = S.questions.filter(q => q.type === t).length; return n ? n + ' ' + TYPE[t] : ''; }).filter(Boolean).join(' · ')}${S.duration ? ' · Waktu ' + S.duration + ' menit' : ''}</p>
+        ${S.reopened ? `<div class="note ok" style="text-align:left;margin-bottom:10px">✅ Guru membuka kembali ujianmu.${Object.keys(S.answers).length ? ` <b>${Object.keys(S.answers).length} jawabanmu sebelumnya</b> masih tersimpan — lanjutkan mengerjakan.` : ' Silakan mengerjakan dari awal.'}</div>` : ''}
         <div style="text-align:left">${QT.instructionsHTML(S.instructions, S.questions.map(q => q.type))}</div>
         <p class="small muted">Jawaban tersimpan otomatis di perangkat ini. Jangan lupa tekan <b>Kumpulkan</b> di akhir.</p>
         <label class="ins-ok"><input type="checkbox" id="ins-ok"> Saya sudah membaca petunjuk</label>

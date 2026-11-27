@@ -128,6 +128,16 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Atasi murid bermasalah, simpan otomatis ujian token, perpustakaan soal (v5.13)
+
+- Tombol **🛠 Atasi masalah** per murid (Kuis Mode Ujian: tabel peserta; ujian token: kolom Online di daftar nilai). Hanya murid itu yang terpengaruh:
+  - **▶ Lanjutkan** — jawaban tetap tersimpan (HP mati, terkunci karena pelanggaran, tak sengaja Selesai, waktu habis). Kuis Mode Ujian: bisa **tambah waktu** & hapus catatan pelanggaran; layar murid otomatis kembali ke ujian. Ujian token: waktu dimulai lagi saat murid menekan Mulai.
+  - **↻ Ulang dari awal** — jawaban & nilai murid itu dihapus.
+  - **🚫 Keluarkan** (Kuis) — bila murid salah memilih nama.
+- **Ujian token kini menyimpan jawaban ke server** setiap beberapa detik (tabel `exam_drafts`, dibuat otomatis): bila HP mati, murid membuka token yang sama di HP lain dan **melanjutkan** jawaban & waktunya. Menu Ujian Berjalan menampilkan jumlah yang sedang mengerjakan ujian token.
+- **Bank Soal (Perpustakaan Soal)**: pencarian (judul, isi soal, teks bacaan, nama guru) dan filter jenis soal.
+- **Hasil ujian**: menu **📡 Ujian Berjalan & Hasil** (bagian Riwayat → 📊 Hasil/Nilai), selain halaman tiap asesmen & layar Kuis.
+
 ## Ujian berjalan, riwayat & ujian untuk beberapa kelas (v5.12)
 
 - Menu **📡 Ujian Berjalan & Riwayat** (versi server): semua Kuis Seru, Mode Ujian, dan ujian token yang sedang berlangsung di sekolah — jumlah yang bergabung, sedang mengerjakan, selesai, pelanggaran, rata-rata — diperbarui otomatis tiap 8 detik; tombol buka pengawas, **Akhiri**/**Tutup Ujian**; penanda "⚠ lebih dari sehari" untuk yang lupa diakhiri; tabel **riwayat** dengan rata-rata nilai; filter "Milik saya".

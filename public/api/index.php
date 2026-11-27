@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.12.0');
+define('APP_VERSION', '5.13.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -38,7 +38,7 @@ try {
     $base = array('ok' => true, 'mode' => 'server', 'backend' => 'php', 'saas' => true, 'version' => APP_VERSION);
     if (!$CFG) out(array_merge($base, array('needsConfig' => true)));
     try {
-      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id') || !has_table(db(), 'media') || !has_table(db(), 'pw_resets') || !has_column(db(), 'users', 'email')) migrate();
+      if (!has_table(db(), 'users') || !has_table(db(), 'tenants') || !has_table(db(), 'payments') || !has_table(db(), 'game_players') || !has_column(db(), 'game_players', 'violations') || !has_column(db(), 'users', 'tenant_id') || !has_table(db(), 'media') || !has_table(db(), 'pw_resets') || !has_column(db(), 'users', 'email') || !has_table(db(), 'exam_drafts')) migrate();
       $n = (int)one('SELECT COUNT(*) AS n FROM users')['n'];
       out(array_merge($base, array('needsSetup' => $n === 0)));
     } catch (PDOException $e) {
@@ -559,6 +559,30 @@ try {
     out(array('data' => $m['data']));
   }
 
+  /* ---------- Ujian token: atasi masalah satu murid ---------- */
+  if ($route === 'exam-admin' && $method === 'POST') {
+    $u = auth(); require_active($u); $tid = tenant_of($u);
+    $aid = clean_id(prop($body, 'assessmentId')); $sid = clean_id(prop($body, 'studentId')); $mode = (string)prop($body, 'mode', 'continue');
+    $row = $aid ? one("SELECT data, updated_by FROM docs WHERE tenant_id = ? AND kind = 'assessments' AND id = ?", array($tid, $aid)) : null;
+    if (!$row || !$sid) bad(404, 'Asesmen atau murid tidak ditemukan.');
+    $ad = json_decode($row['data']); $own = (int)(prop($ad, 'ownerId') ?: $row['updated_by']);
+    if ($u['role'] !== 'admin' && $own && $own !== (int)$u['id']) bad(403, 'Hanya pembuat asesmen atau admin sekolah yang bisa melakukan ini.');
+    $sub = one('SELECT data FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $aid, $sid));
+    $answers = new stdClass();
+    if ($mode === 'continue') {
+      if ($sub) { $sd = json_decode($sub['data'], true); if (!empty($sd['answers'])) $answers = (object)$sd['answers']; }
+      else { $dr = one('SELECT data FROM exam_drafts WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $aid, $sid)); if ($dr) $answers = (object)(json_decode($dr['data'], true) ?: array()); }
+    }
+    $pdo = db(); $pdo->beginTransaction();
+    try {
+      q('DELETE FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $aid, $sid));
+      q('DELETE FROM scores WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $aid, $sid));
+      q('REPLACE INTO exam_drafts (tenant_id, assessment_id, student_id, data, started_ms, reopened_ms) VALUES (?,?,?,?,?,?)', array($tid, $aid, $sid, jenc($answers), 0, now_ms()));
+      $pdo->commit();
+    } catch (Exception $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+    out(array('ok' => true, 'kept' => count(get_object_vars($answers))));
+  }
+
   /* ---------- Pantau ujian berjalan & riwayat ---------- */
   if ($route === 'monitor' && $method === 'GET') {
     $u = auth(); $tid = tenant_of($u);
@@ -582,6 +606,8 @@ try {
     // Ujian token (per asesmen)
     $subs = array();
     foreach (rows('SELECT assessment_id a, COUNT(*) n, MAX(submitted_at) last, MIN(submitted_at) first FROM submissions WHERE tenant_id = ? GROUP BY assessment_id', array($tid)) as $x) $subs[$x['a']] = $x;
+    $work = array();
+    foreach (rows('SELECT assessment_id a, COUNT(*) n FROM exam_drafts WHERE tenant_id = ? AND updated_at > (NOW() - INTERVAL 15 MINUTE) GROUP BY assessment_id', array($tid)) as $x) $work[$x['a']] = (int)$x['n'];
     $tokens = array();
     foreach (rows("SELECT id, data, updated_by FROM docs WHERE tenant_id = ? AND kind = 'assessments'", array($tid)) as $x) {
       $a = json_decode($x['data']); if (!$a) continue;
@@ -591,7 +617,7 @@ try {
       if (isset($subs[$x['id']])) { $sum = 0; $k = 0; foreach (rows('SELECT data FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $x['id'])) as $sb) { $sd = json_decode($sb['data'], true); if (isset($sd['result']['score'])) { $sum += $sd['result']['score']; $k++; } } if ($k) $avg = round($sum / $k, 1); }
       $cid = prop($a, 'classId'); $own = prop($a, 'ownerId') ?: $x['updated_by'];
       $tokens[] = array('kind' => 'token', 'id' => $x['id'], 'type' => prop($a, 'type'), 'title' => prop($a, 'title', ''), 'open' => $open, 'code' => $open ? prop($a, 'examCode') : '', 'linkId' => prop($a, 'linkId'),
-        'classes' => array(isset($clsName[$cid]) ? $clsName[$cid] : ''), 'expected' => isset($clsSize[$cid]) ? $clsSize[$cid] : 0, 'finished' => isset($subs[$x['id']]) ? (int)$subs[$x['id']]['n'] : 0,
+        'classes' => array(isset($clsName[$cid]) ? $clsName[$cid] : ''), 'expected' => isset($clsSize[$cid]) ? $clsSize[$cid] : 0, 'finished' => isset($subs[$x['id']]) ? (int)$subs[$x['id']]['n'] : 0, 'working' => isset($work[$x['id']]) ? $work[$x['id']] : 0,
         'avg' => $avg, 'duration' => (int)prop($a, 'duration', 0), 'firstAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['first'] : null, 'lastAt' => isset($subs[$x['id']]) ? $subs[$x['id']]['last'] : null,
         'owner' => isset($names[(int)$own]) ? $names[(int)$own] : '', 'ownerId' => (int)$own);
     }
@@ -699,7 +725,27 @@ try {
       }
       out(array('ok' => true));
     }
+    if ($act === 'reopen' && $method === 'POST') {
+      $pl = one('SELECT * FROM game_players WHERE id = ? AND game_id = ?', array((int)prop($body, 'playerId', 0), $g['id']));
+      if (!$pl) bad(404, 'Peserta tidak ditemukan.');
+      $dd = json_decode($g['data'], true); $dur = isset($dd['settings']['duration']) ? (int)$dd['settings']['duration'] : 0;
+      $add = max(0, min(240, (int)prop($body, 'addMinutes', 0)));
+      $started = (int)$pl['started_ms'];
+      if ($dur && $started) {
+        $remain = $dur * 60000 - (now_ms() - $started);
+        if ($remain < 60000 && !$add) $add = 10;          // waktu habis → beri 10 menit
+        $remain = max(0, $remain) + $add * 60000;
+        $started = now_ms() - ($dur * 60000 - $remain);
+      }
+      $ex0 = $pl['extra'] ? json_decode($pl['extra'], true) : array();
+      $keep = array('manual' => isset($ex0['manual']) ? (object)$ex0['manual'] : new stdClass());
+      q('UPDATE game_players SET finished_at = NULL, exam_score = NULL, started_ms = ?, violations = ?, extra = ? WHERE id = ?',
+        array($started, prop($body, 'clearViolations') ? 0 : (int)$pl['violations'], jenc($keep), $pl['id']));
+      if ($g['status'] === 'ended') q("UPDATE games SET status = 'running', ended_at = NULL WHERE id = ?", array($g['id']));
+      out(array('ok' => true, 'addedMinutes' => $add));
+    }
     if ($act === 'reset' && $method === 'POST') {
+      if ($g['status'] === 'ended') q("UPDATE games SET status = 'running', ended_at = NULL WHERE id = ?", array($g['id']));
       q("UPDATE game_players SET answers = '{}', flags = NULL, extra = NULL, exam_score = NULL, correct = 0, violations = 0, started_ms = 0, finished_at = NULL WHERE id = ? AND game_id = ?", array((int)prop($body, 'playerId', 0), $g['id']));
       out(array('ok' => true));
     }
@@ -984,7 +1030,23 @@ try {
       $qs = array();
       foreach ($questions as $qq) if (in_array(prop($qq, 'type'), q_types(), true)) $qs[] = public_q($qq, $a->id . $sid, false);
       if (prop($a, 'shuffle')) { mt_srand(crc32($a->id . $sid)); $qs = shuffle_keep_passages($qs, function ($q) { return isset($q['passage']['id']) ? $q['passage']['id'] : null; }); mt_srand(); }
-      out(array('submitted' => false, 'instructions' => (string)prop($ex['qset'], 'instructions', ''), 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
+      $dr = one('SELECT data, started_ms, reopened_ms FROM exam_drafts WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a->id, $sid));
+      $resume = $dr ? array('answers' => (object)(json_decode($dr['data'], true) ?: array()), 'startedAt' => (int)$dr['started_ms'], 'reopenedAt' => (int)$dr['reopened_ms']) : null;
+      out(array('submitted' => false, 'resume' => $resume, 'instructions' => (string)prop($ex['qset'], 'instructions', ''), 'student' => array('id' => $chk['st']->id, 'name' => prop($chk['st'], 'name', '')), 'questions' => $qs, 'duration' => (int)prop($a, 'duration', 0), 'serverTime' => round(microtime(true) * 1000)));
+    }
+
+    if ($action === 'save' && $method === 'POST') {
+      $sid = (string)prop($body, 'studentId', '');
+      $chk = $find_student($sid, prop($body, 'nis', ''));
+      if (isset($chk['err'])) bad(401, $chk['err']);
+      if (one('SELECT 1 AS x FROM submissions WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a->id, $sid))) out(array('submitted' => true));
+      $ids = array(); foreach ($questions as $qq) $ids[$qq->id] = true;
+      $clean = array(); $given = prop($body, 'answers');
+      if (is_object($given)) foreach (get_object_vars($given) as $k => $v) if (isset($ids[$k])) $clean[$k] = clean_answer($tid, $v);
+      $stm = max(0, (int)prop($body, 'startedAt', 0));
+      q('INSERT INTO exam_drafts (tenant_id, assessment_id, student_id, data, started_ms) VALUES (?,?,?,?,?) ON DUPLICATE KEY UPDATE data = VALUES(data), started_ms = IF(started_ms > 0 AND (reopened_ms = 0 OR started_ms >= reopened_ms), LEAST(started_ms, VALUES(started_ms)), VALUES(started_ms))',
+        array($tid, $a->id, $sid, jenc((object)$clean), $stm));
+      out(array('ok' => true));
     }
 
     if ($action === 'media' && $method === 'POST') {
@@ -1013,6 +1075,7 @@ try {
         $sub = array('answers' => $clean ? $clean : new stdClass(), 'manual' => new stdClass(), 'result' => $result, 'at' => round(microtime(true) * 1000),
           'duration' => $started ? max(0, (int)round((microtime(true) * 1000 - $started) / 1000)) : null, 'online' => true);
         q('INSERT INTO submissions (tenant_id, assessment_id, student_id, data) VALUES (?,?,?,?)', array($tid, $a->id, $sid, jenc($sub)));
+        q('DELETE FROM exam_drafts WHERE tenant_id = ? AND assessment_id = ? AND student_id = ?', array($tid, $a->id, $sid));
         $prev = one('SELECT value FROM scores WHERE tenant_id = ? AND assessment_id = ? AND student_id = ? FOR UPDATE', array($tid, $a->id, $sid));
         $val = $result['score'];
         $pv = $prev ? json_decode($prev['value']) : null;

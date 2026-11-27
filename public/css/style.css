@@ -922,3 +922,10 @@ button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: 
 .mon-top .stat { text-align: center; padding: 14px; }
 .mon-top .stat .num { font-size: 2rem; font-weight: 900; }
 .mon-top .stat .lbl { color: var(--muted); font-size: .85rem; }
+
+/* atasi masalah murid */
+.fix-opt { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 14px; border: 2px solid var(--border); border-radius: 14px; margin: 10px 0; background: var(--surface); }
+.fix-opt > div { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.fix-opt small { color: var(--muted); line-height: 1.5; }
+.fix-opt .btn { flex: none; }
+@media (max-width: 560px) { .fix-opt { flex-direction: column; align-items: stretch; } }

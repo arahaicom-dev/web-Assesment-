@@ -189,6 +189,16 @@ function schema() {
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       INDEX (tenant_id)
     )$e",
+    "CREATE TABLE IF NOT EXISTS exam_drafts (
+      tenant_id INT UNSIGNED NOT NULL,
+      assessment_id VARCHAR(64) NOT NULL,
+      student_id VARCHAR(64) NOT NULL,
+      data LONGTEXT NOT NULL,
+      started_ms BIGINT NOT NULL DEFAULT 0,
+      reopened_ms BIGINT NOT NULL DEFAULT 0,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (tenant_id, assessment_id, student_id)
+    )$e",
     "CREATE TABLE IF NOT EXISTS login_fails (
       k VARCHAR(190) NOT NULL PRIMARY KEY,
       n INT NOT NULL DEFAULT 0,

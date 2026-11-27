@@ -278,9 +278,9 @@ B. VII B</pre></div></div></div>
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
     { href: 'kuis', ic: '🎮', label: 'Kuis Seru (Live)', tag: 'Baru' },
-    { href: 'pantau', ic: '📡', label: 'Ujian Berjalan & Riwayat', server: true },
+    { href: 'pantau', ic: '📡', label: 'Ujian Berjalan & Hasil', server: true },
     { group: 'Soal' },
-    { href: 'bank-soal', ic: '📄', label: 'Bank Soal & Unggah PDF' },
+    { href: 'bank-soal', ic: '📚', label: 'Bank Soal (Perpustakaan)' },
     { href: 'panduan-soal', ic: '📘', label: 'Panduan Jenis Soal', tag: '17' },
     { group: 'Nilai Akhir' },
     { href: 'rekap', ic: '🧮', label: 'Rekap Nilai Rapor', tag: 'Total' },
@@ -950,7 +950,7 @@ B. VII B</pre></div></div></div>
           <td data-ket="${m.id}">${a.type === 'diagnostik' ? `<span class="pill">${esc(C.diagnosticGroup(eff, s.settings) || '–')}</span>` : ketPill(eff)}</td>
           ${isF ? `<td><input data-note="${m.id}" value="${esc(o.note || '')}" placeholder="Umpan balik untuk murid" style="width:100%;min-width:200px"${dis}></td>` : ''}`;
       }
-      const subCell = q ? `<td>${sub ? `<button class="btn ${sub.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${m.id}">${sub.result.needsReview ? '📝 Koreksi' : '👁 Jawaban'}</button>` : can ? `<a class="btn ghost sm" href="#/ujian/${a.id}/${m.id}">▶</a>` : '<span class="muted small">–</span>'}</td>` : '';
+      const subCell = q ? `<td class="btns" style="flex-wrap:nowrap">${sub ? `<button class="btn ${sub.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${m.id}">${sub.result.needsReview ? '📝 Koreksi' : '👁 Jawaban'}</button>` : can ? `<a class="btn ghost sm" href="#/ujian/${a.id}/${m.id}">▶</a>` : '<span class="muted small">–</span>'}${can && S.mode === 'server' && (sub || a.examOpen) ? `<button class="btn ghost sm" data-act="tfix" data-id="${m.id}" title="Atasi masalah murid ini">🛠</button>` : ''}</td>` : '';
       return `<tr><td class="num">${i + 1}</td><td class="muted small">${esc(m.nis || '')}</td><td class="sticky-col">${esc(m.name)}</td>${cells}${subCell}</tr>`;
     }).join('');
 
@@ -1087,6 +1087,16 @@ B. VII B</pre></div></div></div>
           };
         },
         review: el => reviewModal(a, el.dataset.id),
+        tfix: el => {
+          const m = cls.students.find(x => x.id === el.dataset.id), sub = (st().submissions[a.id] || {})[el.dataset.id];
+          fixModal({
+            name: m ? m.name : '', finished: !!sub, token: true, timed: !!a.duration,
+            info: sub ? 'Sudah mengumpulkan · nilai ' + fmt(sub.result.score, 1) : 'Belum mengumpulkan (mungkin sedang mengerjakan)',
+            onContinue: async () => { const r = await S.api('exam-admin', { body: { assessmentId: a.id, studentId: el.dataset.id, mode: 'continue' } }); return r.kept + ' jawaban dipertahankan'; },
+            onRestart: async () => { await S.api('exam-admin', { body: { assessmentId: a.id, studentId: el.dataset.id, mode: 'restart' } }); },
+            done: async () => { await S.pull(true); route(); }
+          });
+        },
         'exam-link': () => linkClassesModal(a, keepScroll),
         'exam-toggle': () => {
           if (!a.examCode) a.examCode = newExamCode();
@@ -1169,6 +1179,32 @@ B. VII B</pre></div></div></div>
           <div class="bar" style="margin-top:6px"><i style="width:${cls.students.length ? done / cls.students.length * 100 : 0}%"></i></div>
         </div>
       </div></div>`;
+  }
+
+  /**
+   * Atasi masalah satu murid tanpa mengulang ujian murid lain.
+   * o: {name, info, finished, violations, timed, token, onContinue(addMin, clearViolations), onRestart(), onKick(), done()}
+   */
+  function fixModal(o) {
+    const m = modal(`<h2>🛠 Atasi Masalah: ${esc(o.name)}</h2><p class="small muted" style="margin-top:0">${esc(o.info || '')}</p>
+      <p class="small" style="margin-top:0">Hanya murid ini yang terpengaruh — murid lain tidak perlu mengulang.</p>
+      <div class="fix-opt"><div><b>▶ Lanjutkan mengerjakan</b><small>Jawaban yang sudah ada <b>tetap tersimpan</b>. Cocok untuk: HP mati/keluar, terkunci karena pelanggaran, tidak sengaja menekan Selesai, waktu habis.${o.token ? ' Waktu dimulai lagi saat murid menekan Mulai.' : ''}</small>
+        ${!o.token && o.timed ? `<label class="small">Tambah waktu <select id="fx-add">${[0, 5, 10, 15, 20, 30, 45, 60].map(x => `<option value="${x}" ${x === 10 ? 'selected' : ''}>${x ? '+' + x + ' menit' : 'tidak'}</option>`).join('')}</select></label>` : ''}
+        ${!o.token && o.violations ? `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="fx-viol" checked> Hapus catatan ${o.violations} pelanggaran</label>` : ''}</div>
+        <button class="btn ok" id="fx-cont">▶ Lanjutkan</button></div>
+      <div class="fix-opt"><div><b>↻ Ulang dari awal</b><small>Semua jawaban & nilai murid ini <b>dihapus</b>, lalu ia mengerjakan dari nomor 1. Cocok bila ada kecurangan atau ujian salah dikerjakan.</small></div>
+        <button class="btn danger" id="fx-rst">↻ Ulang</button></div>
+      ${o.onKick ? `<div class="fix-opt"><div><b>🚫 Keluarkan</b><small>Hapus peserta ini dari daftar. Cocok bila murid salah memilih nama (nama dipakai teman) — nama itu bisa dipilih lagi oleh pemiliknya.</small></div>
+        <button class="btn ghost" id="fx-kick">🚫 Keluarkan</button></div>` : ''}
+      <p class="small muted">Setelah dibuka kembali, minta murid membuka lagi tautan/token yang sama${o.token ? '' : ' (layar murid juga berpindah otomatis dalam beberapa detik)'}.</p>
+      <div class="foot"><button class="btn ghost" data-close>Tutup</button></div>`, { noFocus: true });
+    const run = async (fn, msg, confirmMsg) => {
+      if (confirmMsg && !await confirmBox(confirmMsg, 'Ya')) return;
+      try { const r = await fn(); closeModal(); toast(msg + (typeof r === 'string' ? ' — ' + r : '') + '.'); await o.done(); } catch (e) { toast(e.message, 'bad'); }
+    };
+    $('#fx-cont', m).onclick = () => run(() => o.onContinue($('#fx-add', m) ? +$('#fx-add', m).value : 0, $('#fx-viol', m) ? $('#fx-viol', m).checked : false), 'Ujian ' + o.name + ' dibuka kembali');
+    $('#fx-rst', m).onclick = () => run(o.onRestart, 'Ujian ' + o.name + ' diulang dari awal', `Hapus semua jawaban & nilai <b>${esc(o.name)}</b> lalu ulang dari awal?`);
+    if (o.onKick) $('#fx-kick', m).onclick = () => run(o.onKick, o.name + ' dikeluarkan', `Keluarkan <b>${esc(o.name)}</b> dari daftar peserta?`);
   }
 
   /* ---- Koreksi jawaban online ---- */
@@ -1328,7 +1364,7 @@ B. VII B</pre></div></div></div>
   /* ================= Bank soal & unggah PDF ================= */
   let importDraft = null, bankFilter = 'all';
   function viewBank() {
-    setTitle('📄 Bank Soal & Unggah PDF', 'Format soal apa pun di PDF otomatis disesuaikan ke format web');
+    setTitle('📚 Bank Soal (Perpustakaan Soal)', 'Semua paket soal sekolah yang sudah diunggah/dibuat — cari, lihat, pakai, atau perbaiki');
     renderCtx(false);
     const s = st();
     const multiUser = S.mode === 'server' && !!S.user;
@@ -1350,14 +1386,17 @@ B. VII B</pre></div></div></div>
           <div class="btns" style="margin-top:10px"><button class="btn" data-act="parse-paste">✨ Ubah ke Format Web</button><button class="btn ghost sm" data-act="blank">+ Buat Paket Kosong</button></div>
         </div>
       </div>
-      <div class="card"><div class="card-head"><h3>Paket Soal Tersimpan</h3>
+      <div class="card" id="lib"><div class="card-head"><h3>📚 Perpustakaan Soal <span class="pill" id="lib-n">${sets.length}</span></h3>
+        <input id="lib-q" type="search" placeholder="🔎 Cari judul, mapel, isi soal, atau nama guru…" style="flex:1;min-width:220px;max-width:380px">
+        <select id="lib-t" style="width:auto"><option value="">Semua jenis soal</option>${QT.ORDER.map(t => `<option value="${t}">${QT.TYPES[t].icon} ${TYPE_LABEL[t]}</option>`).join('')}</select>
         ${multiUser ? `<div class="tabs" style="margin:0"><button class="${bankFilter === 'all' ? 'on' : ''}" data-act="bf" data-f="all">Semua di sekolah</button><button class="${bankFilter === 'mine' ? 'on' : ''}" data-act="bf" data-f="mine">Milik saya</button></div>` : ''}</div>
         ${multiUser ? `<p class="small muted" style="margin-top:0">${S.user.role === 'admin' ? '👑 Anda admin sekolah: bisa mengedit semua paket soal.' : '✏️ Anda bisa mengedit paket soal milik sendiri. Paket soal guru lain bisa dilihat, dipakai, atau diduplikat.'}</p>` : ''}
         ${sets.length ? `<div class="grid auto">${sets.map(q => {
           const c = t => q.questions.filter(x => x.type === t).length;
           const used = s.assessments.filter(a => a.qsetId === q.id).length;
           const can = canEditQset(q), imgs = q.questions.filter(x => x.image).length;
-          return `<div class="card tilt" style="margin:0"><div class="z1"><h3>${esc(q.title)}</h3>
+          const hay = [q.title, q.ownerName, q.source, q.instructions].concat(q.questions.map(x => x.text + ' ' + (x.passage ? x.passage.title : ''))).join(' ').toLowerCase().slice(0, 20000);
+          return `<div class="card tilt lib-item" style="margin:0" data-hay="${esc(hay)}" data-types="${esc(q.questions.map(x => x.type).filter((t, k, a) => a.indexOf(t) === k).join(' '))}"><div class="z1"><h3>${esc(q.title)}</h3>
             <p class="small muted" style="margin:0 0 8px">${multiUser ? `👤 ${esc(q.ownerName || 'tanpa pemilik')}${q.ownerId === S.user.id ? ' (Anda)' : ''} · ` : ''}${q.source ? '📄 ' + esc(q.source) + ' · ' : ''}${new Date(q.created).toLocaleDateString('id-ID')}</p>
             <div class="btns" style="margin-bottom:10px"><span class="pill pri">${q.questions.length} soal</span>${c('pg') ? `<span class="pill">PG ${c('pg')}</span>` : ''}${c('bs') ? `<span class="pill">B/S ${c('bs')}</span>` : ''}${c('isian') ? `<span class="pill">Isian ${c('isian')}</span>` : ''}${c('uraian') ? `<span class="pill">Uraian ${c('uraian')}</span>` : ''}${imgs ? `<span class="pill">🖼 ${imgs}</span>` : ''}${used ? `<span class="pill ok">Dipakai ${used}×</span>` : ''}</div>
             <div class="btns">${can ? `<a class="btn sm" href="#/bank-soal/${q.id}">✏️ Edit</a>` : `<button class="btn ghost sm" data-act="view" data-id="${q.id}">👁 Lihat</button>`}<button class="btn soft sm" data-act="use" data-id="${q.id}">➕ Jadikan Asesmen</button><button class="btn ghost sm" data-act="dup" data-id="${q.id}" title="${can ? 'Duplikat' : 'Duplikat untuk diedit'}">⧉${can ? '' : ' Duplikat'}</button>${can ? `<button class="btn ghost sm" data-act="del" data-id="${q.id}">🗑</button>` : ''}</div></div></div>`;
@@ -1374,6 +1413,13 @@ B. VII B</pre></div></div></div>
         </div>
         <p class="small muted" style="margin-bottom:0">Hasil pengenalan selalu bisa diperiksa dan diperbaiki di editor sebelum dipakai. PDF hasil scan (gambar) akan dibaca dengan OCR bila ada koneksi internet.</p></div>`,
       mount(v) {
+        const lq = $('#lib-q', v), lt = $('#lib-t', v);
+        const libFilter = () => {
+          const words = lq.value.toLowerCase().split(/\s+/).filter(Boolean), t = lt.value; let n = 0;
+          $$('.lib-item', v).forEach(c => { const ok = words.every(w => c.dataset.hay.indexOf(w) >= 0) && (!t || c.dataset.types.split(' ').indexOf(t) >= 0); c.style.display = ok ? '' : 'none'; if (ok) n++; });
+          $('#lib-n', v).textContent = n;
+        };
+        if (lq) { lq.oninput = libFilter; lt.onchange = libFilter; }
         const drop = $('#drop', v);
         drop.onclick = async () => { const f = await pickFile('.pdf,.txt,application/pdf,text/plain'); if (f) handleFile(f); };
         drop.ondragover = e => { e.preventDefault(); drop.classList.add('over'); };
@@ -2447,7 +2493,18 @@ B. VII B</pre></div></div></div>
         music: () => hostMusic(),
         again: () => { const g = out.data.game; newGameModal({ music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, classIds: gameClassIds(g), subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
         reset: async el => { if (!await confirmBox(`Ulang ujian untuk <b>${esc(el.dataset.n)}</b>? Jawaban, nilai, dan catatan pelanggarannya dihapus sehingga ia bisa mengerjakan dari awal.`, 'Ulang Ujian')) return; try { await S.api('games/' + id + '/reset', { body: { playerId: +el.dataset.id } }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
-        review: el => examReviewModal(out, +el.dataset.id)
+        review: el => examReviewModal(out, +el.dataset.id),
+        fix: el => {
+          const p = out.data.players.find(x => x.id === +el.dataset.id); if (!p) return;
+          fixModal({
+            name: p.nickname, finished: p.finished, violations: p.violations, timed: !!out.data.game.settings.duration,
+            info: `${p.finished ? 'Sudah mengumpulkan' + (p.exam_score !== null ? ' (nilai ' + fmt(p.exam_score, 1) + ')' : '') : p.started_ms ? 'Sedang mengerjakan' : 'Belum mulai'}${p.violations ? ' · ' + p.violations + ' pelanggaran' : ''} · ${p.answeredCount || 0} soal dijawab`,
+            onContinue: async (add, clearV) => { await S.api('games/' + id + '/reopen', { body: { playerId: p.id, addMinutes: add, clearViolations: clearV } }); },
+            onRestart: async () => { await S.api('games/' + id + '/reset', { body: { playerId: p.id } }); },
+            onKick: async () => { await S.api('games/' + id + '/kick', { body: { playerId: p.id } }); },
+            done: () => out.load()
+          });
+        }
       }
     };
     return out;
@@ -2540,7 +2597,7 @@ B. VII B</pre></div></div></div>
         <td class="num">${p.violations ? `<span class="pill bad">⚠ ${p.violations}</span>` : '<span class="muted">0</span>'}</td>
         <td class="num">${p.finished ? '–' : mmss(p.remainingMs)}</td>
         <td class="num">${p.exam_score !== null ? `<b style="font-size:1.1rem">${fmt(p.exam_score, 1)}</b>${p.result && p.result.needsReview ? '<div class="small" style="color:var(--warn)">perlu koreksi</div>' : ''}` : '–'}</td>
-        <td class="btns">${p.finished ? `<button class="btn ${p.result && p.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${p.id}">📝 Koreksi</button>` : ''}<button class="btn ghost sm" data-act="reset" data-id="${p.id}" data-n="${esc(p.nickname)}" title="Ulang ujian">↻</button></td></tr>`;
+        <td class="btns">${p.finished ? `<button class="btn ${p.result && p.result.needsReview ? 'soft' : 'ghost'} sm" data-act="review" data-id="${p.id}">📝 Koreksi</button>` : ''}<button class="btn ghost sm" data-act="fix" data-id="${p.id}" title="Atasi masalah peserta ini">🛠</button></td></tr>`;
     }).join('');
     const table = `<div class="table-wrap"><table id="res-table"><thead><tr><th class="num">No</th><th>Nama</th><th>Status</th><th>Progres</th><th class="num">Pelanggaran</th><th class="num">Sisa Waktu</th><th class="num">Nilai</th><th></th></tr></thead><tbody>${rows || '<tr><td colspan="8" class="empty">Belum ada peserta.</td></tr>'}</tbody></table></div>`;
     if (g.status === 'running') {

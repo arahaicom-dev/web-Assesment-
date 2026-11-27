@@ -441,6 +441,8 @@
       ${r ? `<div class="kz-final-score">${(+r.score).toLocaleString('id-ID', { maximumFractionDigits: 1 })}</div><div class="muted">nilai ujian</div>${r.needsReview ? '<p class="note warn" style="margin-top:12px">Soal uraian/gambar/rekaman akan dikoreksi guru, nilai bisa berubah.</p>' : ''}` : '<p class="muted">Nilai akan diumumkan oleh guru.</p>'}
       ${me.violations ? `<p class="small" style="color:var(--bad)">Tercatat ${me.violations} kali keluar dari halaman ujian.</p>` : ''}
       <p class="small muted">Kamu boleh menutup halaman ini.</p></div>`;
+    // bila guru membuka kembali ujian untuk murid ini, lanjutkan otomatis
+    G.poll = setInterval(async () => { try { const s2 = await api('state'); if (s2.me && !s2.me.finished && s2.status !== 'ended') { stopAll(); toast('Guru membuka kembali ujianmu. Silakan lanjutkan.'); s2.me.started ? examStart() : examRules(); } } catch (e) { /* */ } }, 8000);
   }
   // Pengawasan: keluar dari halaman ujian
   document.addEventListener('visibilitychange', async () => {
