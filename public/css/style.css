@@ -1120,3 +1120,6 @@ button.pill { cursor: pointer; border: none; font: inherit; }
   .ab-tab td.ket-ed:empty::after { content: '＋'; color: #bbb; }
   .ab-tab td.ket-ed.man { background: #fffbe6 !important; }
 }
+.ab-sign.three { flex-wrap: wrap; }
+.ab-sign.three > div { width: 56mm; }
+.ab-sign.three > .ab-sign-date { width: 56mm; margin-left: calc(100% - 56mm); text-align: left; margin-bottom: -4.8mm; }

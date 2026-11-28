@@ -3302,7 +3302,9 @@ B. VII B</pre></div></div></div>
         <div class="row"><label class="field"><span>Mata pelajaran (tampil di bawah kop)</span><select data-a="subjectId"><option value="">— pilih mapel —</option>${s.subjects.map(x => `<option value="${x.id}" ${A.subjectId === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
           <label class="field" style="flex:2"><span>Nama ujian</span><input data-a="ujian" value="${esc(A.ujian)}"></label></div>
         <div class="row"><label class="field" style="max-width:170px"><span>Hari/Tanggal</span><input type="date" data-a="tanggal" value="${esc(A.tanggal)}"></label><label class="field" style="max-width:170px"><span>Waktu</span><input data-a="jam" value="${esc(A.jam)}" placeholder="07.30 – 09.00"></label>
-          <label class="field" style="max-width:150px"><span>Ruang</span><input data-a="ruang" value="${esc(A.ruang)}" placeholder="R-01"></label><label class="field"><span>Nama Pengawas</span><input data-a="pengawas" value="${esc(A.pengawas)}"></label><label class="field"><span>NIP Pengawas</span><input data-a="nipPengawas" value="${esc(A.nipPengawas)}"></label></div>
+          <label class="field" style="max-width:150px"><span>Ruang</span><input data-a="ruang" value="${esc(A.ruang)}" placeholder="R-01"></label></div>
+        <div class="row"><label class="field"><span>Nama Pengawas 1</span><input data-a="pengawas" value="${esc(A.pengawas)}"></label><label class="field"><span>NIP Pengawas 1</span><input data-a="nipPengawas" value="${esc(A.nipPengawas)}"></label>
+          <label class="field"><span>Nama Pengawas 2 <small class="muted">(opsional)</small></span><input data-a="pengawas2" value="${esc(A.pengawas2 || '')}"></label><label class="field"><span>NIP Pengawas 2</span><input data-a="nipPengawas2" value="${esc(A.nipPengawas2 || '')}"></label></div>
         <details class="field" open><summary><b>🏫 Edit kop sekolah, logo & Kepala Sekolah</b> <span class="small muted">— logo & Kepala Sekolah dipakai juga di Kartu Ujian</span></summary>
           <div class="kop-ed-wrap"><div class="small muted" style="margin:8px 0 4px">Baris kop (atas → bawah). Ubah teks, ukuran, dan tebal; perubahan langsung terlihat di pratinjau.</div><div id="kop-ed"></div>
             <div class="btns" style="margin-top:6px;align-items:center"><button class="btn soft sm" data-act="kop-add">＋ Tambah baris</button>
@@ -3315,6 +3317,7 @@ B. VII B</pre></div></div></div>
           <p class="small muted" style="margin:6px 0 0">Nama sekolah ditulis langsung di baris kop di atas. Tahun pelajaran diambil dari <a href="#/pengaturan">Pengaturan</a>.</p></details>
         ${S.mode === 'server' ? '<div class="row" style="align-items:flex-end"><label class="field" style="flex:3"><span>✅ Isi kehadiran otomatis dari ujian (opsional)</span><select id="a-exam"><option value="">— tidak, isi manual saat ujian —</option></select></label></div>' : ''}
         <div class="btns" style="align-items:center">${[['nisn', 'Kolom NISN'], ['ttd', 'Kolom tanda tangan'], ['ket', 'Kolom keterangan'], ['pengawas', 'Tanda tangan pengawas']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-ash="${k}" ${A.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}
+          <label class="small" style="display:flex;gap:6px;align-items:center">Kepala Sekolah di <select data-a="ksPos"><option value="kiri" ${A.ksPos !== 'kanan' ? 'selected' : ''}>kiri</option><option value="kanan" ${A.ksPos === 'kanan' ? 'selected' : ''}>kanan</option></select></label>
           <span style="margin-left:auto" class="btns"><button class="btn ghost" data-act="ket-all" title="Isi atau kosongkan kolom keterangan sekaligus">✎ Keterangan</button><a class="btn ghost" href="#/kartu">🪪 Kartu Ujian</a><button class="btn lg" data-act="a-print">🖨 Cetak Absensi</button></span></div>
         <p class="small muted" style="margin:8px 0 0">Satu kelas dimulai di halaman baru (A4, ${A.perPage} murid per halaman). Untuk PDF: Cetak → "Simpan sebagai PDF".</p>
       </div>
@@ -3335,6 +3338,20 @@ B. VII B</pre></div></div></div>
       if (!A.ket) A.ket = {};
       const ketOf = m => A.ket[m.id] !== undefined ? A.ket[m.id] : present ? (present[m.id] ? (present[m.id].done ? 'Hadir' : 'Hadir*') : 'Tidak hadir') : '';
       const isHadir = v => /^hadir/i.test(String(v).trim());
+      const dots = '..............................';
+      const signHTML = () => {
+        const tglLine = esc(K.kota ? K.kota + ', ' : '') + esc(ttdTgl);
+        const ks = top => `<div>${top}<br>Kepala Sekolah,<div class="ab-sp"></div><b>${esc(K.kepala || dots)}</b><br>NIP. ${esc(K.nip || dots)}</div>`;
+        const pw = top => `<div>${top}<br>Pengawas,<div class="ab-sp"></div><b>${esc(A.pengawas || dots)}</b><br>NIP. ${esc(A.nipPengawas || dots)}</div>`;
+        if (!A.show.pengawas) return A.ksPos === 'kanan' ? `<div></div>${ks(tglLine)}` : `${ks(tglLine)}<div></div>`;
+        if ((A.pengawas2 || '').trim()) {
+          // tiga kolom: Kepala Sekolah + Pengawas 1 + Pengawas 2; tanggal di atas, rata kanan
+          const pwN = (n, nm, nip) => `<div>&nbsp;<br>Pengawas ${n},<div class="ab-sp"></div><b>${esc(nm || dots)}</b><br>NIP. ${esc(nip || dots)}</div>`;
+          const p1 = pwN(1, A.pengawas, A.nipPengawas), p2 = pwN(2, A.pengawas2, A.nipPengawas2), k3 = ks(A.ksPos === 'kanan' ? '&nbsp;' : 'Mengetahui,');
+          return `<div class="ab-sign-date">${tglLine}</div>` + (A.ksPos === 'kanan' ? p1 + p2 + k3 : k3 + p1 + p2);
+        }
+        return A.ksPos === 'kanan' ? pw('&nbsp;') + ks(tglLine) : ks('Mengetahui,') + pw(tglLine);
+      };
       let tot = 0, hadir = 0, known = false;
       const pages = [];
       cls.forEach(c => {
@@ -3355,8 +3372,7 @@ B. VII B</pre></div></div></div>
             ${ch.map((m, i) => { const n = base + i + 1, pr = present ? present[m.id] : undefined; return `<tr><td class="c">${n}</td><td class="c">${esc(m.nis || '')}</td>${A.show.nisn ? `<td class="c">${esc(m.nisn || '')}</td>` : ''}<td>${esc(m.name)}</td>${A.show.ttd ? (n % 2 ? `<td class="sig">${n}.</td><td class="sig"></td>` : `<td class="sig"></td><td class="sig">${n}.</td>`) : ''}${A.show.ket ? (() => { const v = ketOf(m); return `<td class="c ket-ed ${A.ket[m.id] !== undefined ? 'man' : ''}" data-ket="${esc(m.id)}" title="Klik untuk mengganti keterangan">${v && !isHadir(v) ? `<b>${esc(v)}</b>` : esc(v)}</td>`; })() : ''}</tr>`; }).join('')}
             </tbody></table>
             ${last ? `<div class="ab-rekap">Jumlah peserta: <b>${list.length}</b> · Hadir: <b>${nH !== null ? nH : '.....'}</b> · Tidak hadir: <b>${nH !== null ? list.length - nH : '.....'}</b>${Object.keys(rekap).filter(k => !/^(hadir|tidak hadir)$/i.test(k)).map(k => ` <span>(${esc(k)}: ${rekap[k]})</span>`).join('')}${list.some(m => /\*$/.test(ketOf(m))) ? ' <span>(* hadir, belum mengumpulkan)</span>' : ''}</div>
-            <div class="ab-sign">${A.show.pengawas ? `<div>&nbsp;<br>Pengawas,<div class="ab-sp"></div><b>${esc(A.pengawas || '..............................')}</b>${A.nipPengawas ? `<br>NIP. ${esc(A.nipPengawas)}` : '<br>NIP. ..............................'}</div>` : '<div></div>'}
-              <div>${esc(K.kota ? K.kota + ', ' : '')}${esc(ttdTgl)}<br>Kepala Sekolah,<div class="ab-sp"></div><b>${esc(K.kepala || '..............................')}</b>${K.nip ? `<br>NIP. ${esc(K.nip)}` : '<br>NIP. ..............................'}</div></div>` : '<div class="ab-cont small">bersambung ke halaman berikutnya…</div>'}
+            <div class="ab-sign ${A.show.pengawas && (A.pengawas2 || '').trim() ? 'three' : ''}">${signHTML()}</div>` : '<div class="ab-cont small">bersambung ke halaman berikutnya…</div>'}
           </div>`);
         });
       });
