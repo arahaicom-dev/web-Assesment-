@@ -163,3 +163,6 @@
 .kz-type { text-align: center; margin: 4px 0 8px; font-weight: 800; font-size: .9rem; opacity: .9; }
 .kz-qt { margin-top: 10px; }
 .kz-feedback.info { background: radial-gradient(circle at 50% 40%, hsl(var(--h) 70% 55% / .96), hsl(var(--h) 60% 32% / .97)); }
+
+.kz-name-in { width: 100%; font-size: 1.15rem; font-weight: 700; text-align: center; padding: 12px 14px; border-radius: 16px; margin: 6px 0 0; }
+.kz-code::placeholder { letter-spacing: .12em; font-size: 1.4rem; }

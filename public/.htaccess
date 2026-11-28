@@ -9,6 +9,9 @@ AddType application/javascript .js
   # Teruskan header Authorization ke PHP (dibutuhkan untuk login)
   RewriteCond %{HTTP:Authorization} .
   RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+  # Alamat pendek untuk murid: /gabung (bisa ?kode=… atau /gabung/KODE)
+  RewriteCond %{REQUEST_URI} ^(.*/)gabung(?:/([A-Za-z0-9]{4,12}))?/?$
+  RewriteRule ^gabung(?:/[A-Za-z0-9]{4,12})?/?$ %1kuis.html?kode=%2 [R=302,L,QSA]
   # Semua /api/... ditangani api/index.php
   RewriteRule ^api/?$ api/index.php [L,QSA]
   RewriteCond %{REQUEST_FILENAME} !-f

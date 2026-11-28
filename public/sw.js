@@ -1,8 +1,8 @@
 /* Service worker Asesmen Merdeka: aplikasi bisa dipasang & kerangka tetap terbuka saat sinyal lemah.
    Data (/api/) TIDAK pernah disimpan di cache — selalu langsung ke server. */
-const VERSION = 'am-5.14.0';
+const VERSION = 'am-5.15.0';
 const SHELL = [
-  'app.html', 'kuis.html', 'ujian.html', 'index.html', 'offline.html',
+  'app.html', 'kuis.html', 'gabung.html', 'ujian.html', 'index.html', 'offline.html',
   'css/fonts.css', 'css/style.css', 'css/kuis.css', 'css/landing.css',
   'js/calc.js', 'js/parser.js', 'js/store.js', 'js/app.js', 'js/art.js', 'js/kuis.js', 'js/student.js', 'js/landing.js', 'js/pwa.js', 'js/mode.js', 'js/music.js', 'js/qtypes.js', 'js/panduan.js', 'js/siswa-import.js', 'js/menufx.js',
   'fonts/unbounded-latin-800-normal.woff2', 'fonts/unbounded-latin-900-normal.woff2',

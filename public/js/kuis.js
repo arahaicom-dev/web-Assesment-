@@ -101,20 +101,43 @@
   function stopAll() { clearInterval(G.timer); clearInterval(G.poll); G.timer = G.poll = null; }
 
   /* ---------- 1. Masukkan kode ---------- */
+  /** Token ujian asesmen ada? → buka halaman ujian (nama ikut dibawa). */
+  async function tryExamToken(code) {
+    const r = await fetch('api/exam/' + encodeURIComponent(code), { cache: 'no-store' });
+    if (!r.ok) { let d = {}; try { d = await r.json(); } catch (e) { /* */ } return d.error || null; }
+    const nm = (G.prefName || '').trim();
+    location.href = 'ujian.html?token=' + encodeURIComponent(code) + (nm ? '&nama=' + encodeURIComponent(nm) : '');
+    return true;
+  }
   function stepCode(msg) {
+    if (msg && /tidak ditemukan/i.test(msg)) msg = 'Kode/token tidak ditemukan, atau ujian sudah ditutup. Periksa lagi kode dari guru.';
     stopAll();
     SND.stop(); G.me = null; setHud();
     view.innerHTML = `<div class="kz-card pop" style="max-width:460px;margin:6vh auto 0;text-align:center">
-      <div class="kz-mascot">${window.Art ? Art.kubi({ pose: 'wave', eyes: 'happy' }) : '🎮'}</div><h1 class="kz-title">Gabung Kuis</h1><p class="muted">Masukkan kode yang ditampilkan guru di layar.</p>
+      <div class="kz-mascot">${window.Art ? Art.kubi({ pose: 'wave', eyes: 'happy' }) : '🎮'}</div><h1 class="kz-title">Gabung Ujian / Kuis</h1><p class="muted">Tulis namamu, lalu kode atau token dari guru.</p>
       ${msg ? `<div class="note warn" style="text-align:left;margin-bottom:12px">${esc(msg)}</div>` : ''}
-      <form id="f"><input id="code" class="kz-code" inputmode="numeric" maxlength="6" autocomplete="off" placeholder="123456" value="${esc(G.code)}">
-      <button class="btn lg kz-go" type="submit">Masuk ▶</button></form></div>`;
-    const inp = $('#code'); inp.focus();
+      <form id="f"><input id="pname" class="kz-name-in" autocomplete="name" maxlength="60" placeholder="Nama kamu" value="${esc(G.prefName || localStorage.getItem('gabung-nama') || '')}">
+      <input id="code" class="kz-code" autocomplete="off" autocapitalize="characters" maxlength="12" placeholder="KODE / TOKEN" value="${esc(G.code)}">
+      <button class="btn lg kz-go" type="submit">Masuk ▶</button></form>
+      <p class="small muted" style="margin:12px 0 0">Kode kuis = 6 angka di layar guru · Token ujian = 6 huruf/angka dari guru</p></div>`;
+    const inp = $('#code'), nmIn = $('#pname'); (nmIn.value ? inp : nmIn).focus();
+    inp.oninput = () => { const p = inp.selectionStart; inp.value = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, ''); try { inp.setSelectionRange(p, p); } catch (e) { /* */ } };
     $('#f').onsubmit = async e => {
       e.preventDefault();
-      G.code = inp.value.replace(/\D/g, '');
-      if (G.code.length < 6) return toast('Kode terdiri dari 6 angka.', 'bad');
-      try { G.info = await api(''); } catch (err) { return stepCode(err.message); }
+      G.prefName = nmIn.value.trim(); try { localStorage.setItem('gabung-nama', G.prefName); } catch (er) { /* */ }
+      const raw = inp.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
+      if (raw.length < 4) return toast('Tulis kode atau token dari guru.', 'bad');
+      const btn = $('#f button'); btn.disabled = true; btn.textContent = 'Memeriksa…';
+      // 6 angka → coba kuis dulu; selain itu → token ujian
+      if (/^\d{6}$/.test(raw)) {
+        G.code = raw;
+        try { G.info = await api(''); }
+        catch (err) { const t = await tryExamToken(raw).catch(() => null); if (t === true) return; return stepCode(err.message); }
+      } else {
+        const t = await tryExamToken(raw).catch(() => 'Koneksi bermasalah. Coba lagi.');
+        if (t === true) return;
+        return stepCode(t || 'Kode/token tidak ditemukan. Periksa lagi.');
+      }
       const saved = JSON.parse(localStorage.getItem(saveKey()) || 'null');
       if (saved && saved.token) { G.token = saved.token; try { const s = await api('state'); G.me = s.me; return resume(s); } catch (er) { G.token = ''; localStorage.removeItem(saveKey()); } }
       stepName();
@@ -141,13 +164,17 @@
       </form></div>`;
     let chosen = null;
     $$('.kz-av[data-a]').forEach(b => b.onclick = () => { G.avatar = b.dataset.a; $$('.kz-av[data-a]').forEach(x => x.classList.toggle('on', x === b)); });
+    if (i.needName && G.prefName && $('#nick') && !$('#nick').value) $('#nick').value = G.prefName.slice(0, 30);
     if (!i.needName) {
+      if (G.prefName && $('#q')) $('#q').value = G.prefName;
       const draw = () => {
         const f = $('#q').value.trim().toLowerCase();
         $('#names').innerHTML = i.students.filter(s => (!f || s.name.toLowerCase().includes(f)) && (!pickCls || s.cls === pickCls)).map(s => `<button type="button" class="btn ${chosen && chosen.id === s.id ? '' : 'soft'} sm" data-id="${esc(s.id)}">${esc(s.name)}${s.cls && !pickCls ? ` <small>· ${esc(s.cls)}</small>` : ''}${s.taken ? ' ✓' : ''}</button>`).join('') || '<span class="muted small">Nama tidak ditemukan.</span>';
         $$('#names button').forEach(b => b.onclick = () => { chosen = i.students.find(s => s.id === b.dataset.id); $('#nis-wrap').classList.toggle('hidden', !chosen.needNis); draw(); if (chosen.needNis) $('#nis').focus(); });
       };
       $('#q').oninput = draw; draw();
+      // satu nama cocok → langsung terpilih
+      if (G.prefName) { const hit = i.students.filter(s => s.name.toLowerCase().includes(G.prefName.toLowerCase())); if (hit.length === 1) { const b = $(`#names button[data-id="${hit[0].id}"]`); if (b) b.click(); } }
       $$('#cls-pick button').forEach(b => b.onclick = () => { pickCls = pickCls === b.dataset.c ? '' : b.dataset.c; $$('#cls-pick button').forEach(x => { x.className = 'btn sm ' + (x.dataset.c === pickCls ? '' : 'soft'); }); draw(); });
     } else $('#nick').focus();
     $('#f').onsubmit = async e => {
@@ -482,7 +509,11 @@
   // Tema mengikuti pengaturan perangkat (bila pernah dipakai guru)
   try { const t = JSON.parse(localStorage.getItem('asesmen-merdeka-v1') || '{}').theme; if (t) { document.documentElement.style.setProperty('--h', t.h); document.documentElement.style.setProperty('--s', t.s); } } catch (e) { /* */ }
 
-  G.code = (new URLSearchParams(location.search).get('kode') || '').replace(/\D/g, '');
+  const qp = new URLSearchParams(location.search);
+  G.prefName = qp.get('nama') || '';
+  const rawCode = (qp.get('kode') || qp.get('token') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (rawCode && !/^\d{6}$/.test(rawCode)) { location.replace('ujian.html?token=' + encodeURIComponent(rawCode) + (G.prefName ? '&nama=' + encodeURIComponent(G.prefName) : '')); return; }
+  G.code = rawCode;
   if (G.code.length === 6) { $('#view').innerHTML = ''; (async () => { try { G.info = await api(''); const saved = JSON.parse(localStorage.getItem(saveKey()) || 'null'); if (saved && saved.token) { G.token = saved.token; try { return resume(await api('state')); } catch (e) { G.token = ''; localStorage.removeItem(saveKey()); } } stepName(); } catch (e) { stepCode(e.message); } })(); }
   else stepCode();
   // :active di layar sentuh iOS langsung terasa

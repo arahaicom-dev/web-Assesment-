@@ -1168,7 +1168,7 @@ B. VII B</pre></div></div></div>
             <div class="small"><b>Bagikan ke murid</b> (mis. lewat WhatsApp):</div>
             <div class="share-link"><input readonly value="${esc(link)}" onclick="this.select()"><button class="btn soft sm" data-act="exam-copy">🔗 Salin Link</button><button class="btn ok sm" data-act="exam-wa">💬 WhatsApp</button></div>
             <ol class="small" style="margin:8px 0;padding-left:18px">
-              <li>Murid membuka link di atas (atau <b>${esc(location.host)}/ujian.html</b> lalu mengetik token <b>${esc(a.examCode)}</b>).</li>
+              <li>Murid membuka link di atas — atau buka <b>${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}gabung</b>, menulis nama, lalu mengetik token <b>${esc(a.examCode)}</b>.</li>
               <li>Murid memilih namanya, lalu mengisi <b>NIS</b>.</li>
               <li>Nilai otomatis masuk ke daftar nilai di bawah.</li>
             </ol>`
@@ -2534,7 +2534,7 @@ B. VII B</pre></div></div></div>
     const acc = p => p.answered ? Math.round(p.correct / p.answered * 100) : 0;
     if (g.status === 'lobby') {
       box.innerHTML = top + `<div class="card host-join">
-        <div><div class="small muted">Buka di HP: <b>${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}kuis.html</b> lalu masukkan kode</div>
+        <div><div class="small muted">Buka di HP: <b>${esc(location.host + location.pathname.replace(/[^/]*$/, ''))}gabung</b> lalu tulis nama & kode</div>
           <div class="host-code">${esc(g.code)}</div>
           <div class="btns" style="margin-top:12px"><button class="btn soft sm" data-act="copy">🔗 Salin Link</button><button class="btn ok sm" data-act="wa">💬 Bagikan ke WhatsApp</button></div></div>
         <div style="text-align:center"><div style="font-size:3.4rem;font-weight:900">${ps.length}</div><div class="muted">pemain bergabung</div>

@@ -52,7 +52,7 @@
       S.token = $('#tok').value.trim().toUpperCase();
       if (!S.token) return;
       try { S.info = await api('exam/' + encodeURIComponent(S.token)); stepName(); }
-      catch (err) { stepToken(err.message); }
+      catch (err) { if (/^\d{6}$/.test(S.token) && await isGameCode(S.token)) { location.href = 'kuis.html?kode=' + S.token + (S.prefName ? '&nama=' + encodeURIComponent(S.prefName) : ''); return; } stepToken(err.message); }
     };
   }
 
@@ -74,7 +74,9 @@
         `<button class="btn ${s.done ? 'ghost' : 'soft'}" data-id="${esc(s.id)}"><span>${esc(s.name)}${s.cls && !pickCls ? ` <small class="muted">· ${esc(s.cls)}</small>` : ''}</span>${s.done ? '<span class="pill ok">✔ selesai</span>' : ''}</button>`).join('') || '<p class="muted small">Nama tidak ditemukan.</p>';
       $$('#list button').forEach(b => b.onclick = () => stepNis(i.students.find(s => s.id === b.dataset.id)));
     };
+    if (S.prefName && !$('#q').value) $('#q').value = S.prefName;
     $('#q').oninput = draw; draw();
+    if (S.prefName) { const hit = i.students.filter(s => s.name.toLowerCase().includes(S.prefName.toLowerCase())); S.prefName = ''; if (hit.length === 1) { stepNis(hit[0]); return; } }
     $$('#cls-pick button').forEach(b => b.onclick = () => { pickCls = pickCls === b.dataset.c ? '' : b.dataset.c; $$('#cls-pick button').forEach(x => { x.className = 'btn sm ' + (x.dataset.c === pickCls ? '' : 'soft'); }); draw(); });
     $('#back').onclick = () => stepToken();
   }
@@ -219,8 +221,11 @@
   } catch (e) { /* */ }
   window.addEventListener('beforeunload', e => { if (S.startedAt && S.questions.length && !sending && $('#timer, .qnav')) { e.preventDefault(); e.returnValue = ''; } });
 
-  S.token = (new URLSearchParams(location.search).get('token') || '').toUpperCase();
-  if (S.token) api('exam/' + encodeURIComponent(S.token)).then(i => { S.info = i; stepName(); }).catch(e => stepToken(e.message));
+  async function isGameCode(c) { try { const r = await fetch('api/play/' + c, { cache: 'no-store' }); return r.ok; } catch (e) { return false; } }
+  const qp = new URLSearchParams(location.search);
+  S.prefName = qp.get('nama') || '';
+  S.token = (qp.get('token') || qp.get('kode') || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (S.token) api('exam/' + encodeURIComponent(S.token)).then(i => { S.info = i; stepName(); }).catch(async e => { if (/^\d{6}$/.test(S.token) && await isGameCode(S.token)) { location.replace('kuis.html?kode=' + S.token + (S.prefName ? '&nama=' + encodeURIComponent(S.prefName) : '')); return; } stepToken(e.message); });
   else stepToken();
   // :active di layar sentuh iOS langsung terasa
   document.addEventListener('touchstart', () => {}, { passive: true });

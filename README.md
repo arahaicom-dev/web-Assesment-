@@ -128,6 +128,12 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Satu pintu masuk murid: /gabung (v5.15)
+
+- Murid cukup membuka **`domain/asesmen/gabung`**, menulis **nama**, lalu **kode atau token** — berlaku untuk semua jenis ujian: kode Kuis Seru (6 angka, permainan maupun Mode Ujian) dan token ujian asesmen (6 huruf/angka). Aplikasi mengenali jenisnya sendiri dan mengarahkan ke ujian yang tepat.
+- Nama yang diketik dipakai otomatis: dipilihkan dari daftar kelas bila cocok (lalu tinggal isi NIS), atau menjadi nama panggilan di kuis bebas.
+- Link lama tetap berfungsi (`kuis.html?kode=…`, `ujian.html?token=…`), dan saling dialihkan bila kode/token tertukar. `domain/asesmen/gabung/KODE` langsung terisi kodenya.
+
 ## Perpustakaan Soal & Hasil Ujian (v5.14)
 
 - **📚 Perpustakaan Soal** (menu Soal): kartu bersampul (gambar soal atau ikon mapel), jumlah soal & jenis soal, pembuat, berapa kali dipakai. Panel kiri: Semua / Milik saya / Guru lain / **Folder**. Pencarian, urutan (terbaru, A–Z, paling sering dipakai, soal terbanyak), tampilan kartu/daftar. Tombol **▶ Mulai** → Kuis Permainan, Ujian (Kuis Mode Ujian), atau Asesmen + Token; menu **⋯** → detail, edit, duplikat, pindah folder, lihat hasil, hapus. Halaman detail paket soal: daftar soal (kunci bisa disembunyikan) dan riwayat pemakaian.
