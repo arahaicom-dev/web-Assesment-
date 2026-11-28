@@ -275,7 +275,8 @@ B. VII B</pre></div></div></div>
     { href: 'beranda', ic: '🏠', label: 'Beranda' },
     { href: 'data', ic: '🗂️', label: 'Kelas, Murid & Mapel' },
     { href: 'kartu', ic: '🪪', label: 'Kartu Ujian' },
-    { href: 'absen', ic: '📋', label: 'Absensi Ujian', tag: 'Baru' },
+    { href: 'absen', ic: '📋', label: 'Absensi Ujian' },
+    { href: 'panitia', ic: '🎫', label: 'Kartu Panitia', tag: 'Baru' },
     { group: 'Asesmen' },
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
@@ -433,6 +434,7 @@ B. VII B</pre></div></div></div>
       else if (r === 'pantau' && S.mode === 'server') out = viewMonitor();
       else if (r === 'kartu') out = viewCards();
       else if (r === 'absen') out = viewAbsen();
+      else if (r === 'panitia') out = viewPanitia();
       else if (r === 'perpustakaan') out = viewLibrary(parts[1]);
       else if (r === 'hasil' || /^hasil\?/.test(r)) out = viewReports(parts[1], parts[2]);
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
@@ -3468,6 +3470,143 @@ B. VII B</pre></div></div></div>
         'kop-reset': () => { KOP.lines = [{ t: s.settings.schoolName || 'NAMA SEKOLAH', s: 'xl', b: true }]; KOP.logo = 24; KOP.garis = 'double'; S.save(); route(); },
         'a-logo': setLogo('logo'), 'a-logo2': setLogo('logo2'),
         'a-nologo': () => { K.logo = ''; S.save(); route(); }, 'a-nologo2': () => { K.logo2 = ''; S.save(); route(); }
+      }
+    };
+  }
+
+  /* ================= Kartu panitia ujian ================= */
+  const PANITIA_ROLES = ['Penanggung Jawab', 'Ketua Panitia', 'Wakil Ketua', 'Sekretaris', 'Bendahara', 'Koordinator Pengawas', 'Pengawas Ruang', 'Proktor', 'Teknisi', 'Seksi Konsumsi', 'Seksi Keamanan', 'Seksi Dokumentasi', 'Anggota'];
+  function viewPanitia() {
+    setTitle('🎫 Kartu Panitia Ujian', 'Kartu tanda pengenal panitia: pilih desain & ukuran, ganti teks, cetak, atau unduh JPG/PDF');
+    renderCtx(false);
+    const PC = window.PanitiaCard;
+    if (!PC) return { html: '<div class="card">Memuat…</div>' };
+    const s = st();
+    const K = s.settings.kartu = Object.assign(kartuDefaults(s), s.settings.kartu || {});
+    const P = s.settings.panitia = Object.assign({ theme: 'retro', size: 'id', w: 54, h: 86, accent: '', scale: 1, cut: true, showNip: true, members: [],
+      texts: { school: s.settings.schoolName || 'Nama Sekolah', title: 'PANITIA|UJIAN', event: K.ujian || 'Sumatif Akhir Semester', greet: 'Halo, saya', footer: s.settings.tahunAjaran ? 'Tahun Pelajaran ' + s.settings.tahunAjaran : '' } }, s.settings.panitia || {});
+    const save = (() => { let t; return () => { clearTimeout(t); t = setTimeout(() => S.save(), 600); }; })();
+    const dims = () => { const z = PC.SIZES.find(x => x.id === P.size) || PC.SIZES[0]; return P.size === 'custom' ? { w: Math.max(30, Math.min(190, +P.w || 54)), h: Math.max(30, Math.min(277, +P.h || 86)) } : { w: z.w, h: z.h }; };
+    const T = P.texts;
+    const html = `<div class="grid pn-grid" style="grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);align-items:start">
+      <div class="card no-print kartu-form">
+        <div class="field"><span>🎨 Pilih desain</span><div class="pn-themes" id="pn-themes"></div></div>
+        <div class="row"><label class="field"><span>📐 Ukuran kartu</span><select id="pn-size">${PC.SIZES.map(z => `<option value="${z.id}" ${P.size === z.id ? 'selected' : ''}>${z.label}</option>`).join('')}</select></label>
+          <label class="field pn-custom" style="max-width:110px"><span>Lebar (mm)</span><input type="number" min="30" max="190" id="pn-w" value="${+P.w || 54}"></label><label class="field pn-custom" style="max-width:110px"><span>Tinggi (mm)</span><input type="number" min="30" max="277" id="pn-h" value="${+P.h || 86}"></label></div>
+        <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🔠 Ukuran teks <input type="range" min="0.75" max="1.3" step="0.05" id="pn-scale" value="${+P.scale || 1}"></label>
+          <label class="small" style="display:flex;gap:8px;align-items:center">🎨 Warna utama <input type="color" id="pn-accent" value="${P.accent || (PC.THEMES[P.theme] || PC.THEMES.retro).accent}"></label><button class="btn ghost sm" data-act="pn-accent0">Warna bawaan</button></div>
+        <details class="field" open><summary><b>✏️ Teks kartu</b></summary>
+          <div class="row" style="margin-top:8px"><label class="field"><span>Nama sekolah</span><input data-pt="school" value="${esc(T.school)}"></label><label class="field"><span>Judul besar <small class="muted">(| = baris baru)</small></span><input data-pt="title" value="${esc(T.title)}"></label></div>
+          <div class="row"><label class="field"><span>Nama kegiatan</span><input data-pt="event" value="${esc(T.event)}"></label><label class="field"><span>Sapaan <small class="muted">(desain Retro/Ceria)</small></span><input data-pt="greet" value="${esc(T.greet)}"></label><label class="field"><span>Teks bawah</span><input data-pt="footer" value="${esc(T.footer)}"></label></div>
+          <div class="btns" style="align-items:center"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pn-nip" ${P.showNip ? 'checked' : ''}> Tampilkan NIP</label>
+            <button class="btn soft sm" data-act="pn-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} logo</button>${K.logo ? `<img src="${K.logo}" alt="" style="height:30px;background:#fff;border-radius:6px;padding:2px">` : ''}</div></details>
+        <div class="field"><span>👥 Anggota panitia <small class="muted">(centang yang dicetak)</small></span><div id="pn-members"></div>
+          <datalist id="pn-roles">${PANITIA_ROLES.map(r => `<option value="${r}">`).join('')}</datalist>
+          <div class="btns" style="margin-top:8px"><button class="btn soft sm" data-act="pn-add">＋ Tambah</button>${S.mode === 'server' ? '<button class="btn soft sm" data-act="pn-teachers">👩‍🏫 Ambil dari akun guru</button>' : ''}<button class="btn soft sm" data-act="pn-paste">📋 Tempel daftar</button></div></div>
+      </div>
+      <div>
+        <div class="card no-print"><div class="btns" style="align-items:center"><button class="btn lg" data-act="pn-print">🖨 Cetak</button><button class="btn soft" data-act="pn-pdf">⬇ PDF lembar A4</button><button class="btn soft" data-act="pn-pdf1">⬇ PDF per kartu</button><button class="btn soft" data-act="pn-jpg">⬇ JPG per kartu</button><button class="btn ghost" data-act="pn-jpga4">⬇ JPG lembar A4</button></div>
+          <div class="btns" style="margin-top:6px;align-items:center"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pn-cut" ${P.cut ? 'checked' : ''}> Garis potong di lembar A4</label><span class="small muted" id="pn-sum"></span></div></div>
+        <div id="pn-preview" class="pn-preview"></div>
+      </div></div>
+      <div id="pn-print" class="hidden"></div>`;
+    let photoGet = r => (r && /^data:/.test(r) ? r : null);
+    const card = (m, extra) => PC.svg(Object.assign({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: m.name, role: m.role, nip: m.nip, photo: photoGet(m.photo), logo: K.logo, showNip: P.showNip }), Object.assign({ theme: P.theme, accent: P.accent, scale: +P.scale || 1, id: m.id }, dims(), extra || {}));
+    const chosen = () => P.members.filter(m => m.on !== false);
+    const drawThemes = () => {
+      const box = $('#pn-themes'); if (!box) return;
+      const sample = chosen()[0] || P.members[0] || { id: 'x', name: 'Nama Panitia', role: 'Ketua Panitia' };
+      box.innerHTML = Object.keys(PC.THEMES).map(k => `<button class="pn-theme ${P.theme === k ? 'on' : ''}" data-th="${k}" title="${esc(PC.THEMES[k].desc)}"><div class="pn-th-img">${PC.svg({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: sample.name, role: sample.role, photo: photoGet(sample.photo), logo: K.logo }, { theme: k, w: 54, h: 86, id: 't' + k })}</div><b>${esc(PC.THEMES[k].name)}</b></button>`).join('');
+      $$('[data-th]', box).forEach(b => b.onclick = () => { P.theme = b.dataset.th; P.accent = ''; const ac = $('#pn-accent'); if (ac) ac.value = PC.THEMES[P.theme].accent; save(); drawThemes(); drawPreview(); });
+    };
+    const drawPreview = () => {
+      const box = $('#pn-preview'); if (!box) return;
+      const d = dims(), list = chosen(), sc = Math.min(3.4, 300 / Math.max(d.w, d.h * 0.7));
+      $$('.pn-custom').forEach(x => x.classList.toggle('hidden', P.size !== 'custom'));
+      const lay = PC.layoutA4(list.length, d.w, d.h);
+      $('#pn-sum').textContent = list.length ? `${list.length} kartu · ${d.w}×${d.h} mm · ${lay.per} kartu per A4 → ${lay.pages.length} lembar` : '';
+      box.innerHTML = list.length ? list.map(m => `<div class="pn-card"><div class="pn-svg" style="width:${(d.w * sc).toFixed(0)}px">${card(m)}</div><div class="btns"><span class="small ellipsis" style="max-width:${(d.w * sc - 60).toFixed(0)}px">${esc(m.name || '–')}</span><button class="btn ghost sm" data-act="pn-jpg1" data-id="${m.id}" title="Unduh JPG kartu ini">⬇ JPG</button></div></div>`).join('')
+        : '<div class="card empty">Tambahkan anggota panitia di kiri: ketik manual, ambil dari akun guru, atau tempel daftar nama.</div>';
+    };
+    const drawMembers = () => {
+      const box = $('#pn-members'); if (!box) return;
+      box.innerHTML = P.members.length ? P.members.map((m, i) => `<div class="pn-mem">
+          <input type="checkbox" data-mon="${i}" ${m.on !== false ? 'checked' : ''} title="Ikut dicetak">
+          <button class="ph-btn" data-act="pn-photo" data-i="${i}" title="Foto" ${m.photo ? `data-ph="${esc(m.photo)}"` : ''}>📷</button>
+          <div class="pn-mem-f"><input data-mf="name" data-i="${i}" value="${esc(m.name)}" placeholder="Nama lengkap"><div class="row" style="gap:6px;margin:0"><input data-mf="role" data-i="${i}" value="${esc(m.role)}" placeholder="Jabatan" list="pn-roles"><input data-mf="nip" data-i="${i}" value="${esc(m.nip || '')}" placeholder="NIP (opsional)"></div></div>
+          <div class="pn-mem-b"><button class="btn ghost sm" data-mv="${i}" data-d="-1" ${i ? '' : 'disabled'}>↑</button><button class="btn ghost sm" data-mv="${i}" data-d="1" ${i < P.members.length - 1 ? '' : 'disabled'}>↓</button><button class="btn ghost sm" data-mdel="${i}">🗑</button></div></div>`).join('')
+        : '<p class="small muted" style="margin:4px 0">Belum ada anggota.</p>';
+      $$('[data-mf]', box).forEach(x => x.oninput = () => { P.members[+x.dataset.i][x.dataset.mf] = x.value; save(); drawPreview(); });
+      $$('[data-mon]', box).forEach(x => x.onchange = () => { P.members[+x.dataset.mon].on = x.checked; save(); drawPreview(); });
+      $$('[data-mv]', box).forEach(x => x.onclick = () => { const i = +x.dataset.mv, j = i + +x.dataset.d; const t = P.members[i]; P.members[i] = P.members[j]; P.members[j] = t; save(); drawMembers(); drawPreview(); });
+      $$('[data-mdel]', box).forEach(x => x.onclick = () => { P.members.splice(+x.dataset.mdel, 1); save(); drawMembers(); drawPreview(); drawThemes(); });
+      fillPhotos(box);
+    };
+    const refreshPhotos = async () => { photoGet = await photoResolver(P.members.map(m => m.photo)); };
+    const exportSvgs = async list => { const css = await PC.fontCss(''); return list.map(m => card(m, { fontCss: css })); };
+    const busy = async (label, fn) => { const tt = toast(label + '…'); try { await fn(); } catch (e) { toast(e.message || String(e), 'bad'); } };
+    const fname = s2 => String(s2 || 'kartu').replace(/[\\/:*?"<>|]+/g, '').trim().slice(0, 60) || 'kartu';
+    const needList = () => { const l = chosen(); if (!l.length) { toast('Belum ada anggota panitia yang dicentang.', 'bad'); return null; } return l; };
+    return {
+      html,
+      async mount(v) {
+        await refreshPhotos();
+        drawThemes(); drawMembers(); drawPreview();
+        $('#pn-size', v).onchange = e => { P.size = e.target.value; const z = PC.SIZES.find(x => x.id === P.size); if (P.size === 'custom' && z) { $('#pn-w', v).value = P.w = P.w || z.w; $('#pn-h', v).value = P.h = P.h || z.h; } save(); drawPreview(); };
+        $('#pn-w', v).oninput = e => { P.w = +e.target.value; save(); drawPreview(); };
+        $('#pn-h', v).oninput = e => { P.h = +e.target.value; save(); drawPreview(); };
+        $('#pn-scale', v).oninput = e => { P.scale = +e.target.value; save(); drawPreview(); };
+        $('#pn-accent', v).oninput = e => { P.accent = e.target.value; save(); drawPreview(); };
+        $('#pn-nip', v).onchange = e => { P.showNip = e.target.checked; save(); drawPreview(); };
+        $('#pn-cut', v).onchange = e => { P.cut = e.target.checked; save(); };
+        $$('[data-pt]', v).forEach(x => x.oninput = () => { T[x.dataset.pt] = x.value; save(); drawPreview(); clearTimeout(x._t); x._t = setTimeout(drawThemes, 500); });
+        const sheet = () => {
+          const d = dims(), list = chosen(), lay = PC.layoutA4(list.length, d.w, d.h);
+          let el = document.getElementById('print-sheet'); if (!el) { el = document.createElement('div'); el.id = 'print-sheet'; document.body.appendChild(el); }
+          el.innerHTML = lay.pages.map(pg => `<div class="pn-page">${pg.map(sl => `<div class="pn-slot ${P.cut ? 'cut' : ''}" style="left:${sl.x}mm;top:${sl.y}mm;width:${d.w}mm;height:${d.h}mm">${card(list[sl.i])}</div>`).join('')}</div>`).join('');
+          document.body.classList.add('print-cards');
+        };
+        const unsheet = () => { const el = document.getElementById('print-sheet'); if (el) el.remove(); document.body.classList.remove('print-cards'); };
+        window.__panitiaSheet = sheet;
+        window.addEventListener('beforeprint', sheet); window.addEventListener('afterprint', unsheet);
+        window.addEventListener('hashchange', () => { unsheet(); window.removeEventListener('beforeprint', sheet); window.removeEventListener('afterprint', unsheet); }, { once: true });
+      },
+      actions: {
+        'pn-accent0': () => { P.accent = ''; $('#pn-accent').value = PC.THEMES[P.theme].accent; save(); drawPreview(); },
+        'pn-add': () => { P.members.push({ id: S.uid('pn'), name: '', role: 'Anggota', nip: '', on: true }); save(); drawMembers(); drawPreview(); const ins = $$('[data-mf=name]'); if (ins.length) ins[ins.length - 1].focus(); },
+        'pn-paste': () => {
+          const m = modal(`<h2>📋 Tempel Daftar Panitia</h2><p class="small muted" style="margin-top:0">Satu orang per baris: <span class="kbd">Nama | Jabatan | NIP</span> (jabatan & NIP boleh kosong). Bisa juga disalin langsung dari Excel (kolom dipisah tab).</p>
+            <textarea id="pn-txt" style="min-height:200px" placeholder="Aco Yaqub, S.Pd. | Ketua Panitia | 199411012024211007\nSiti Aminah, S.Pd | Sekretaris\nMuh. Rais | Pengawas Ruang"></textarea><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="pn-ok">Tambahkan</button></div>`);
+          $('#pn-ok', m).onclick = () => {
+            const rows = $('#pn-txt', m).value.split('\n').map(l => l.split(/\s*[|\t;]\s*/).map(x => x.trim())).filter(r => r[0]);
+            rows.forEach(r => P.members.push({ id: S.uid('pn'), name: r[0], role: r[1] || 'Anggota', nip: (r[2] || '').replace(/^NIP\.?\s*/i, ''), on: true }));
+            S.save(); closeModal(); toast(rows.length + ' anggota ditambahkan.'); drawMembers(); drawPreview(); drawThemes();
+          };
+        },
+        'pn-teachers': async () => {
+          try {
+            const r = await S.api('users'); const have = new Set(P.members.map(m => (m.name || '').toLowerCase()));
+            const add = r.users.filter(u => !have.has((u.name || '').toLowerCase()));
+            add.forEach(u => P.members.push({ id: S.uid('pn'), name: u.name, role: 'Pengawas Ruang', nip: '', on: true }));
+            S.save(); toast(add.length ? add.length + ' guru ditambahkan. Atur jabatannya masing-masing.' : 'Semua akun guru sudah ada di daftar.'); drawMembers(); drawPreview(); drawThemes();
+          } catch (e) { toast(e.message, 'bad'); }
+        },
+        'pn-photo': el => {
+          const m = P.members[+el.dataset.i]; if (!m) return;
+          photoOne(el, m, async () => { await refreshPhotos(); drawMembers(); drawPreview(); drawThemes(); });
+        },
+        'pn-logo': async () => {
+          const f = (await pickFiles('image/*'))[0]; if (!f) return;
+          const img = new Image(), url = URL.createObjectURL(f);
+          img.onload = () => { const k = Math.min(1, 240 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); K.logo = c.toDataURL('image/png'); S.save(); route(); };
+          img.src = url;
+        },
+        'pn-print': () => { if (!needList()) return; window.__panitiaSheet(); window.print(); },
+        'pn-jpg1': el => busy('Membuat JPG', async () => { const m = P.members.find(x => x.id === el.dataset.id); const d = dims(); const [sv] = await exportSvgs([m]); const c = await PC.cardCanvas(sv, d.w, d.h, 12); PC.saveBlob(await PC.canvasBlob(c), 'Kartu Panitia - ' + fname(m.name) + '.jpg'); }),
+        'pn-jpg': () => { const l = needList(); if (!l) return; busy('Membuat ' + l.length + ' JPG', async () => { const d = dims(), svgs = await exportSvgs(l); for (let i = 0; i < l.length; i++) { const c = await PC.cardCanvas(svgs[i], d.w, d.h, 12); PC.saveBlob(await PC.canvasBlob(c), 'Kartu Panitia - ' + fname(l[i].name) + '.jpg'); await new Promise(r => setTimeout(r, 350)); } toast(l.length + ' file JPG diunduh.'); }); },
+        'pn-jpga4': () => { const l = needList(); if (!l) return; busy('Membuat lembar A4', async () => { const d = dims(), svgs = await exportSvgs(l), lay = PC.layoutA4(l.length, d.w, d.h); for (let p = 0; p < lay.pages.length; p++) { const c = await PC.sheetCanvas(svgs, d.w, d.h, lay.pages[p], 8, P.cut); PC.saveBlob(await PC.canvasBlob(c), `Kartu Panitia - lembar ${p + 1}.jpg`); await new Promise(r => setTimeout(r, 350)); } toast(lay.pages.length + ' lembar JPG diunduh.'); }); },
+        'pn-pdf': () => { const l = needList(); if (!l) return; busy('Membuat PDF', async () => { const d = dims(), svgs = await exportSvgs(l), lay = PC.layoutA4(l.length, d.w, d.h), pages = []; for (const pg of lay.pages) pages.push({ canvas: await PC.sheetCanvas(svgs, d.w, d.h, pg, 8, P.cut), wmm: 210, hmm: 297 }); PC.saveBlob(PC.pdfFromCanvases(pages), 'Kartu Panitia Ujian (A4).pdf'); toast('PDF siap: ' + pages.length + ' halaman A4.'); }); },
+        'pn-pdf1': () => { const l = needList(); if (!l) return; busy('Membuat PDF', async () => { const d = dims(), svgs = await exportSvgs(l), pages = []; for (const sv of svgs) pages.push({ canvas: await PC.cardCanvas(sv, d.w, d.h, 12), wmm: d.w, hmm: d.h }); PC.saveBlob(PC.pdfFromCanvases(pages), 'Kartu Panitia Ujian (per kartu).pdf'); toast('PDF siap: ' + pages.length + ' kartu.'); }); }
       }
     };
   }

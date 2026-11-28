@@ -1123,3 +1123,26 @@ button.pill { cursor: pointer; border: none; font: inherit; }
 .ab-sign.three { flex-wrap: wrap; }
 .ab-sign.three > div { width: 56mm; }
 .ab-sign.three > .ab-sign-date { width: 56mm; margin-left: calc(100% - 56mm); text-align: left; margin-bottom: -4.8mm; }
+
+/* ---------- Kartu panitia ---------- */
+.pn-themes { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 8px; }
+.pn-theme { display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 6px; border-radius: 14px; border: 2px solid var(--border); background: var(--surface-2); cursor: pointer; color: inherit; font: inherit; font-size: .78rem; }
+.pn-theme.on { border-color: var(--primary, #7c5cff); box-shadow: 0 0 0 3px rgba(124, 92, 255, .25); }
+.pn-th-img { width: 100%; aspect-ratio: 54/86; border-radius: 8px; overflow: hidden; background: #fff; }
+.pn-th-img svg, .pn-svg svg { width: 100%; height: auto; display: block; }
+.pn-preview { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 14px; align-items: flex-start; }
+.pn-card { display: flex; flex-direction: column; gap: 6px; }
+.pn-svg { border-radius: 10px; overflow: hidden; box-shadow: 0 6px 22px rgba(0, 0, 0, .25); background: #fff; }
+.pn-card .btns { justify-content: space-between; align-items: center; flex-wrap: nowrap; }
+.pn-mem { display: flex; gap: 8px; align-items: center; padding: 8px; border: 1px solid var(--border); border-radius: 12px; margin-bottom: 6px; background: var(--surface-2); }
+.pn-mem-f { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pn-mem-f input { min-width: 0; } .pn-mem-b { display: flex; flex-direction: column; gap: 2px; }
+.pn-page { position: relative; width: 210mm; height: 297mm; background: #fff; overflow: hidden; }
+.pn-slot { position: absolute; } .pn-slot svg { width: 100%; height: 100%; display: block; }
+.pn-slot.cut { outline: 0.3mm dashed #b5b5b5; }
+@media (max-width: 1000px) { .pn-grid { grid-template-columns: 1fr !important; } }
+@media print {
+  body.print-cards .pn-page { page-break-after: always; break-after: page; }
+  body.print-cards .pn-page:last-child { page-break-after: auto; break-after: auto; }
+  .pn-slot, .pn-slot * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
