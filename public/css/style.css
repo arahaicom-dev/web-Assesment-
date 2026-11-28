@@ -1149,3 +1149,5 @@ button.pill { cursor: pointer; border: none; font: inherit; }
 .pn-preview .pn-drag { cursor: grab; touch-action: none; }
 .pn-preview .pn-drag:hover { filter: drop-shadow(0 0 3px rgba(255, 214, 0, .95)); }
 body.pn-dragging, body.pn-dragging * { cursor: grabbing !important; user-select: none; }
+.pn-sel { margin-top: 12px; padding: 10px 14px; }
+.pn-preview .pn-drag.sel { filter: drop-shadow(0 0 2px #ffd600) drop-shadow(0 0 4px #ffd600); }

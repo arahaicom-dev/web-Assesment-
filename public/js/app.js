@@ -3495,7 +3495,7 @@ B. VII B</pre></div></div></div>
         <div class="row"><label class="field"><span>📐 Ukuran kartu</span><select id="pn-size">${PC.SIZES.map(z => `<option value="${z.id}" ${P.size === z.id ? 'selected' : ''}>${z.label}</option>`).join('')}</select></label>
           <label class="field pn-custom" style="max-width:110px"><span>Lebar (mm)</span><input type="number" min="30" max="190" id="pn-w" value="${+P.w || 54}"></label><label class="field pn-custom" style="max-width:110px"><span>Tinggi (mm)</span><input type="number" min="30" max="277" id="pn-h" value="${+P.h || 86}"></label></div>
         <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🏷 Label jabatan <select id="pn-rpos">${[['auto', 'Otomatis (pojok foto)'], ['atas', 'Di atas foto'], ['bawah', 'Di bawah wajah (dada)'], ['none', 'Sembunyikan']].map(([v, l]) => `<option value="${v}" ${(P.rolePos || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
-          <button class="btn ghost sm" data-act="pn-offreset" title="Kembalikan label yang sudah digeser ke posisi awal">↺ Posisi label</button><span class="small muted">✋ Label jabatan & sapaan juga bisa <b>digeser langsung</b> di kartu pratinjau.</span></div>
+          <button class="btn ghost sm" data-act="pn-offreset" title="Kembalikan semua elemen yang sudah digeser/diubah ukurannya">↺ Semua posisi</button></div>
         <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🔠 Ukuran teks <input type="range" min="0.75" max="1.3" step="0.05" id="pn-scale" value="${+P.scale || 1}"></label>
           <label class="small" style="display:flex;gap:8px;align-items:center">🎨 Warna utama <input type="color" id="pn-accent" value="${P.accent || (PC.THEMES[P.theme] || PC.THEMES.retro).accent}"></label><button class="btn ghost sm" data-act="pn-accent0">Warna bawaan</button></div>
         <details class="field" open><summary><b>✏️ Teks kartu</b></summary>
@@ -3510,6 +3510,7 @@ B. VII B</pre></div></div></div>
       <div>
         <div class="card no-print"><div class="btns" style="align-items:center"><button class="btn lg" data-act="pn-print">🖨 Cetak</button><button class="btn soft" data-act="pn-pdf">⬇ PDF lembar A4</button><button class="btn soft" data-act="pn-pdf1">⬇ PDF per kartu</button><button class="btn soft" data-act="pn-jpg">⬇ JPG per kartu</button><button class="btn ghost" data-act="pn-jpga4">⬇ JPG lembar A4</button></div>
           <div class="btns" style="margin-top:6px;align-items:center"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="pn-cut" ${P.cut ? 'checked' : ''}> Garis potong di lembar A4</label><span class="small muted" id="pn-sum"></span></div></div>
+        <div id="pn-sel" class="card pn-sel no-print"></div>
         <div id="pn-preview" class="pn-preview"></div>
       </div></div>
       <div id="pn-print" class="hidden"></div>`;
@@ -3522,6 +3523,22 @@ B. VII B</pre></div></div></div>
       box.innerHTML = Object.keys(PC.THEMES).map(k => `<button class="pn-theme ${P.theme === k ? 'on' : ''}" data-th="${k}" title="${esc(PC.THEMES[k].desc)}"><div class="pn-th-img">${PC.svg({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: sample.name, role: sample.role, photo: photoGet(sample.photo), logo: K.logo }, { theme: k, w: 54, h: 86, id: 't' + k })}</div><b>${esc(PC.THEMES[k].name)}</b></button>`).join('');
       $$('[data-th]', box).forEach(b => b.onclick = () => { P.theme = b.dataset.th; P.accent = ''; const ac = $('#pn-accent'); if (ac) ac.value = PC.THEMES[P.theme].accent; save(); drawThemes(); drawPreview(); });
     };
+    let selKey = '';
+    const drawSel = () => {
+      const box = $('#pn-sel'); if (!box) return;
+      $$('#pn-preview [data-drag]').forEach(g => g.classList.toggle('sel', g.dataset.drag === selKey));
+      if (!selKey) { box.innerHTML = '<span class="small muted">✋ <b>Klik</b> teks, foto, atau logo di kartu untuk memilihnya, lalu <b>geser</b> atau atur ukurannya. Perubahan berlaku untuk semua kartu.</span>'; return; }
+      const v = Object.assign({ x: 0, y: 0, s: 1 }, (P.off || {})[selKey]);
+      box.innerHTML = `<div class="btns" style="align-items:center"><b>✏️ ${esc(PC.PARTS[selKey] || selKey)}</b><span class="small muted">geser 1 mm:</span>
+        <button class="btn soft sm" data-nd="-1,0" title="Kiri">←</button><button class="btn soft sm" data-nd="0,-1" title="Atas">↑</button><button class="btn soft sm" data-nd="0,1" title="Bawah">↓</button><button class="btn soft sm" data-nd="1,0" title="Kanan">→</button>
+        <span class="small muted" style="margin-left:6px">ukuran:</span><button class="btn soft sm" data-ns="-0.1" title="Perkecil">A−</button><b class="small">${Math.round((+v.s || 1) * 100)}%</b><button class="btn soft sm" data-ns="0.1" title="Perbesar">A+</button>
+        <button class="btn ghost sm" data-nr title="Kembalikan posisi & ukuran elemen ini">↺</button><button class="btn ghost sm" data-nx title="Selesai">✕</button></div>`;
+      const put = f => { const cur = Object.assign({ x: 0, y: 0, s: 1 }, (P.off || {})[selKey]); f(cur); P.off = Object.assign({}, P.off, { [selKey]: cur }); save(); drawPreview(); };
+      $$('[data-nd]', box).forEach(b => b.onclick = () => put(c => { const [a, d2] = b.dataset.nd.split(',').map(Number); c.x = +(c.x + a).toFixed(2); c.y = +(c.y + d2).toFixed(2); }));
+      $$('[data-ns]', box).forEach(b => b.onclick = () => put(c => { c.s = Math.max(0.4, Math.min(2.5, +((+c.s || 1) + +b.dataset.ns).toFixed(2))); }));
+      $('[data-nr]', box).onclick = () => { const o2 = Object.assign({}, P.off); delete o2[selKey]; P.off = o2; save(); drawPreview(); };
+      $('[data-nx]', box).onclick = () => { selKey = ''; drawSel(); };
+    };
     const drawPreview = () => {
       const box = $('#pn-preview'); if (!box) return;
       const d = dims(), list = chosen(), sc = Math.min(3.4, 300 / Math.max(d.w, d.h * 0.7));
@@ -3530,6 +3547,7 @@ B. VII B</pre></div></div></div>
       $('#pn-sum').textContent = list.length ? `${list.length} kartu · ${d.w}×${d.h} mm · ${lay.per} kartu per A4 → ${lay.pages.length} lembar` : '';
       box.innerHTML = list.length ? list.map(m => `<div class="pn-card"><div class="pn-svg" style="width:${(d.w * sc).toFixed(0)}px">${card(m)}</div><div class="btns"><span class="small ellipsis" style="max-width:${(d.w * sc - 60).toFixed(0)}px">${esc(m.name || '–')}</span><button class="btn ghost sm" data-act="pn-jpg1" data-id="${m.id}" title="Unduh JPG kartu ini">⬇ JPG</button></div></div>`).join('')
         : '<div class="card empty">Tambahkan anggota panitia di kiri: ketik manual, ambil dari akun guru, atau tempel daftar nama.</div>';
+      drawSel();
     };
     const drawMembers = () => {
       const box = $('#pn-members'); if (!box) return;
@@ -3568,13 +3586,14 @@ B. VII B</pre></div></div></div>
           const groups = $$(`#pn-preview [data-drag="${k}"]`);
           g.setPointerCapture && g.setPointerCapture(e.pointerId);
           document.body.classList.add('pn-dragging');
-          const move = ev => { const dx = (ev.clientX - x0) * sc, dy = (ev.clientY - y0) * sc; groups.forEach(gg => gg.setAttribute('transform', `translate(${(base.x * 10 + dx).toFixed(1)} ${(base.y * 10 + dy).toFixed(1)})`)); };
+          const move = ev => { const dx = (ev.clientX - x0) * sc, dy = (ev.clientY - y0) * sc; groups.forEach(gg => gg.setAttribute('transform', `translate(${(base.x * 10 + dx).toFixed(1)} ${(base.y * 10 + dy).toFixed(1)}) ${gg.dataset.sc || ''}`)); };
           const up = ev => {
             window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
             document.body.classList.remove('pn-dragging');
             const dx = (ev.clientX - x0) * sc / 10, dy = (ev.clientY - y0) * sc / 10;
-            if (Math.abs(dx) + Math.abs(dy) < 0.2) return;
-            P.off = Object.assign({}, P.off, { [k]: { x: +(base.x + dx).toFixed(2), y: +(base.y + dy).toFixed(2) } }); save(); drawPreview();
+            selKey = k;
+            if (Math.abs(dx) + Math.abs(dy) < 0.2) { drawSel(); return; }
+            P.off = Object.assign({}, P.off, { [k]: Object.assign({}, base, { x: +(base.x + dx).toFixed(2), y: +(base.y + dy).toFixed(2) }) }); save(); drawPreview();
           };
           window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
         });
@@ -3598,7 +3617,7 @@ B. VII B</pre></div></div></div>
         window.addEventListener('hashchange', () => { unsheet(); window.removeEventListener('beforeprint', sheet); window.removeEventListener('afterprint', unsheet); }, { once: true });
       },
       actions: {
-        'pn-offreset': () => { P.off = {}; save(); drawPreview(); toast('Posisi label dikembalikan.'); },
+        'pn-offreset': () => { P.off = {}; selKey = ''; save(); drawPreview(); toast('Posisi & ukuran semua elemen dikembalikan.'); },
         'pn-accent0': () => { P.accent = ''; $('#pn-accent').value = PC.THEMES[P.theme].accent; save(); drawPreview(); },
         'pn-add': () => { P.members.push({ id: S.uid('pn'), name: '', role: 'Anggota', nip: '', on: true }); save(); drawMembers(); drawPreview(); const ins = $$('[data-mf=name]'); if (ins.length) ins[ins.length - 1].focus(); },
         'pn-paste': () => {

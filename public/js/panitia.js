@@ -62,6 +62,12 @@
     let titleLines = String(d.title || '').split(/\||\n/).map(s => s.trim()).filter(Boolean).map(s => s.toUpperCase());
     if (W > H && titleLines.length > 1) titleLines = [titleLines.join(' ')];
     let defs = '', back = '', mid = '', fore = '';
+    // setiap elemen bisa digeser & diperbesar: o.off = { kunci: { x, y (mm), s (skala) } }
+    const drag = (k, inner, ox, oy) => {
+      const v = (o.off && o.off[k]) || {}, dx = (+v.x || 0) * 10, dy = (+v.y || 0) * 10, sc = +v.s || 1;
+      const scp = sc !== 1 && ox !== undefined ? `translate(${ox.toFixed(1)} ${oy.toFixed(1)}) scale(${sc}) translate(${(-ox).toFixed(1)} ${(-oy).toFixed(1)})` : '';
+      return `<g class="pn-drag" data-drag="${k}" data-sc="${scp}" transform="translate(${dx.toFixed(1)} ${dy.toFixed(1)}) ${scp}">${inner}</g>`;
+    };
     const name = String(d.name || 'Nama Panitia').trim() || 'Nama Panitia', role = String(d.role || '').toUpperCase();
     const nip = d.showNip && d.nip ? 'NIP. ' + d.nip : '';
     // ---- area isi ----
@@ -102,35 +108,37 @@
       const bandH = (land ? 0.3 : 0.2) * H;
       back += `<rect width="${W}" height="${bandH}" fill="${A}"/><rect y="${bandH}" width="${W}" height="${1.1 * u}" fill="${B}"/><rect y="${H - 6 * u}" width="${W}" height="${6 * u}" fill="${A}"/>`;
       const lg = bandH * 0.62, lx = land ? col.x : pad;
-      if (d.logo) fore += `<image href="${d.logo}" x="${lx}" y="${(bandH - lg) / 2}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`;
+      if (d.logo) fore += drag('logo', `<image href="${d.logo}" x="${lx}" y="${(bandH - lg) / 2}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`, lx + lg / 2, bandH / 2);
       const tx = d.logo ? lx + lg + pad * 0.6 : lx, tw = W - tx - pad;
-      fore += txt(d.school, tx, bandH * 0.36, fsSchool, tw, { fill: '#ffffff', anchor: 'start', w: 800 });
-      fore += txt(titleLines.join(' '), tx, bandH * 0.36 + fsTitle * 0.95, fsTitle * 0.78, tw, { fill: '#ffffff', anchor: 'start', font: F_DISP, w: 900, k: 'disp' });
-      if (d.event) fore += txt(d.event, tx, bandH * 0.36 + fsTitle * 0.95 + fsSmall * 1.35, fsSmall, tw, { fill: '#e7ffe9', anchor: 'start', w: 600, k: 'text' });
+      fore += drag('school', txt(d.school, tx, bandH * 0.36, fsSchool, tw, { fill: '#ffffff', anchor: 'start', w: 800 }), tx, bandH * 0.33);
+      fore += drag('title', txt(titleLines.join(' '), tx, bandH * 0.36 + fsTitle * 0.95, fsTitle * 0.78, tw, { fill: '#ffffff', anchor: 'start', font: F_DISP, w: 900, k: 'disp' }), tx, bandH * 0.36 + fsTitle * 0.7);
+      if (d.event) fore += drag('event', txt(d.event, tx, bandH * 0.36 + fsTitle * 0.95 + fsSmall * 1.35, fsSmall, tw, { fill: '#e7ffe9', anchor: 'start', w: 600, k: 'text' }), tx, bandH * 0.36 + fsTitle * 0.95 + fsSmall);
       y = bandH + pad * (land ? 0.6 : 1);
-      if (d.footer) fore += txt(d.footer, land ? col.x + col.w / 2 : W / 2, H - 1.8 * u, fsSmall * 0.85, land ? col.w : W - 2 * pad, { fill: '#ffffff', w: 700 });
+      if (d.footer) fore += drag('footer', txt(d.footer, land ? col.x + col.w / 2 : W / 2, H - 1.8 * u, fsSmall * 0.85, land ? col.w : W - 2 * pad, { fill: '#ffffff', w: 700 }), land ? col.x + col.w / 2 : W / 2, H - 2.1 * u);
     } else {
       let sx0 = land ? col.x : cx, sw0 = col.w;
       if (d.logo && o.theme !== 'retro') {
         const lg = fsSchool * (land ? 2.2 : 2.6);
-        if (land) { fore += `<image href="${d.logo}" x="${col.x.toFixed(1)}" y="${(y - fsSchool * 1.45).toFixed(1)}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`; sx0 = col.x + lg + fsSchool * 0.6; sw0 = col.w - lg - fsSchool * 0.6; }
-        else { fore += `<image href="${d.logo}" x="${(cx - lg / 2).toFixed(1)}" y="${(pad * 0.9).toFixed(1)}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`; y += lg; }
+        if (land) { fore += drag('logo', `<image href="${d.logo}" x="${col.x.toFixed(1)}" y="${(y - fsSchool * 1.45).toFixed(1)}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`, col.x + lg / 2, y - fsSchool * 1.45 + lg / 2); sx0 = col.x + lg + fsSchool * 0.6; sw0 = col.w - lg - fsSchool * 0.6; }
+        else { fore += drag('logo', `<image href="${d.logo}" x="${(cx - lg / 2).toFixed(1)}" y="${(pad * 0.9).toFixed(1)}" width="${lg}" height="${lg}" preserveAspectRatio="xMidYMid meet"/>`, cx, pad * 0.9 + lg / 2); y += lg; }
       }
       const schoolFill = o.theme === 'retro' ? A : onDark ? (o.theme === 'navy' ? A : '#ffffff') : '#374151';
-      fore += txt(String(d.school || '').toUpperCase(), sx0, y, fsSchool, sw0, { fill: schoolFill, anchor: land ? 'start' : 'middle', w: 800, ls: 0.3 * u });
+      fore += drag('school', txt(String(d.school || '').toUpperCase(), sx0, y, fsSchool, sw0, { fill: schoolFill, anchor: land ? 'start' : 'middle', w: 800, ls: 0.3 * u }), sx0, y - fsSchool * 0.35);
       y += fsSchool * 0.5;
+      let titleSvg = '', ty0 = y;
       titleLines.forEach((l, i) => {
         y += fsTitle * (i ? 1.02 : 1.08);
         const titleStyle = o.theme === 'retro' ? { fill: A, stroke: '#ffffff', sw: 2.2 * u } : o.theme === 'navy' ? { fill: A } : o.theme === 'ceria' ? { fill: '#ffffff', stroke: 'rgba(0,0,0,.18)', sw: 1.2 * u } : { fill: A };
-        fore += txt(l, land ? col.x : cx, y, fsTitle, col.w, Object.assign({ anchor: land ? 'start' : 'middle', font: F_DISP, w: 900, k: 'disp' }, titleStyle));
+        titleSvg += txt(l, land ? col.x : cx, y, fsTitle, col.w, Object.assign({ anchor: land ? 'start' : 'middle', font: F_DISP, w: 900, k: 'disp' }, titleStyle));
       });
+      fore += drag('title', titleSvg, land ? col.x : cx, (ty0 + y) / 2);
       if (d.event) {
         y += fsSmall * 2.1;
-        if (o.theme === 'retro') fore += tag(d.event, land ? col.x + Math.min(col.w, d.event.length * fsSmall * 0.66 + fsSmall * 1.6) / 2 : cx, y - fsSmall * 0.4, fsSmall, '#efe56a', '#1f2937', -2, col.w);
-        else fore += txt(d.event, land ? col.x : cx, y, fsSmall, col.w, { fill: onDark ? '#f8fafc' : '#4b5563', anchor: land ? 'start' : 'middle', w: 600, k: 'text' });
+        if (o.theme === 'retro') fore += drag('event', tag(d.event, land ? col.x + Math.min(col.w, d.event.length * fsSmall * 0.66 + fsSmall * 1.6) / 2 : cx, y - fsSmall * 0.4, fsSmall, '#efe56a', '#1f2937', -2, col.w), cx, y - fsSmall * 0.4);
+        else fore += drag('event', txt(d.event, land ? col.x : cx, y, fsSmall, col.w, { fill: onDark ? '#f8fafc' : '#4b5563', anchor: land ? 'start' : 'middle', w: 600, k: 'text' }), land ? col.x : cx, y - fsSmall * 0.35);
       }
       y += pad * 0.7;
-      if (d.footer) fore += txt(d.footer, land ? col.x : cx, H - pad * 0.75, fsSmall * 0.85, col.w, { fill: onDark ? 'rgba(255,255,255,.8)' : '#6b7280', anchor: land ? 'start' : 'middle', w: 600, k: 'text' });
+      if (d.footer) fore += drag('footer', txt(d.footer, land ? col.x : cx, H - pad * 1.1, fsSmall * 0.85, col.w, { fill: onDark ? 'rgba(255,255,255,.8)' : '#6b7280', anchor: land ? 'start' : 'middle', w: 600, k: 'text' }), land ? col.x : cx, H - pad * 1.1 - fsSmall * 0.3);
     }
     // ---- foto ----
     const nameBarH = fsName * 1.65;
@@ -144,14 +152,16 @@
     }
     const pb = photoBox(d, px, py, pw, ph, th.photo, 'c' + uid, o.theme === 'navy' ? '#2a3a6b' : o.theme === 'ceria' ? '#f5d0fe' : '#cfd8e3');
     defs += pb.defs;
+    const pcx = px + pw / 2, pcy = py + ph / 2;
+    let frame = '';
     if (o.theme === 'retro') {
       if (!land) mid += `<polygon points="${star(px + pw * 1.0, py + ph * 0.42, 14 * u, 4.6 * u, 14, 0.1)}" fill="#efe56a" stroke="${A}" stroke-width="${0.5 * u}"/>`;
-      mid += `<rect x="${px - pw * (land ? 0.04 : 0.12)}" y="${py + ph * 0.06}" width="${pw * 0.5}" height="${ph * 0.9}" fill="#ffffff" transform="rotate(-3 ${px} ${py})"/><rect x="${px - pw * 0.03}" y="${py - ph * 0.015}" width="${pw * (land ? 1.04 : 1.08)}" height="${ph * 1.02}" fill="${B}" transform="rotate(2 ${px + pw / 2} ${py + ph / 2})"/>`;
-    } else if (o.theme === 'navy') fore += `<circle cx="${px + pw / 2}" cy="${py + ph / 2}" r="${Math.min(pw, ph) / 2 + 1.6 * u}" fill="none" stroke="${A}" stroke-width="${1.1 * u}"/>`;
-    else if (o.theme === 'ceria') fore += `<rect x="${px - 1.5 * u}" y="${py - 1.5 * u}" width="${pw + 3 * u}" height="${ph + 3 * u}" rx="${Math.min(pw, ph) * 0.1}" fill="#ffffff"/>`;
-    else if (o.theme === 'resmi') fore += `<rect x="${px - 0.9 * u}" y="${py - 0.9 * u}" width="${pw + 1.8 * u}" height="${ph + 1.8 * u}" fill="${A}"/>`;
-    else fore += `<rect x="${px - 0.6 * u}" y="${py - 0.6 * u}" width="${pw + 1.2 * u}" height="${ph + 1.2 * u}" rx="${Math.min(pw, ph) * 0.09}" fill="${A}"/>`;
-    fore += pb.svg;
+      mid = drag('photo', mid + `<rect x="${px - pw * (land ? 0.04 : 0.12)}" y="${py + ph * 0.06}" width="${pw * 0.5}" height="${ph * 0.9}" fill="#ffffff" transform="rotate(-3 ${px} ${py})"/><rect x="${px - pw * 0.03}" y="${py - ph * 0.015}" width="${pw * (land ? 1.04 : 1.08)}" height="${ph * 1.02}" fill="${B}" transform="rotate(2 ${px + pw / 2} ${py + ph / 2})"/>`, pcx, pcy);
+    } else if (o.theme === 'navy') frame = `<circle cx="${px + pw / 2}" cy="${py + ph / 2}" r="${Math.min(pw, ph) / 2 + 1.6 * u}" fill="none" stroke="${A}" stroke-width="${1.1 * u}"/>`;
+    else if (o.theme === 'ceria') frame = `<rect x="${px - 1.5 * u}" y="${py - 1.5 * u}" width="${pw + 3 * u}" height="${ph + 3 * u}" rx="${Math.min(pw, ph) * 0.1}" fill="#ffffff"/>`;
+    else if (o.theme === 'resmi') frame = `<rect x="${px - 0.9 * u}" y="${py - 0.9 * u}" width="${pw + 1.8 * u}" height="${ph + 1.8 * u}" fill="${A}"/>`;
+    else frame = `<rect x="${px - 0.6 * u}" y="${py - 0.6 * u}" width="${pw + 1.2 * u}" height="${ph + 1.2 * u}" rx="${Math.min(pw, ph) * 0.09}" fill="${A}"/>`;
+    fore += drag('photo', frame + pb.svg, pcx, pcy);
     // ---- jabatan, sapaan, nama, NIP ----
     const nameW = land ? col.w : Math.min(W - pad * 1.2, Math.max(pw * 1.15, name.length * fsName * 0.66 + fsName * 1.4));
     let ny;
@@ -160,9 +170,6 @@
     else ny = py + ph + nameBarH * 0.15;
     const nb = land ? 0.36 : null; // pada kartu mendatar teks nama selalu di tengah pita
     const nx = land ? col.x + nameW / 2 : W / 2;
-    // label yang bisa digeser: o.off = { role: {x, y}, greet: {x, y} } dalam mm
-    const off = k => { const v = (o.off && o.off[k]) || {}; return [(+v.x || 0) * 10, (+v.y || 0) * 10]; };
-    const drag = (k, inner) => { const [dx, dy] = off(k); return `<g class="pn-drag" data-drag="${k}" transform="translate(${dx.toFixed(1)} ${dy.toFixed(1)})">${inner}</g>`; };
     if (role && o.rolePos !== 'none') {
       const tw0 = Math.min(land ? col.w : W - pad * 2, role.length * fsTag * 0.66 + fsTag * 1.6);
       // tag jabatan selalu utuh di dalam kartu (tidak terpotong di tepi)
@@ -170,16 +177,18 @@
       if (!land && o.rolePos === 'atas') { ry = py + fsTag * 0.25; rx = W / 2; }
       if (!land && o.rolePos === 'bawah') { ry = py + ph * (th.photo === 'circle' ? 0.84 : 0.88); rx = W / 2; }
       const rStyle = o.theme === 'retro' ? [A, '#fdf1dc', -4] : o.theme === 'navy' ? [A, '#111d42', 0] : o.theme === 'ceria' ? ['#fde047', '#3b0764', -3] : o.theme === 'resmi' ? [A, '#ffffff', 0] : [B, '#111827', 0];
-      fore += drag('role', tag(role, rx, ry, fsTag, rStyle[0], rStyle[1], rStyle[2], land ? col.w : W - pad * 2, { rx: o.theme === 'retro' ? 0 : fsTag * 0.88 }));
+      fore += drag('role', tag(role, rx, ry, fsTag, rStyle[0], rStyle[1], rStyle[2], land ? col.w : W - pad * 2, { rx: o.theme === 'retro' ? 0 : fsTag * 0.88 }), rx, ry);
     }
-    if (!land && d.greet && (o.theme === 'retro' || o.theme === 'ceria')) fore += drag('greet', tag(String(d.greet).toUpperCase(), (land ? col.x : nx - nameW / 2) + fsSmall * 3.6, ny - nameBarH * 0.72, fsSmall * 0.95, '#22b8e0', '#ffffff', -4, nameW));
+    if (!land && d.greet && (o.theme === 'retro' || o.theme === 'ceria')) fore += drag('greet', tag(String(d.greet).toUpperCase(), (land ? col.x : nx - nameW / 2) + fsSmall * 3.6, ny - nameBarH * 0.72, fsSmall * 0.95, '#22b8e0', '#ffffff', -4, nameW), nx - nameW / 2 + fsSmall * 3.6, ny - nameBarH * 0.72);
+    let nameSvg = '';
     if (o.theme === 'retro') {
-      fore += `<polygon points="${star(nx + nameW / 2 + 1.5 * u, ny + nameBarH * 0.45, 6.5 * u, 2.3 * u, 11, 0.3)}" fill="${B}"/>`;
-      fore += `<g transform="rotate(-2 ${nx} ${ny})"><rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2}" width="${nameW}" height="${nameBarH}" fill="${A}"/>${txt(name.toUpperCase(), nx, ny + fsName * 0.36, fsName, nameW - fsName, { fill: '#fdf1dc', font: F_DISP, w: 900, k: 'disp' })}</g>`;
-    } else if (o.theme === 'navy') fore += txt(name, nx, ny + fsName * (nb || 0.85), fsName, nameW, { fill: '#ffffff', w: 800 }) + `<line x1="${nx - nameW * 0.3}" y1="${ny + fsName * ((nb || 0.85) + 0.5)}" x2="${nx + nameW * 0.3}" y2="${ny + fsName * ((nb || 0.85) + 0.5)}" stroke="${A}" stroke-width="${0.5 * u}"/>`;
-    else if (o.theme === 'ceria') { const off = land ? 0 : fsName * 0.5; fore += `<rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2 + off}" width="${nameW}" height="${nameBarH}" rx="${nameBarH / 2}" fill="#ffffff"/>${txt(name, nx, ny + off + fsName * 0.36, fsName, nameW - fsName, { fill: '#3b0764', w: 800 })}`; }
-    else fore += txt(name, nx, ny + fsName * (nb || 0.9), fsName, nameW, { fill: o.theme === 'resmi' ? B : '#111827', w: 800 });
-    if (nip) fore += txt(nip, nx, ny + nameBarH * 0.5 + fsSmall * 1.75, fsSmall * 0.95, nameW, { fill: onDark ? '#e5e7eb' : '#374151', w: 600, k: 'text' });
+      nameSvg += `<polygon points="${star(nx + nameW / 2 + 1.5 * u, ny + nameBarH * 0.45, 6.5 * u, 2.3 * u, 11, 0.3)}" fill="${B}"/>`;
+      nameSvg += `<g transform="rotate(-2 ${nx} ${ny})"><rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2}" width="${nameW}" height="${nameBarH}" fill="${A}"/>${txt(name.toUpperCase(), nx, ny + fsName * 0.36, fsName, nameW - fsName, { fill: '#fdf1dc', font: F_DISP, w: 900, k: 'disp' })}</g>`;
+    } else if (o.theme === 'navy') nameSvg += txt(name, nx, ny + fsName * (nb || 0.85), fsName, nameW, { fill: '#ffffff', w: 800 }) + `<line x1="${nx - nameW * 0.3}" y1="${ny + fsName * ((nb || 0.85) + 0.5)}" x2="${nx + nameW * 0.3}" y2="${ny + fsName * ((nb || 0.85) + 0.5)}" stroke="${A}" stroke-width="${0.5 * u}"/>`;
+    else if (o.theme === 'ceria') { const off = land ? 0 : fsName * 0.5; nameSvg += `<rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2 + off}" width="${nameW}" height="${nameBarH}" rx="${nameBarH / 2}" fill="#ffffff"/>${txt(name, nx, ny + off + fsName * 0.36, fsName, nameW - fsName, { fill: '#3b0764', w: 800 })}`; }
+    else nameSvg += txt(name, nx, ny + fsName * (nb || 0.9), fsName, nameW, { fill: o.theme === 'resmi' ? B : '#111827', w: 800 });
+    fore += drag('name', nameSvg, nx, ny + fsName * 0.4);
+    if (nip) fore += drag('nip', txt(nip, nx, ny + nameBarH * 0.5 + fsSmall * 1.75, fsSmall * 0.95, nameW, { fill: onDark ? '#e5e7eb' : '#374151', w: 600, k: 'text' }), nx, ny + nameBarH * 0.5 + fsSmall * 1.45);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${o.w}mm" height="${o.h}mm"><defs>${defs}${o.fontCss ? `<style>${o.fontCss}</style>` : ''}</defs>${back}${mid}${fore}</svg>`;
   }
 
@@ -249,5 +258,6 @@
   }
   const canvasBlob = (c, q) => new Promise(res => c.toBlob(res, 'image/jpeg', q || 0.92));
 
-  root.PanitiaCard = { SIZES, THEMES, svg, fontCss, cardCanvas, sheetCanvas, layoutA4, pdfFromCanvases, saveBlob, canvasBlob };
+  const PARTS = { logo: 'Logo', school: 'Nama sekolah', title: 'Judul', event: 'Nama kegiatan', photo: 'Foto', role: 'Jabatan', greet: 'Sapaan', name: 'Nama', nip: 'NIP', footer: 'Teks bawah' };
+  root.PanitiaCard = { PARTS, SIZES, THEMES, svg, fontCss, cardCanvas, sheetCanvas, layoutA4, pdfFromCanvases, saveBlob, canvasBlob };
 })(typeof self !== 'undefined' ? self : this);
