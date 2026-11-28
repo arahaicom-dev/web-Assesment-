@@ -475,6 +475,16 @@ B. VII B</pre></div></div></div>
 
   /* ================= Beranda ================= */
   const apkUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'unduh/asesmen-merdeka.apk';
+  /** Tampilkan data login akun guru agar bisa langsung dibagikan. */
+  function credModal(name, user, pw, email) {
+    const url = location.origin + location.pathname.replace(/[^/]*$/, '') + 'app.html';
+    const txt = `Akun Asesmen Merdeka untuk ${name}\nAlamat: ${url}\nUsername: ${user}${email ? '\natau email: ' + email : ''}\nPassword: ${pw}\n\nSetelah masuk, ganti password di menu Akun Guru.`;
+    const m = modal(`<h2>✅ Akun siap dipakai</h2><p class="small muted" style="margin-top:0">Berikan data ini ke <b>${esc(name)}</b>. Ketik persis sama (huruf besar/kecil berpengaruh pada password).</p>
+      <div class="cred-box"><div><span>Alamat</span><b>${esc(url)}</b></div><div><span>Username</span><b>${esc(user)}</b></div>${email ? `<div><span>atau Email</span><b>${esc(email)}</b></div>` : ''}<div><span>Password</span><b>${esc(pw)}</b></div></div>
+      <div class="foot"><button class="btn ghost" data-act-c="copy">📋 Salin</button><button class="btn soft" data-act-c="wa">💬 Kirim via WhatsApp</button><button class="btn" data-close>Selesai</button></div>`);
+    $('[data-act-c=copy]', m).onclick = () => (navigator.clipboard ? navigator.clipboard.writeText(txt) : Promise.reject()).then(() => toast('Data login disalin.')).catch(() => prompt('Salin:', txt));
+    $('[data-act-c=wa]', m).onclick = () => window.open('https://wa.me/?text=' + encodeURIComponent(txt), '_blank');
+  }
   function viewHome() {
     setTitle('Beranda', 'Kurikulum Merdeka — asesmen, penilaian, dan nilai rapor otomatis');
     renderCtx(false);
@@ -2096,7 +2106,7 @@ B. VII B</pre></div></div></div>
         try {
           const r = await S.api('users');
           list.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Nama</th><th>Username</th><th>Email</th><th>Peran</th><th></th></tr></thead><tbody>${r.users.map(u => `<tr><td>${esc(u.name)}</td><td>${esc(u.username)}</td><td class="small">${u.email ? esc(u.email) : /@/.test(u.username) ? '<span class="muted">(username)</span>' : '<span class="pill warn">belum ada</span>'}</td><td><span class="pill ${u.role === 'admin' ? 'pri' : ''}">${u.role}</span></td>
-            <td class="btns"><button class="btn ghost sm" data-act="user-email" data-id="${u.id}" data-n="${esc(u.name)}" data-e="${esc(u.email || '')}" title="Atur email">✉️</button><button class="btn ghost sm" data-act="reset-pw" data-id="${u.id}" data-n="${esc(u.name)}" title="Atur ulang password">🔑</button>${u.id === me.id ? '' : `<button class="btn ghost sm" data-act="del-user" data-id="${u.id}" data-n="${esc(u.name)}">🗑</button>`}</td></tr>`).join('')}</tbody></table></div>`;
+            <td class="btns"><button class="btn ghost sm" data-act="user-email" data-id="${u.id}" data-n="${esc(u.name)}" data-e="${esc(u.email || '')}" title="Atur email">✉️</button><button class="btn ghost sm" data-act="reset-pw" data-id="${u.id}" data-n="${esc(u.name)}" data-u="${esc(u.username)}" data-e="${esc(u.email || '')}" title="Atur ulang password">🔑</button>${u.id === me.id ? '' : `<button class="btn ghost sm" data-act="del-user" data-id="${u.id}" data-n="${esc(u.name)}">🗑</button>`}</td></tr>`).join('')}</tbody></table></div>`;
         } catch (e) { list.textContent = e.message; }
       },
       actions: {
@@ -2116,18 +2126,20 @@ B. VII B</pre></div></div></div>
         'add-user': () => {
           const m = modal(`<h2>Akun Guru Baru</h2>
             <label class="field"><span>Nama lengkap</span><input id="nu-name"></label>
-            <div class="row"><label class="field"><span>Username</span><input id="nu-user" autocomplete="off"></label><label class="field"><span>Password awal</span><input id="nu-pw" type="text" autocomplete="off"></label></div>
+            <div class="row"><label class="field"><span>Username</span><input id="nu-user" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="mis. hardi"></label><label class="field"><span>Password awal</span><input id="nu-pw" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="min. 6 karakter"></label></div>
+            <p class="small muted" style="margin:-4px 0 8px">Username otomatis huruf kecil. Guru bisa masuk dengan username <b>atau</b> email di bawah.</p>
             <label class="field"><span>Email (untuk lupa password, opsional)</span><input id="nu-email" type="email" autocomplete="off" placeholder="guru@email.com"></label>
             <label class="field"><span>Peran</span><select id="nu-role"><option value="guru">Guru</option><option value="admin">Admin</option></select></label>
             <div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="nu-ok">Buat Akun</button></div>`);
           $('#nu-ok', m).onclick = async () => {
-            try { await S.api('users', { body: { name: $('#nu-name', m).value.trim(), username: $('#nu-user', m).value.trim(), password: $('#nu-pw', m).value, role: $('#nu-role', m).value, email: $('#nu-email', m).value.trim() } }); closeModal(); toast('Akun dibuat.'); route(); }
+            const info = { name: $('#nu-name', m).value.trim(), username: $('#nu-user', m).value.trim().toLowerCase(), password: $('#nu-pw', m).value.trim(), role: $('#nu-role', m).value, email: $('#nu-email', m).value.trim() };
+            try { await S.api('users', { body: info }); closeModal(); route(); credModal(info.name, info.username, info.password, info.email); }
             catch (e) { toast(e.message, 'bad'); }
           };
         },
         'reset-pw': el => {
-          const m = modal(`<h2>Atur Password ${esc(el.dataset.n)}</h2><label class="field"><span>Password baru</span><input id="rp" type="text" autocomplete="off"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="rp-ok">Simpan</button></div>`);
-          $('#rp-ok', m).onclick = async () => { try { await S.api('users/' + el.dataset.id + '/password', { method: 'PUT', body: { password: $('#rp', m).value } }); closeModal(); toast('Password diatur ulang.'); } catch (e) { toast(e.message, 'bad'); } };
+          const m = modal(`<h2>Atur Password ${esc(el.dataset.n)}</h2><label class="field"><span>Password baru</span><input id="rp" type="text" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="rp-ok">Simpan</button></div>`);
+          $('#rp-ok', m).onclick = async () => { const pw = $('#rp', m).value.trim(); try { await S.api('users/' + el.dataset.id + '/password', { method: 'PUT', body: { password: pw } }); closeModal(); credModal(el.dataset.n, el.dataset.u, pw, el.dataset.e); } catch (e) { toast(e.message, 'bad'); } };
         },
         'del-user': async el => {
           if (!await confirmBox(`Hapus akun <b>${esc(el.dataset.n)}</b>? Data asesmen tetap ada.`, 'Hapus')) return;

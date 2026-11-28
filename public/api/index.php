@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.16.1');
+define('APP_VERSION', '5.16.2');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -119,9 +119,13 @@ try {
     $username = trim((string)prop($body, 'username', '')); $password = (string)prop($body, 'password', '');
     $k = lock_key($username);
     if (is_locked($k)) bad(429, 'Terlalu banyak percobaan. Coba lagi 10 menit lagi.');
+    // cari akun: username (tanpa beda huruf besar/kecil), lalu email yang terdaftar
     $u = one('SELECT * FROM users WHERE username = ?', array($username));
-    if (!$u && strpos($username, '@') !== false) $u = one('SELECT * FROM users WHERE LOWER(username) = ?', array(strtolower($username)));
-    if (!$u || !password_verify($password, $u['pass_hash'])) { add_fail($k); bad(401, 'Email/username atau password salah.'); }
+    if (!$u) $u = one('SELECT * FROM users WHERE LOWER(username) = ? ORDER BY id LIMIT 1', array(strtolower($username)));
+    if (!$u && strpos($username, '@') !== false) $u = one('SELECT * FROM users WHERE LOWER(email) = ? ORDER BY id LIMIT 1', array(strtolower($username)));
+    // toleransi spasi tak sengaja di awal/akhir password (sering terjadi di HP)
+    $okPw = $u && (password_verify($password, $u['pass_hash']) || (trim($password) !== $password && password_verify(trim($password), $u['pass_hash'])));
+    if (!$okPw) { add_fail($k); bad(401, $u ? 'Password salah. Periksa huruf besar/kecil, atau minta admin mengatur ulang password.' : 'Email/username tidak terdaftar.'); }
     clear_fail($k);
     out(array('token' => new_session((int)$u['id']), 'user' => public_user($u)));
   }
@@ -206,10 +210,10 @@ try {
     }
     require_active($u);
     if (count($seg) === 1 && $method === 'POST') {
-      $un = trim((string)prop($body, 'username', '')); $pw = prop($body, 'password');
+      $un = strtolower(trim((string)prop($body, 'username', ''))); $pw = trim((string)prop($body, 'password', ''));
       if (!valid_username($un)) bad(400, 'Username/email 3–150 karakter tanpa spasi.');
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
-      if (one('SELECT id FROM users WHERE username = ?', array($un))) bad(409, 'Username sudah dipakai.');
+      if (one('SELECT id FROM users WHERE LOWER(username) = ? OR LOWER(email) = ?', array($un, $un))) bad(409, 'Username sudah dipakai.');
       $nm = str_cut(prop($body, 'name', ''), 150) ?: $un;
       $em = strtolower(trim((string)prop($body, 'email', '')));
       if ($em !== '' && !valid_email($em)) bad(400, 'Alamat email tidak valid.');
@@ -219,7 +223,7 @@ try {
     $id = isset($seg[1]) ? (int)$seg[1] : 0;
     if (!one('SELECT id FROM users WHERE id = ? AND tenant_id = ?', array($id, $tid))) bad(404, 'Akun tidak ditemukan.');
     if (count($seg) === 3 && $seg[2] === 'password' && $method === 'PUT') {
-      $pw = prop($body, 'password');
+      $pw = trim((string)prop($body, 'password', ''));
       if (!valid_password($pw)) bad(400, 'Password minimal 6 karakter.');
       q('UPDATE users SET pass_hash = ? WHERE id = ?', array(password_hash($pw, PASSWORD_DEFAULT), $id));
       q('DELETE FROM sessions WHERE user_id = ?', array($id));
