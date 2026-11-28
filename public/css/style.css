@@ -1114,3 +1114,9 @@ button.pill { cursor: pointer; border: none; font: inherit; }
 .kop-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
 .kop-row input[data-kl] { flex: 1; min-width: 0; } .kop-row select { width: 130px; }
 .kop-b { display: flex; align-items: center; gap: 3px; padding: 0 6px; cursor: pointer; }
+@media screen {
+  .ab-tab td.ket-ed { cursor: pointer; transition: background .15s; }
+  .ab-tab td.ket-ed:hover { background: #fff6c8 !important; outline: 2px solid #f5b800; outline-offset: -2px; }
+  .ab-tab td.ket-ed:empty::after { content: '＋'; color: #bbb; }
+  .ab-tab td.ket-ed.man { background: #fffbe6 !important; }
+}

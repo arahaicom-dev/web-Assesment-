@@ -2776,9 +2776,12 @@ B. VII B</pre></div></div></div>
     el.style.top = (r.bottom + h + 8 > window.innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6) + 'px';
     const list = items.filter(Boolean);
     $$('button[data-k]', el).forEach(b => b.onclick = e => { e.stopPropagation(); const it = list[+b.dataset.k]; closePop(); it.run && it.run(); });
-    setTimeout(() => document.addEventListener('click', closePop, { once: true }), 0);
+    // tutup saat klik di luar; pendengar lama dilepas agar tidak menutup menu berikutnya
+    const off = () => closePop();
+    el._off = off;
+    setTimeout(() => { if (el.isConnected) document.addEventListener('click', off, { once: true }); }, 0);
   }
-  function closePop() { const p = $('#pop-menu'); if (p) p.remove(); }
+  function closePop() { const p = $('#pop-menu'); if (p) { if (p._off) document.removeEventListener('click', p._off); p.remove(); } }
   window.addEventListener('hashchange', closePop);
 
   /* ================= Perpustakaan soal ================= */
@@ -3312,7 +3315,7 @@ B. VII B</pre></div></div></div>
           <p class="small muted" style="margin:6px 0 0">Nama sekolah ditulis langsung di baris kop di atas. Tahun pelajaran diambil dari <a href="#/pengaturan">Pengaturan</a>.</p></details>
         ${S.mode === 'server' ? '<div class="row" style="align-items:flex-end"><label class="field" style="flex:3"><span>✅ Isi kehadiran otomatis dari ujian (opsional)</span><select id="a-exam"><option value="">— tidak, isi manual saat ujian —</option></select></label></div>' : ''}
         <div class="btns" style="align-items:center">${[['nisn', 'Kolom NISN'], ['ttd', 'Kolom tanda tangan'], ['ket', 'Kolom keterangan'], ['pengawas', 'Tanda tangan pengawas']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-ash="${k}" ${A.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}
-          <span style="margin-left:auto" class="btns"><a class="btn ghost" href="#/kartu">🪪 Kartu Ujian</a><button class="btn lg" data-act="a-print">🖨 Cetak Absensi</button></span></div>
+          <span style="margin-left:auto" class="btns"><button class="btn ghost" data-act="ket-all" title="Isi atau kosongkan kolom keterangan sekaligus">✎ Keterangan</button><a class="btn ghost" href="#/kartu">🪪 Kartu Ujian</a><button class="btn lg" data-act="a-print">🖨 Cetak Absensi</button></span></div>
         <p class="small muted" style="margin:8px 0 0">Satu kelas dimulai di halaman baru (A4, ${A.perPage} murid per halaman). Untuk PDF: Cetak → "Simpan sebagai PDF".</p>
       </div>
       <div id="a-sum" class="small muted no-print" style="margin:6px 0 10px"></div>
@@ -3328,13 +3331,19 @@ B. VII B</pre></div></div></div>
       const kop = `<div class="ab-kop g-${esc(KOP.garis || 'double')}">${K.logo ? `<img src="${K.logo}" alt="" class="ab-logo" style="width:${lg};height:${lg}">` : `<div class="ab-logo" style="width:${lg};height:${lg}"></div>`}
         <div class="ab-kop-t">${KOP.lines.filter(l => l.t && l.t.trim()).map(l => `<div style="font-size:${(KSZ[l.s] || KSZ.m)[1]}pt;font-weight:${l.b ? 800 : 400}">${esc(l.t)}</div>`).join('')}</div>
         ${K.logo2 ? `<img src="${K.logo2}" alt="" class="ab-logo" style="width:${lg};height:${lg}">` : `<div class="ab-logo" style="width:${lg};height:${lg}"></div>`}</div>`;
-      let tot = 0, hadir = 0;
+      if (A.ketDate !== A.tanggal) { A.ket = {}; A.ketDate = A.tanggal; }
+      if (!A.ket) A.ket = {};
+      const ketOf = m => A.ket[m.id] !== undefined ? A.ket[m.id] : present ? (present[m.id] ? (present[m.id].done ? 'Hadir' : 'Hadir*') : 'Tidak hadir') : '';
+      const isHadir = v => /^hadir/i.test(String(v).trim());
+      let tot = 0, hadir = 0, known = false;
       const pages = [];
       cls.forEach(c => {
         const list = c.students;
         const chunks = []; for (let k = 0; k < Math.max(1, list.length); k += A.perPage) chunks.push(list.slice(k, k + A.perPage));
-        const nH = present ? list.filter(m => present[m.id]).length : null;
-        tot += list.length; if (nH !== null) hadir += nH;
+        const filled = list.filter(m => ketOf(m) !== '').length;
+        const nH = present || filled ? list.filter(m => isHadir(ketOf(m))).length : null;
+        const rekap = {}; list.forEach(m => { const v = String(ketOf(m)).replace(/\*$/, '').trim(); if (v) rekap[v] = (rekap[v] || 0) + 1; });
+        tot += list.length; if (nH !== null) { hadir += nH; known = true; }
         chunks.forEach((ch, pi) => {
           const last = pi === chunks.length - 1, base = pi * A.perPage;
           pages.push(`<div class="ab-page">${kop}
@@ -3343,16 +3352,16 @@ B. VII B</pre></div></div></div>
             <table class="ab-info"><tr><td>Kelas</td><td>: <b>${esc(c.name)}</b></td><td>Hari/Tanggal</td><td>: ${esc(hari || '..............................')}</td></tr>
               <tr><td>Ruang</td><td>: ${esc(A.ruang || '..........')}</td><td>Waktu</td><td>: ${esc(A.jam || '..............................')}</td></tr></table>
             <table class="ab-tab"><thead><tr><th style="width:9mm">No</th><th style="width:22mm">NIS</th>${A.show.nisn ? '<th style="width:26mm">NISN</th>' : ''}<th>Nama Peserta</th>${A.show.ttd ? '<th style="width:44mm" colspan="2">Tanda Tangan</th>' : ''}${A.show.ket ? '<th style="width:24mm">Ket.</th>' : ''}</tr></thead><tbody>
-            ${ch.map((m, i) => { const n = base + i + 1, pr = present ? present[m.id] : undefined; return `<tr><td class="c">${n}</td><td class="c">${esc(m.nis || '')}</td>${A.show.nisn ? `<td class="c">${esc(m.nisn || '')}</td>` : ''}<td>${esc(m.name)}</td>${A.show.ttd ? (n % 2 ? `<td class="sig">${n}.</td><td class="sig"></td>` : `<td class="sig"></td><td class="sig">${n}.</td>`) : ''}${A.show.ket ? `<td class="c">${present ? (pr ? (pr.done ? 'Hadir' : 'Hadir*') : '<b>Tidak hadir</b>') : ''}</td>` : ''}</tr>`; }).join('')}
+            ${ch.map((m, i) => { const n = base + i + 1, pr = present ? present[m.id] : undefined; return `<tr><td class="c">${n}</td><td class="c">${esc(m.nis || '')}</td>${A.show.nisn ? `<td class="c">${esc(m.nisn || '')}</td>` : ''}<td>${esc(m.name)}</td>${A.show.ttd ? (n % 2 ? `<td class="sig">${n}.</td><td class="sig"></td>` : `<td class="sig"></td><td class="sig">${n}.</td>`) : ''}${A.show.ket ? (() => { const v = ketOf(m); return `<td class="c ket-ed ${A.ket[m.id] !== undefined ? 'man' : ''}" data-ket="${esc(m.id)}" title="Klik untuk mengganti keterangan">${v && !isHadir(v) ? `<b>${esc(v)}</b>` : esc(v)}</td>`; })() : ''}</tr>`; }).join('')}
             </tbody></table>
-            ${last ? `<div class="ab-rekap">Jumlah peserta: <b>${list.length}</b> · Hadir: <b>${nH !== null ? nH : '.....'}</b> · Tidak hadir: <b>${nH !== null ? list.length - nH : '.....'}</b>${present && list.some(m => present[m.id] && !present[m.id].done) ? ' <span>(* hadir, belum mengumpulkan)</span>' : ''}</div>
+            ${last ? `<div class="ab-rekap">Jumlah peserta: <b>${list.length}</b> · Hadir: <b>${nH !== null ? nH : '.....'}</b> · Tidak hadir: <b>${nH !== null ? list.length - nH : '.....'}</b>${Object.keys(rekap).filter(k => !/^(hadir|tidak hadir)$/i.test(k)).map(k => ` <span>(${esc(k)}: ${rekap[k]})</span>`).join('')}${list.some(m => /\*$/.test(ketOf(m))) ? ' <span>(* hadir, belum mengumpulkan)</span>' : ''}</div>
             <div class="ab-sign">${A.show.pengawas ? `<div>&nbsp;<br>Pengawas,<div class="ab-sp"></div><b>${esc(A.pengawas || '..............................')}</b>${A.nipPengawas ? `<br>NIP. ${esc(A.nipPengawas)}` : '<br>NIP. ..............................'}</div>` : '<div></div>'}
               <div>${esc(K.kota ? K.kota + ', ' : '')}${esc(ttdTgl)}<br>Kepala Sekolah,<div class="ab-sp"></div><b>${esc(K.kepala || '..............................')}</b>${K.nip ? `<br>NIP. ${esc(K.nip)}` : '<br>NIP. ..............................'}</div></div>` : '<div class="ab-cont small">bersambung ke halaman berikutnya…</div>'}
           </div>`);
         });
       });
       box.innerHTML = pages.join('');
-      $('#a-sum').textContent = `${cls.length} kelas · ${tot} peserta · ${pages.length} halaman A4${present ? ` · ✅ kehadiran dari "${examLabel}": ${hadir} hadir, ${tot - hadir} tidak hadir` : ''}`;
+      $('#a-sum').textContent = `${cls.length} kelas · ${tot} peserta · ${pages.length} halaman A4${present ? ` · ✅ kehadiran dari "${examLabel}"` : ''}${known ? ` · ${hadir} hadir, ${tot - hadir} tidak hadir` : ''}${A.show.ket ? ' · klik sel kolom Ket. untuk mengganti isinya' : ''}`;
     };
     const drawKopEd = () => {
       const box = $('#kop-ed'); if (!box) return;
@@ -3406,6 +3415,22 @@ B. VII B</pre></div></div></div>
         $('#kop-logo', v).oninput = e => { KOP.logo = +e.target.value; save(); draw(); };
         $('#kop-garis', v).onchange = e => { KOP.garis = e.target.value; save(); draw(); };
         drawKopEd(); draw(); loadExams();
+        const setKet = (id, v) => { A.ketDate = A.tanggal; if (v === undefined) delete A.ket[id]; else A.ket[id] = v; save(); draw(); };
+        $('#absen-print', v).addEventListener('click', e => {
+          const td = e.target.closest('td[data-ket]'); if (!td) return;
+          e.stopPropagation();
+          const id = td.dataset.ket, m = [].concat(...A.classIds.map(c => (S.cls(c) || { students: [] }).students)).find(x => x.id === id);
+          const opt = (ic, label) => ({ ic, label, run: () => setKet(id, label) });
+          popMenu(td, [opt('✅', 'Hadir'), opt('🤒', 'Sakit'), opt('📝', 'Izin'), opt('❌', 'Alpa'), opt('🚫', 'Tidak hadir'), opt('⏰', 'Terlambat'), '-',
+            { ic: '✏️', label: 'Tulis sendiri…', sub: m ? m.name : '', run: () => {
+              const md = modal(`<h2>Keterangan ${esc(m ? m.name : '')}</h2><label class="field"><span>Isi keterangan</span><input id="ket-in" maxlength="40" value="${esc(A.ket[id] !== undefined ? A.ket[id] : td.textContent.trim())}" placeholder="mis. Dispensasi, Susulan"></label><div class="foot"><button class="btn ghost" data-close>Batal</button><button class="btn" id="ket-ok">Simpan</button></div>`);
+              const inp = $('#ket-in', md); inp.focus(); inp.select();
+              const ok = () => { setKet(id, inp.value.trim()); closeModal(); };
+              $('#ket-ok', md).onclick = ok; inp.onkeydown = ev => { if (ev.key === 'Enter') ok(); };
+            } },
+            { ic: '⬜', label: 'Kosongkan', run: () => setKet(id, '') },
+            A.ket[id] !== undefined && present ? { ic: '↺', label: 'Kembalikan dari data ujian', run: () => setKet(id, undefined) } : null]);
+        });
         const sheet = () => { let el = document.getElementById('print-sheet'); if (!el) { el = document.createElement('div'); el.id = 'print-sheet'; document.body.appendChild(el); } const src = $('#absen-print'); el.innerHTML = src ? src.innerHTML : ''; document.body.classList.add('print-cards'); };
         const unsheet = () => { const el = document.getElementById('print-sheet'); if (el) el.remove(); document.body.classList.remove('print-cards'); };
         window.__absenSheet = sheet;
@@ -3414,6 +3439,12 @@ B. VII B</pre></div></div></div>
       },
       actions: {
         'a-print': () => { if (window.__absenSheet) window.__absenSheet(); window.print(); },
+        'ket-all': el => {
+          const ids = [].concat(...A.classIds.map(c => (S.cls(c) || { students: [] }).students.map(m => m.id)));
+          const all = v => () => { A.ketDate = A.tanggal; ids.forEach(id => { A.ket[id] = v; }); save(); route(); };
+          popMenu(el, [{ ic: '✅', label: 'Semua: Hadir', run: all('Hadir') }, { ic: '⬜', label: 'Kosongkan semua', run: all('') },
+            { ic: '↺', label: 'Kembalikan semua ke otomatis', sub: present ? 'dari data ujian' : 'kosong', run: () => { A.ket = {}; save(); route(); } }]);
+        },
         'kop-add': () => { KOP.lines.push({ t: '', s: 'm', b: false }); save(); drawKopEd(); draw(); const ins = $$('[data-kl]'); if (ins.length) ins[ins.length - 1].focus(); },
         'kop-reset': () => { KOP.lines = [{ t: s.settings.schoolName || 'NAMA SEKOLAH', s: 'xl', b: true }]; KOP.logo = 24; KOP.garis = 'double'; S.save(); route(); },
         'a-logo': setLogo('logo'), 'a-logo2': setLogo('logo2'),
