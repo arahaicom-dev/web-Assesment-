@@ -1146,3 +1146,6 @@ button.pill { cursor: pointer; border: none; font: inherit; }
   body.print-cards .pn-page:last-child { page-break-after: auto; break-after: auto; }
   .pn-slot, .pn-slot * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.pn-preview .pn-drag { cursor: grab; touch-action: none; }
+.pn-preview .pn-drag:hover { filter: drop-shadow(0 0 3px rgba(255, 214, 0, .95)); }
+body.pn-dragging, body.pn-dragging * { cursor: grabbing !important; user-select: none; }

@@ -160,14 +160,19 @@
     else ny = py + ph + nameBarH * 0.15;
     const nb = land ? 0.36 : null; // pada kartu mendatar teks nama selalu di tengah pita
     const nx = land ? col.x + nameW / 2 : W / 2;
-    if (role) {
+    // label yang bisa digeser: o.off = { role: {x, y}, greet: {x, y} } dalam mm
+    const off = k => { const v = (o.off && o.off[k]) || {}; return [(+v.x || 0) * 10, (+v.y || 0) * 10]; };
+    const drag = (k, inner) => { const [dx, dy] = off(k); return `<g class="pn-drag" data-drag="${k}" transform="translate(${dx.toFixed(1)} ${dy.toFixed(1)})">${inner}</g>`; };
+    if (role && o.rolePos !== 'none') {
       const tw0 = Math.min(land ? col.w : W - pad * 2, role.length * fsTag * 0.66 + fsTag * 1.6);
       // tag jabatan selalu utuh di dalam kartu (tidak terpotong di tepi)
-      const ry = land ? landRoleY : py + ph * 0.1, rx = land ? col.x + tw0 / 2 : Math.min(W - pad * 0.6 - tw0 / 2, Math.max(pad * 0.6 + tw0 / 2, px + pw * 0.08));
+      let ry = land ? landRoleY : py + ph * 0.1, rx = land ? col.x + tw0 / 2 : Math.min(W - pad * 0.6 - tw0 / 2, Math.max(pad * 0.6 + tw0 / 2, px + pw * 0.08));
+      if (!land && o.rolePos === 'atas') { ry = py + fsTag * 0.25; rx = W / 2; }
+      if (!land && o.rolePos === 'bawah') { ry = py + ph * (th.photo === 'circle' ? 0.84 : 0.88); rx = W / 2; }
       const rStyle = o.theme === 'retro' ? [A, '#fdf1dc', -4] : o.theme === 'navy' ? [A, '#111d42', 0] : o.theme === 'ceria' ? ['#fde047', '#3b0764', -3] : o.theme === 'resmi' ? [A, '#ffffff', 0] : [B, '#111827', 0];
-      fore += tag(role, rx, ry, fsTag, rStyle[0], rStyle[1], rStyle[2], land ? col.w : W - pad * 2, { rx: o.theme === 'retro' ? 0 : fsTag * 0.88 });
+      fore += drag('role', tag(role, rx, ry, fsTag, rStyle[0], rStyle[1], rStyle[2], land ? col.w : W - pad * 2, { rx: o.theme === 'retro' ? 0 : fsTag * 0.88 }));
     }
-    if (!land && d.greet && (o.theme === 'retro' || o.theme === 'ceria')) fore += tag(String(d.greet).toUpperCase(), (land ? col.x : nx - nameW / 2) + fsSmall * 3.6, ny - nameBarH * 0.72, fsSmall * 0.95, '#22b8e0', '#ffffff', -4, nameW);
+    if (!land && d.greet && (o.theme === 'retro' || o.theme === 'ceria')) fore += drag('greet', tag(String(d.greet).toUpperCase(), (land ? col.x : nx - nameW / 2) + fsSmall * 3.6, ny - nameBarH * 0.72, fsSmall * 0.95, '#22b8e0', '#ffffff', -4, nameW));
     if (o.theme === 'retro') {
       fore += `<polygon points="${star(nx + nameW / 2 + 1.5 * u, ny + nameBarH * 0.45, 6.5 * u, 2.3 * u, 11, 0.3)}" fill="${B}"/>`;
       fore += `<g transform="rotate(-2 ${nx} ${ny})"><rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2}" width="${nameW}" height="${nameBarH}" fill="${A}"/>${txt(name.toUpperCase(), nx, ny + fsName * 0.36, fsName, nameW - fsName, { fill: '#fdf1dc', font: F_DISP, w: 900, k: 'disp' })}</g>`;

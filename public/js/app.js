@@ -3494,6 +3494,8 @@ B. VII B</pre></div></div></div>
         <div class="field"><span>🎨 Pilih desain</span><div class="pn-themes" id="pn-themes"></div></div>
         <div class="row"><label class="field"><span>📐 Ukuran kartu</span><select id="pn-size">${PC.SIZES.map(z => `<option value="${z.id}" ${P.size === z.id ? 'selected' : ''}>${z.label}</option>`).join('')}</select></label>
           <label class="field pn-custom" style="max-width:110px"><span>Lebar (mm)</span><input type="number" min="30" max="190" id="pn-w" value="${+P.w || 54}"></label><label class="field pn-custom" style="max-width:110px"><span>Tinggi (mm)</span><input type="number" min="30" max="277" id="pn-h" value="${+P.h || 86}"></label></div>
+        <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🏷 Label jabatan <select id="pn-rpos">${[['auto', 'Otomatis (pojok foto)'], ['atas', 'Di atas foto'], ['bawah', 'Di bawah wajah (dada)'], ['none', 'Sembunyikan']].map(([v, l]) => `<option value="${v}" ${(P.rolePos || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+          <button class="btn ghost sm" data-act="pn-offreset" title="Kembalikan label yang sudah digeser ke posisi awal">↺ Posisi label</button><span class="small muted">✋ Label jabatan & sapaan juga bisa <b>digeser langsung</b> di kartu pratinjau.</span></div>
         <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🔠 Ukuran teks <input type="range" min="0.75" max="1.3" step="0.05" id="pn-scale" value="${+P.scale || 1}"></label>
           <label class="small" style="display:flex;gap:8px;align-items:center">🎨 Warna utama <input type="color" id="pn-accent" value="${P.accent || (PC.THEMES[P.theme] || PC.THEMES.retro).accent}"></label><button class="btn ghost sm" data-act="pn-accent0">Warna bawaan</button></div>
         <details class="field" open><summary><b>✏️ Teks kartu</b></summary>
@@ -3512,7 +3514,7 @@ B. VII B</pre></div></div></div>
       </div></div>
       <div id="pn-print" class="hidden"></div>`;
     let photoGet = r => (r && /^data:/.test(r) ? r : null);
-    const card = (m, extra) => PC.svg(Object.assign({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: m.name, role: m.role, nip: m.nip, photo: photoGet(m.photo), logo: K.logo, showNip: P.showNip }), Object.assign({ theme: P.theme, accent: P.accent, scale: +P.scale || 1, id: m.id }, dims(), extra || {}));
+    const card = (m, extra) => PC.svg(Object.assign({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: m.name, role: m.role, nip: m.nip, photo: photoGet(m.photo), logo: K.logo, showNip: P.showNip }), Object.assign({ theme: P.theme, accent: P.accent, scale: +P.scale || 1, id: m.id, rolePos: P.rolePos || 'auto', off: P.off || {} }, dims(), extra || {}));
     const chosen = () => P.members.filter(m => m.on !== false);
     const drawThemes = () => {
       const box = $('#pn-themes'); if (!box) return;
@@ -3553,6 +3555,29 @@ B. VII B</pre></div></div></div>
       async mount(v) {
         await refreshPhotos();
         drawThemes(); drawMembers(); drawPreview();
+        $('#pn-rpos', v).onchange = e => { P.rolePos = e.target.value; P.off = Object.assign({}, P.off, { role: { x: 0, y: 0 } }); save(); drawPreview(); };
+        const pv = $('#pn-preview', v);
+        pv.addEventListener('pointerdown', e => {
+          const g = e.target.closest('[data-drag]'); if (!g) return;
+          const sv = g.ownerSVGElement; if (!sv) return;
+          e.preventDefault();
+          const k = g.dataset.drag, vb = sv.viewBox.baseVal, r = sv.getBoundingClientRect(), sc = vb.width / r.width;
+          const base = Object.assign({ x: 0, y: 0 }, (P.off || {})[k]);
+          const x0 = e.clientX, y0 = e.clientY;
+          // semua kartu ikut bergeser bersamaan agar posisinya seragam
+          const groups = $$(`#pn-preview [data-drag="${k}"]`);
+          g.setPointerCapture && g.setPointerCapture(e.pointerId);
+          document.body.classList.add('pn-dragging');
+          const move = ev => { const dx = (ev.clientX - x0) * sc, dy = (ev.clientY - y0) * sc; groups.forEach(gg => gg.setAttribute('transform', `translate(${(base.x * 10 + dx).toFixed(1)} ${(base.y * 10 + dy).toFixed(1)})`)); };
+          const up = ev => {
+            window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); window.removeEventListener('pointercancel', up);
+            document.body.classList.remove('pn-dragging');
+            const dx = (ev.clientX - x0) * sc / 10, dy = (ev.clientY - y0) * sc / 10;
+            if (Math.abs(dx) + Math.abs(dy) < 0.2) return;
+            P.off = Object.assign({}, P.off, { [k]: { x: +(base.x + dx).toFixed(2), y: +(base.y + dy).toFixed(2) } }); save(); drawPreview();
+          };
+          window.addEventListener('pointermove', move); window.addEventListener('pointerup', up); window.addEventListener('pointercancel', up);
+        });
         $('#pn-size', v).onchange = e => { P.size = e.target.value; const z = PC.SIZES.find(x => x.id === P.size); if (P.size === 'custom' && z) { $('#pn-w', v).value = P.w = P.w || z.w; $('#pn-h', v).value = P.h = P.h || z.h; } save(); drawPreview(); };
         $('#pn-w', v).oninput = e => { P.w = +e.target.value; save(); drawPreview(); };
         $('#pn-h', v).oninput = e => { P.h = +e.target.value; save(); drawPreview(); };
@@ -3573,6 +3598,7 @@ B. VII B</pre></div></div></div>
         window.addEventListener('hashchange', () => { unsheet(); window.removeEventListener('beforeprint', sheet); window.removeEventListener('afterprint', unsheet); }, { once: true });
       },
       actions: {
+        'pn-offreset': () => { P.off = {}; save(); drawPreview(); toast('Posisi label dikembalikan.'); },
         'pn-accent0': () => { P.accent = ''; $('#pn-accent').value = PC.THEMES[P.theme].accent; save(); drawPreview(); },
         'pn-add': () => { P.members.push({ id: S.uid('pn'), name: '', role: 'Anggota', nip: '', on: true }); save(); drawMembers(); drawPreview(); const ins = $$('[data-mf=name]'); if (ins.length) ins[ins.length - 1].focus(); },
         'pn-paste': () => {
