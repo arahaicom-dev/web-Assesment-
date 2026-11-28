@@ -474,6 +474,7 @@ B. VII B</pre></div></div></div>
   });
 
   /* ================= Beranda ================= */
+  const apkUrl = () => location.origin + location.pathname.replace(/[^/]*$/, '') + 'unduh/asesmen-merdeka.apk';
   function viewHome() {
     setTitle('Beranda', 'Kurikulum Merdeka — asesmen, penilaian, dan nilai rapor otomatis');
     renderCtx(false);
@@ -499,6 +500,12 @@ B. VII B</pre></div></div></div>
         </div>
         <div class="stage"><div class="big-cube"><div>SLM</div><div>STS</div><div>SAS</div><div>SAT</div><div>AD</div><div>AF</div></div></div>
       </div>
+      ${window.PWA && PWA.inApp ? '' : `<div class="card app-promo" style="margin-top:18px">
+        <div class="ap-ic">📲</div>
+        <div class="ap-txt"><h3>Aplikasi Asesmen Merdeka untuk HP</h3><p class="small muted">Pasang di HP Android Anda dan murid: buka langsung dari ikon, layar penuh. Bagikan tautan atau QR ini ke murid.</p>
+          <div class="btns"><a class="btn ok" href="${PWA ? PWA.apk : 'unduh/asesmen-merdeka.apk'}" download>🤖 Unduh Aplikasi Android</a><button class="btn soft" data-act="apk-copy">🔗 Salin Tautan</button><button class="btn soft" data-act="apk-wa">💬 Bagikan via WhatsApp</button><button class="btn ghost" data-act="apk-ios">🍎 iPhone</button></div></div>
+        <div class="ap-qr" id="apk-qr-home"></div>
+      </div>`}
       <div class="grid g4" style="margin-top:18px">
         ${stat('🏫', s.classes.length, 'Kelas')}
         ${stat('👩‍🎓', nStudents, 'Murid')}
@@ -524,7 +531,16 @@ B. VII B</pre></div></div></div>
           <span class="pill">${s.questionSets.length} paket soal</span></div></a>
         <a class="card tile tilt" href="#/pengaturan"><div class="ico3d z2">🎨</div><div class="z1"><h3>Ubah Warna Tema</h3><div class="old">${S.PRESETS.length} pilihan + warna bebas</div>
           <p class="small muted" style="margin:8px 0 6px">Pilih warna, mode terang/gelap, dan kedalaman efek 3D sesuai selera.</p></div></a>
-      </div>`
+      </div>`,
+      mount(v) {
+        const box = $('#apk-qr-home', v);
+        if (box) loadQR().then(() => { const q = window.qrcode(0, 'M'); q.addData(apkUrl()); q.make(); box.innerHTML = q.createSvgTag({ cellSize: 3, margin: 2, scalable: true }) + '<small>Pindai untuk unduh</small>'; }).catch(() => box.remove());
+      },
+      actions: {
+        'apk-copy': () => { const u = apkUrl(); (navigator.clipboard ? navigator.clipboard.writeText(u) : Promise.reject()).then(() => toast('Tautan aplikasi disalin.')).catch(() => prompt('Salin tautan ini:', u)); },
+        'apk-wa': () => window.open('https://wa.me/?text=' + encodeURIComponent('Pasang aplikasi Asesmen Merdeka di HP Android:\n' + apkUrl() + '\n\nSetelah terpasang, buka aplikasi lalu pilih Gabung Ujian/Kuis.'), '_blank'),
+        'apk-ios': () => window.PWA && PWA.iosHelp()
+      }
     };
   }
 

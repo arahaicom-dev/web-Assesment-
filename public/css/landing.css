@@ -213,3 +213,11 @@ html[data-mode="light"] .sky .cloud.c1 { top: 8%; }
 .app-dl-qr { background: #fff; color: #1b1663; border-radius: 20px; padding: 16px; text-align: center; font-weight: 700; }
 .app-dl-qr svg { width: 150px; height: 150px; display: block; margin: 0 auto 6px; }
 html.in-app #aplikasi { display: none; }
+.apk-hero { display: inline-flex; align-items: center; gap: 14px; margin-top: 18px; padding: 12px 18px 12px 12px; border-radius: 20px; background: linear-gradient(135deg, #3ddc84, #1fa463); color: #062b17; text-decoration: none; box-shadow: 0 10px 30px rgba(61, 220, 132, .35); transition: transform .15s; }
+.apk-hero:hover { transform: translateY(-2px); }
+.apk-hero .apk-ic { width: 46px; height: 46px; border-radius: 14px; background: #fff; display: flex; align-items: center; justify-content: center; font-size: 26px; }
+.apk-hero b { display: block; font-size: 1.08rem; } .apk-hero small { display: block; font-weight: 600; opacity: .8; }
+.apk-hero .apk-go { font-size: 22px; font-weight: 900; margin-left: 6px; }
+.lp-nav > .apk-nav { margin-left: auto; padding: 10px 16px; } .lp-nav > .apk-nav + #btn-login { margin-left: 8px; }
+@media (max-width: 860px) { .lp-nav > .apk-nav { display: none; } }
+html.in-app .no-app { display: none !important; }
