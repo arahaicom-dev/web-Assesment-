@@ -1076,3 +1076,11 @@ button.pill { cursor: pointer; border: none; font: inherit; }
 .q-card.flash { animation: qflash 1.6s ease; }
 @keyframes qflash { 0%, 60% { box-shadow: 0 0 0 4px rgba(255, 176, 46, .85); } 100% { box-shadow: none; } }
 .key-pill { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* ---------- Klasemen tim (Kuis Seru) ---------- */
+.team-board .tb-row { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; margin-bottom: 8px; background: color-mix(in srgb, var(--tc) 14%, transparent); border-left: 6px solid var(--tc); }
+.team-board .tb-rk { font-size: 1.3rem; font-weight: 900; width: 34px; text-align: center; }
+.team-board .tb-nm { flex: 0 0 34%; font-weight: 800; display: flex; flex-direction: column; min-width: 0; }
+.team-board .tb-nm small { font-weight: 500; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.team-board .tb-bar { flex: 1; height: 14px; border-radius: 99px; background: rgba(127, 127, 127, .18); overflow: hidden; }
+.team-board .tb-bar i { display: block; height: 100%; background: var(--tc); border-radius: 99px; transition: width .6s; }
+.team-board .tb-sc { font-size: 1.2rem; min-width: 70px; text-align: right; }

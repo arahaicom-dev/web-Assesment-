@@ -10,6 +10,16 @@
   const WRONG = ['Tetap semangat!', 'Ayo, soal berikutnya pasti bisa!', 'Tidak apa-apa, lanjut!', 'Hampir! Coba lagi di soal berikut.'];
   const G = { code: '', info: null, token: '', me: null, q: null, timer: null, deadline: 0, poll: null, busy: false, avatar: AVATARS[Math.floor(Math.random() * AVATARS.length)] };
   const pick = a => a[Math.floor(Math.random() * a.length)];
+  /* Tim & power-up (nama dan ikon milik Kuis Seru sendiri) */
+  const TEAMS = [{ n: 'Tim Merah', e: '🔴', c: '#ff5a5f' }, { n: 'Tim Biru', e: '🔵', c: '#3d8bff' }, { n: 'Tim Hijau', e: '🟢', c: '#22c55e' }, { n: 'Tim Kuning', e: '🟡', c: '#f5b800' }, { n: 'Tim Ungu', e: '🟣', c: '#a855f7' }, { n: 'Tim Oranye', e: '🟠', c: '#ff8a1f' }];
+  const POWER = {
+    x2: { ic: '✖️2', n: 'Poin Ganda', d: 'Poin jawaban benar berikutnya dikali 2' },
+    '5050': { ic: '✂️', n: '50 : 50', d: 'Hapus 2 pilihan yang salah' },
+    shield: { ic: '🛡️', n: 'Perisai Beruntun', d: 'Beruntunmu tidak putus walau salah sekali' },
+    time: { ic: '⏳', n: '+10 Detik', d: 'Tambah waktu menjawab soal ini' }
+  };
+  const REACT_OK = ['🤩', '🥳', '😎', '🚀', '🦸', '🏆', '💯', '⚡', '🌟', '🐐'];
+  const REACT_NO = ['😅', '🙈', '🤔', '😬', '🫠', '🐢', '🌧️', '🧐'];
   const isExam = () => G.info && G.info.mode === 'exam';
   const fmt = n => (+n || 0).toLocaleString('id-ID');
 
@@ -96,7 +106,9 @@
   function setHud() {
     if (!G.me) { hud.innerHTML = ''; return; }
     if (isExam()) { hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b>`; return; }
-    hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b><span class="kz-pts">⭐ ${fmt(G.me.score)}</span>${G.me.streak > 1 ? `<span class="kz-streak">🔥${G.me.streak}</span>` : ''}`;
+    const tm = G.me.team !== null && G.me.team !== undefined ? TEAMS[G.me.team] : null;
+    const fx = G.me.fx || {};
+    hud.innerHTML = `<span class="kz-av sm">${esc(G.me.avatar || '🙂')}</span><b>${esc(G.me.nickname)}</b>${tm ? `<span class="kz-team" style="--tc:${tm.c}" title="${tm.n}">${tm.e}<span class="tn"> ${tm.n}</span></span>` : ''}<span class="kz-pts">⭐ ${fmt(G.me.score)}</span>${G.me.streak > 1 ? `<span class="kz-streak">🔥${G.me.streak}</span>` : ''}${fx.x2 ? '<span class="kz-fx">✖️2 aktif</span>' : ''}${fx.shield ? '<span class="kz-fx">🛡️ aktif</span>' : ''}`;
   }
   function stopAll() { clearInterval(G.timer); clearInterval(G.poll); G.timer = G.poll = null; }
 
@@ -216,6 +228,8 @@
       $('#lb-live').innerHTML = `<div class="kz-card pop" style="text-align:center;max-width:720px;margin:3vh auto 0">
         <div class="kz-big-ico bounce">${esc(G.me.avatar || '🙂')}</div>
         <h2>Halo, ${esc(G.me.nickname)}!</h2><p class="muted">Kamu sudah masuk. Tunggu guru memulai ${isExam() ? 'ujian' : 'kuis'}…</p>
+        ${G.me.team !== null && G.me.team !== undefined && TEAMS[G.me.team] ? `<div class="kz-team big" style="--tc:${TEAMS[G.me.team].c}">Kamu masuk <b>${TEAMS[G.me.team].e} ${TEAMS[G.me.team].n}</b> — kumpulkan poin untuk timmu!</div>` : ''}
+        ${G.info && G.info.powerups ? '<div class="small muted" style="margin-top:6px">🎁 Benar 3 kali berturut-turut = dapat power-up!</div>' : ''}
         <div class="kz-dots"><i></i><i></i><i></i></div>
         <div class="kz-lobby">${(st.lobby || []).map(p => `<span class="kz-chip">${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('')}</div>
         <div class="small muted" style="margin-top:10px">${st.players} pemain bergabung</div></div>`;
@@ -245,7 +259,8 @@
     if (isExam()) return examStart();
     if (d.ended) { const s = await api('state'); return final(s); }
     if (d.finished) return waitEnd();
-    G.q = d.question; G.busy = false;
+    if (d.redemption && d.redemption.n === 1 && !G.redShown) { G.redShown = true; return redemptionIntro(d.redemption.of); }
+    G.q = d.question; G.busy = false; G.red = d.redemption;
     const q = d.question;
     let body;
     if (q.type === 'pg') body = `<div class="kz-opts n${q.options.length}">${q.options.map((o, k) => `<button class="kz-opt c${k % 6}" data-v="${esc(o.label)}"><span class="kz-opt-l">${'ABCDEF'[k]}</span><span>${QT.rich(o.text)}</span></button>`).join('')}</div>`;
@@ -253,26 +268,65 @@
     else if (q.type === 'isian') body = `<form id="isian" class="kz-isian"><input id="ans" autocomplete="off" placeholder="Ketik jawabanmu…"><button class="btn lg kz-go" type="submit">Kirim</button></form>`;
     else body = `<div class="kz-card kz-qt" id="qt-host"></div><div style="text-align:center;margin-top:12px"><button class="btn lg kz-go" id="qt-send">${q.type === 'slide' ? 'Lanjut ▶' : 'Kirim ✔'}</button></div>`;
     view.innerHTML = `<div class="kz-q pop">
-      <div class="kz-q-head"><span class="kz-pill">${d.index} / ${d.total}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
+      ${d.redemption ? `<div class="kz-red-bar">🔁 Soal Penebusan ${d.redemption.n}/${d.redemption.of} — jawab benar untuk merebut kembali poinmu!</div>` : ''}
+      <div class="kz-q-head"><span class="kz-pill">${d.redemption ? '🔁' : `${d.index} / ${d.total}`}</span><div class="kz-timebar"><i id="tb"></i></div><span class="kz-sec" id="sec">${d.time}</span></div>
       ${q.type === 'pg' || q.type === 'bs' || q.type === 'isian' ? '' : `<div class="kz-type">${typeLabel(q.type)}</div>`}
       ${QT.passageHTML(q)}
       <div class="kz-card kz-q-card">${q.image && !ownImg(q.type) ? `<img src="${q.image}" alt="" class="kz-img zoomable">` : ''}${hideText(q.type) ? '<div class="kz-q-text small">Lengkapi kalimat berikut.</div>' : `<div class="kz-q-text">${QT.rich(q.text)}</div>`}</div>
-      ${body}</div>`;
+      ${body}<div id="pu-bar"></div></div>`;
     const host = $('#qt-host');
     if (host) { const h = QT.mount(host, q, '', {}); $('#qt-send').onclick = () => send(h.get() || ''); }
-    const total = d.time * 1000;
+    G.total = d.limitMs || d.time * 1000;
     G.deadline = Date.now() + d.remainingMs;
+    (d.hide || []).forEach(l => { const b = $(`.kz-opt[data-v="${l}"]`); if (b) b.classList.add('gone'); });
+    drawPowers();
     const tick = () => {
-      const left = Math.max(0, G.deadline - Date.now());
+      const left = Math.max(0, G.deadline - Date.now()), total = G.total;
       const tb = $('#tb'); if (!tb) return clearInterval(G.timer);
-      tb.style.width = (left / total * 100) + '%';
+      tb.style.width = Math.min(100, left / total * 100) + '%';
       tb.classList.toggle('low', left < total * 0.25);
       const sec = Math.ceil(left / 1000); const el = $('#sec'); if (el.textContent !== String(sec)) { el.textContent = sec; if (sec <= 3 && sec > 0) sfx.tick(); }
       if (left <= 0) { clearInterval(G.timer); send(''); }
     };
     tick(); G.timer = setInterval(tick, 100);
-    $$('.kz-opt').forEach(b => b.onclick = () => { $$('.kz-opt').forEach(x => x.classList.add(x === b ? 'picked' : 'dim')); send(b.dataset.v, b); });
+    // guru bisa mengakhiri kuis kapan saja: cek berkala agar murid langsung melihat juara
+    G.poll = setInterval(async () => { try { const st = await api('state'); if (st.status === 'ended') { stopAll(); final(st); } } catch (e) { /* */ } }, 4000);
+    $$('.kz-opt').forEach(b => b.onclick = () => { if (b.classList.contains('gone')) return; $$('.kz-opt').forEach(x => x.classList.add(x === b ? 'picked' : 'dim')); send(b.dataset.v, b); });
     const f = $('#isian'); if (f) { $('#ans').focus(); f.onsubmit = e => { e.preventDefault(); send($('#ans').value.trim()); }; }
+  }
+
+  /** Tombol power-up di bawah soal. */
+  function drawPowers() {
+    const box = $('#pu-bar'); if (!box) return;
+    const inv = (G.me && G.me.powerups) || [];
+    if (!G.info || !G.info.powerups || G.red) { box.innerHTML = ''; return; }
+    box.innerHTML = inv.length ? `<div class="kz-pu"><span class="small muted">Power-up:</span>${inv.map((k, i) => POWER[k] ? `<button class="kz-pu-btn" data-k="${k}" data-i="${i}" title="${esc(POWER[k].d)}"><span>${POWER[k].ic}</span><small>${esc(POWER[k].n)}</small></button>` : '').join('')}</div>`
+      : '<div class="kz-pu empty small muted">🎁 Jawab benar 3× berturut-turut untuk mendapat power-up</div>';
+    $$('.kz-pu-btn', box).forEach(b => b.onclick = async () => {
+      if (G.busy) return;
+      const k = b.dataset.k;
+      if (k === '5050' && (!G.q || G.q.type !== 'pg' || (G.q.options || []).length < 3)) return toast('50:50 hanya untuk soal pilihan ganda. Simpan untuk soal berikutnya.', 'bad');
+      b.disabled = true;
+      try {
+        const r = await api('power', { kind: k });
+        G.me = r.me; setHud();
+        if (r.hide) r.hide.forEach(l => { const o = $(`.kz-opt[data-v="${l}"]`); if (o) o.classList.add('gone'); });
+        if (r.remainingMs !== undefined) { G.deadline = Date.now() + r.remainingMs; G.total = r.limitMs; }
+        powerToast(k, true); sfx.go();
+        drawPowers();
+      } catch (e) { b.disabled = false; toast(e.message, 'bad'); }
+    });
+  }
+  function powerToast(k, used) {
+    const p = POWER[k]; if (!p) return;
+    const el = document.createElement('div'); el.className = 'kz-pu-pop';
+    el.innerHTML = `<div class="kz-pu-ic">${p.ic}</div><b>${used ? 'Dipakai: ' : '🎁 Dapat power-up: '}${esc(p.n)}</b><small>${esc(p.d)}</small>`;
+    document.body.appendChild(el); setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 300); }, used ? 1300 : 2200);
+  }
+  function redemptionIntro(n) {
+    view.innerHTML = `<div class="kz-card pop kz-red-intro"><div class="kz-big-ico bounce">🔁</div><h2>Soal Penebusan!</h2>
+      <p>${n} soal yang tadi salah muncul lagi. Jawab benar untuk merebut kembali poin dan memperbaiki nilaimu.</p><div class="kz-dots"><i></i><i></i><i></i></div></div>`;
+    sfx.go(); setTimeout(nextQ, 2600);
   }
 
   async function send(answer) {
@@ -292,14 +346,18 @@
     (r.correct ? sfx.ok : sfx.bad)();
     const fb = document.createElement('div');
     fb.className = 'kz-feedback ' + (r.correct ? 'ok' : 'bad');
-    fb.innerHTML = `<div class="kz-fb-ico">${r.correct ? '🎉' : (r.late ? '⏰' : '💪')}</div>
+    fb.innerHTML = `<div class="kz-fb-ico kz-react">${r.correct ? pick(REACT_OK) : (r.late ? '⏰' : pick(REACT_NO))}</div>
       <div class="kz-fb-title">${r.correct ? pick(RIGHT) : (r.late || answer === '' ? 'Waktu habis!' : r.partial ? 'Hampir!' : pick(WRONG))}</div>
       ${r.correct ? `<div class="kz-fb-pts">+${fmt(r.points)}</div>` : r.partial ? `<div class="kz-fb-pts">+${fmt(r.points)}</div><div class="kz-fb-streak">Benar sebagian (${Math.round(r.partial * 100)}%)</div>` : ''}
-      ${r.streak > 1 ? `<div class="kz-fb-streak">🔥 Beruntun ${r.streak}!</div>` : ''}
+      ${r.redemption && r.correct ? '<div class="kz-fb-streak">🔁 Poin berhasil direbut kembali!</div>' : ''}
+      ${(r.used || []).indexOf('x2') >= 0 && r.correct ? '<div class="kz-fb-streak">✖️2 Poin ganda!</div>' : ''}
+      ${r.shielded ? `<div class="kz-fb-streak">🛡️ Perisai melindungi beruntunmu (🔥${r.streak})</div>` : ''}
+      ${!r.redemption && r.streak > 1 ? `<div class="kz-fb-streak">🔥 Beruntun ${r.streak}!</div>` : ''}
       ${!r.correct && r.correctText ? `<div class="kz-fb-key">Jawaban benar: <b>${esc(r.correctText)}</b></div>` : ''}
       <div class="kz-fb-rank">Peringkat #${r.me.rank} dari ${r.players} · ⭐ ${fmt(r.me.score)}</div>`;
     document.body.appendChild(fb);
-    setTimeout(() => { fb.classList.add('out'); setTimeout(() => fb.remove(), 300); nextQ(); }, r.correct ? 1600 : 2400);
+    if (r.gotPower) setTimeout(() => powerToast(r.gotPower, false), 500);
+    setTimeout(() => { fb.classList.add('out'); setTimeout(() => fb.remove(), 300); nextQ(); }, (r.correct ? 1600 : 2400) + (r.gotPower ? 900 : 0));
   }
 
   /* ---------- 5. Selesai ---------- */
@@ -310,10 +368,12 @@
         <div class="kz-big-ico bounce">🏁</div><h2>Kamu sudah selesai!</h2>
         <div class="kz-final-score">${fmt(me.score)}</div><div class="muted">poin · peringkat sementara #${me.rank}</div>
         <div class="kz-stats"><div><b>${me.correct}/${me.total}</b><small>Benar</small></div><div><b>${me.total ? Math.round(me.correct / me.total * 100) : 0}%</b><small>Akurasi</small></div><div><b>🔥${me.bestStreak}</b><small>Beruntun terbaik</small></div></div>
+        ${me.redeemed ? `<div class="small" style="margin:6px 0">🔁 ${me.redeemed} soal berhasil ditebus</div>` : ''}
+        ${teamsHTML(G.teams)}
         <p class="small muted">Tunggu teman-teman selesai dan guru mengumumkan juara…</p></div>`;
     };
     draw(G.me);
-    G.poll = setInterval(async () => { try { const s = await api('state'); G.me = s.me; setHud(); if (s.status === 'ended') { stopAll(); final(s); } else draw(s.me); } catch (e) { /* */ } }, 3000);
+    G.poll = setInterval(async () => { try { const s = await api('state'); G.me = s.me; G.teams = s.teams; setHud(); if (s.status === 'ended') { stopAll(); final(s); } else draw(s.me); } catch (e) { /* */ } }, 3000);
   }
   function final(s) {
     stopAll();
@@ -324,9 +384,14 @@
       <h2>🏆 Kuis selesai!</h2>
       <div class="kz-podium">${podium}</div>
       <div class="kz-mine"><span class="kz-av">${esc(me.avatar || '🙂')}</span><div style="text-align:left"><b>${esc(me.nickname)}</b><div class="small muted">Peringkat #${me.rank} · ${me.correct}/${me.total} benar</div></div><div class="kz-final-score sm">${fmt(me.score)}</div></div>
+      ${teamsHTML(s.teams, true)}
       <button class="btn ghost" id="again" style="margin-top:14px">Gabung kuis lain</button></div>`;
     if (me.rank <= 3) confetti();
     $('#again').onclick = () => { localStorage.removeItem(saveKey()); G.code = ''; G.token = ''; stepCode(); };
+  }
+  function teamsHTML(ts, fin) {
+    if (!ts || !ts.length) return '';
+    return `<div class="kz-teams"><div class="small muted" style="margin-bottom:6px">${fin ? '🏆 Juara Tim' : 'Klasemen tim sementara'} · rata-rata poin anggota</div>${ts.map((t, i) => { const T = TEAMS[t.team]; const mine = G.me && G.me.team === t.team; return `<div class="kz-team-row ${mine ? 'mine' : ''}" style="--tc:${T.c}"><b>${i < 3 && fin ? ['🥇', '🥈', '🥉'][i] : '#' + (i + 1)}</b><span>${T.e} ${T.n}${mine ? ' (timmu)' : ''}</span><small>${t.members} anggota</small><b>${fmt(t.avg)}</b></div>`; }).join('')}</div>`;
   }
   function confetti() {
     const box = document.createElement('div'); box.className = 'kz-confetti';

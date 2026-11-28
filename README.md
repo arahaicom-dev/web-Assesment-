@@ -136,6 +136,15 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Kode sumber di folder `android/`. Membangun ulang: siapkan Android SDK, salin kunci ke `android/keystore/` (`asesmen-release.jks` + `keystore.properties`, **tidak** disimpan di GitHub), naikkan `appVersionCode` di `android/gradle.properties`, lalu `cd android && ./gradlew assembleRelease`. Alamat website bisa diubah di `appUrl`.
 - **Simpan baik-baik file kunci (keystore)**: pembaruan APK harus ditandatangani kunci yang sama, kalau tidak HP menolak memperbarui aplikasi.
 
+## Kuis Seru: power-up, soal penebusan, mode tim (v5.18)
+
+Terinspirasi sistem permainan kuis populer, dengan nama dan tampilan milik sendiri:
+- **🎁 Power-up**: murid mendapat 1 power-up setiap 3 jawaban benar beruntun (maks. 3 disimpan): **✖️2 Poin Ganda**, **✂️ 50:50** (hapus 2 pilihan salah), **🛡️ Perisai Beruntun** (beruntun tidak putus saat salah), **⏳ +10 Detik**. Dihitung di server.
+- **🔁 Soal penebusan**: setelah soal terakhir, 2 soal yang salah (3 bila ≥15 soal) muncul lagi. Benar → soal dihitung benar + setengah poin.
+- **👥 Mode tim**: 2–6 tim, murid dibagi otomatis seimbang. Juara tim = rata-rata poin anggota. Klasemen tim tampil di layar guru dan HP murid.
+- Reaksi emoji beranimasi setelah menjawab; murid yang sedang menjawab langsung melihat juara saat guru mengakhiri kuis.
+- Semua bisa dinyalakan/dimatikan saat membuat kuis (mode Permainan).
+
 ## Kunci jawaban otomatis dari PDF (v5.17)
 
 - Tulis bagian **KUNCI JAWABAN** (atau *Pedoman Penskoran dan Kunci Jawaban*) di bawah soal pada PDF. Saat diunggah, kunci **semua jenis soal** otomatis terpasang dan tercentang: pilihan ganda, pilihan ganda kompleks, benar/salah, menjodohkan, isian, dan uraian (jawaban acuan).

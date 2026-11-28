@@ -2454,6 +2454,9 @@ B. VII B</pre></div></div></div>
         <label style="display:flex;gap:8px"><input type="checkbox" id="g-so" checked> Acak urutan pilihan jawaban</label>
         <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-sa" checked> Tampilkan jawaban benar setelah menjawab</label>
         <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-sb" checked> Bonus poin untuk jawaban cepat</label>
+        <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-pu" ${preset.powerups === false ? '' : 'checked'}> 🎁 Power-up (Poin Ganda, 50:50, Perisai, +10 Detik) — didapat tiap 3 jawaban benar beruntun</label>
+        <label class="only-game" style="display:flex;gap:8px"><input type="checkbox" id="g-red" ${preset.redemption === false ? '' : 'checked'}> 🔁 Soal penebusan — soal yang salah muncul lagi di akhir untuk merebut kembali poin</label>
+        <label class="field only-game" style="margin:4px 0 0"><span>👥 Mode tim</span><select id="g-teams"><option value="0">Sendiri-sendiri (tanpa tim)</option>${[2, 3, 4, 5, 6].map(n => `<option value="${n}" ${+preset.teams === n ? 'selected' : ''}>${n} tim — murid dibagi otomatis, juara = rata-rata poin tim</option>`).join('')}</select></label>
         <label class="only-exam" style="display:flex;gap:8px"><input type="checkbox" id="g-sr" checked> Tampilkan nilai ke murid setelah selesai</label>
       </div>
       <label class="field only-exam" style="margin-top:10px"><span>Pengawasan: jika murid keluar dari halaman ujian (pindah aplikasi/tab)…</span><select id="g-viol">
@@ -2508,7 +2511,8 @@ B. VII B</pre></div></div></div>
         hostAutoMusic = hostOn ? track : null;
         const r = await S.api('games', { body: { mode, music: musicOn ? track : '', qsetId: $('#g-qs', m).value, title: $('#g-title', m).value.trim(), classId: $('#g-cls', m).value === '__multi' ? null : ($('#g-cls', m).value || null), classIds: $('#g-cls', m).value === '__multi' ? $$('#g-multi input:checked', m).map(x => x.value) : undefined, subjectId: $('#g-subj', m).value || null, time: +$('#g-time', m).value,
           duration: +$('#g-dur', m).value, showResult: $('#g-sr', m).checked, maxViolations: +$('#g-viol', m).value,
-          shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked } });
+          shuffleQ: $('#g-sq', m).checked, shuffleOpt: $('#g-so', m).checked, showAnswer: $('#g-sa', m).checked, speedBonus: $('#g-sb', m).checked,
+          powerups: $('#g-pu', m).checked, redemption: $('#g-red', m).checked, teams: +$('#g-teams', m).value } });
         closeModal();
         if (r.skipped) toast(r.skipped + ' soal dilewati (' + (mode === 'exam' ? 'belum ada kunci' : 'uraian / belum ada kunci') + ').', 'bad');
         location.hash = '#/kuis/' + r.id;
@@ -2544,7 +2548,7 @@ B. VII B</pre></div></div></div>
         save: () => saveGameScores(out.data),
         xls: () => exportTable($('#res-table'), 'Kuis_' + out.data.game.title.replace(/[^\w\s-]/g, '')),
         music: () => hostMusic(),
-        again: () => { const g = out.data.game; newGameModal({ music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, classIds: gameClassIds(g), subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
+        again: () => { const g = out.data.game; newGameModal({ powerups: g.settings.powerups, redemption: g.settings.redemption, teams: g.settings.teams, music: g.settings.music, mode: g.settings.mode, qsetId: g.settings.qsetId, title: g.title, classId: g.classId, classIds: gameClassIds(g), subjectId: g.subjectId, time: g.settings.time, duration: g.settings.duration }); },
         reset: async el => { if (!await confirmBox(`Ulang ujian untuk <b>${esc(el.dataset.n)}</b>? Jawaban, nilai, dan catatan pelanggarannya dihapus sehingga ia bisa mengerjakan dari awal.`, 'Ulang Ujian')) return; try { await S.api('games/' + id + '/reset', { body: { playerId: +el.dataset.id } }); out.load(); } catch (e) { toast(e.message, 'bad'); } },
         review: el => examReviewModal(out, +el.dataset.id),
         fix: el => {
@@ -2569,6 +2573,22 @@ B. VII B</pre></div></div></div>
     $$('[data-act=start],[data-act=end],[data-act=kick],[data-act=reset]', box).forEach(b => b.remove());
     box.insertAdjacentHTML('afterbegin', `<div class="note warn" style="margin-bottom:12px">👁 <b>Hanya lihat.</b> Kuis ini dibuat oleh <b>${esc(d.game.creatorName || 'guru lain')}</b>. Hanya pembuatnya atau admin sekolah yang bisa memulai, mengakhiri, atau mengoreksi.</div>`);
   }
+  const TEAMS = [{ n: 'Tim Merah', e: '🔴', c: '#ff5a5f' }, { n: 'Tim Biru', e: '🔵', c: '#3d8bff' }, { n: 'Tim Hijau', e: '🟢', c: '#22c55e' }, { n: 'Tim Kuning', e: '🟡', c: '#f5b800' }, { n: 'Tim Ungu', e: '🟣', c: '#a855f7' }, { n: 'Tim Oranye', e: '🟠', c: '#ff8a1f' }];
+  /** Klasemen tim: rata-rata poin anggota. */
+  function teamStand(g, ps) {
+    const n = +(g.settings && g.settings.teams) || 0; if (!n) return [];
+    const t = Array.from({ length: n }, (_, k) => ({ team: k, members: [], score: 0, correct: 0 }));
+    ps.forEach(p => { if (p.team !== null && p.team !== undefined && t[p.team]) { t[p.team].members.push(p); t[p.team].score += p.score; t[p.team].correct += p.correct; } });
+    t.forEach(x => { x.avg = x.members.length ? Math.round(x.score / x.members.length) : 0; });
+    return t.sort((a, b) => b.avg - a.avg || b.correct - a.correct);
+  }
+  const teamBoardHTML = (g, ps, fin) => {
+    const ts = teamStand(g, ps); if (!ts.length) return '';
+    const max = Math.max(1, ...ts.map(x => x.avg));
+    return `<div class="card team-board"><div class="card-head"><h3>${fin ? '🏆 Juara Tim' : '👥 Klasemen Tim'}</h3><span class="small muted">rata-rata poin anggota</span></div>
+      ${ts.map((x, i) => { const T = TEAMS[x.team]; return `<div class="tb-row" style="--tc:${T.c}"><span class="tb-rk">${fin && i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><span class="tb-nm">${T.e} ${T.n}<small>${x.members.length} anggota: ${x.members.map(p => esc(p.nickname)).join(', ') || '–'}</small></span><div class="tb-bar"><i style="width:${Math.round(x.avg / max * 100)}%"></i></div><b class="tb-sc">${x.avg.toLocaleString('id-ID')}</b></div>`; }).join('')}</div>`;
+  };
+  const teamDot = p => p.team !== null && p.team !== undefined && TEAMS[p.team] ? `<span title="${TEAMS[p.team].n}">${TEAMS[p.team].e}</span> ` : '';
   const gameClassIds = g => (g.settings && g.settings.classIds && g.settings.classIds.length ? g.settings.classIds : g.classId ? [g.classId] : []);
   const gameClassNames = g => gameClassIds(g).map(id => S.cls(id)).filter(Boolean).map(c => c.name).join(', ');
   function renderHost0(d) {
@@ -2587,7 +2607,8 @@ B. VII B</pre></div></div></div>
           <div class="btns" style="margin-top:12px"><button class="btn soft sm" data-act="copy">🔗 Salin Link</button><button class="btn ok sm" data-act="wa">💬 Bagikan ke WhatsApp</button></div></div>
         <div style="text-align:center"><div style="font-size:3.4rem;font-weight:900">${ps.length}</div><div class="muted">pemain bergabung</div>
           <button class="btn lg" data-act="start" ${ps.length ? '' : 'disabled'} style="margin-top:14px">▶ Mulai Kuis</button></div></div>
-        <div class="card"><h3>Pemain di ruang tunggu</h3><div class="host-players">${ps.map(p => `<span class="kz-chip" title="Klik untuk mengeluarkan" style="cursor:pointer" data-act="kick" data-id="${p.id}" data-n="${esc(p.nickname)}">${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('') || '<span class="muted">Menunggu murid bergabung…</span>'}</div></div>`;
+        <div class="card"><h3>Pemain di ruang tunggu</h3><div class="host-players">${ps.map(p => `<span class="kz-chip" title="Klik untuk mengeluarkan" style="cursor:pointer" data-act="kick" data-id="${p.id}" data-n="${esc(p.nickname)}">${teamDot(p)}${esc(p.avatar || '🙂')} ${esc(p.nickname)}</span>`).join('') || '<span class="muted">Menunggu murid bergabung…</span>'}</div>
+          ${[g.settings.teams ? `👥 ${g.settings.teams} tim` : '', g.settings.powerups ? '🎁 Power-up aktif' : '', g.settings.redemption ? '🔁 Soal penebusan aktif' : ''].filter(Boolean).map(x => `<span class="pill">${x}</span>`).join(' ')}</div>`;
       return;
     }
     if (g.status === 'running') {
@@ -2597,8 +2618,9 @@ B. VII B</pre></div></div></div>
           <div class="card stat"><div class="blob"><span>👥</span></div><div class="num">${ps.length}</div><div class="lbl">Pemain</div></div>
           <div class="card stat"><div class="blob"><span>🏁</span></div><div class="num">${finished}/${ps.length}</div><div class="lbl">Sudah selesai</div></div>
           <div class="card stat"><div class="blob"><span>🎯</span></div><div class="num">${avg}%</div><div class="lbl">Rata-rata akurasi</div></div></div>
+        ${teamBoardHTML(g, ps) ? `<div style="margin-top:18px">${teamBoardHTML(g, ps)}</div>` : ''}
         <div class="card host-board" style="margin-top:18px"><div class="card-head"><h3>🏆 Papan Peringkat</h3>${finished === ps.length && ps.length ? '<span class="pill ok">Semua sudah selesai</span>' : ''}<button class="btn danger" data-act="end">■ Akhiri Kuis & Umumkan Juara</button></div>
-          ${ps.map((p, i) => { const ans = Object.values(p.answers || {}); return `<div class="row-b"><span class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><span class="kz-av sm">${esc(p.avatar || '🙂')}</span><span class="nm">${esc(p.nickname)}${p.streak > 1 ? ` <span class="kz-streak">🔥${p.streak}</span>` : ''}</span>
+          ${ps.map((p, i) => { const ans = Object.values(p.answers || {}); return `<div class="row-b"><span class="rk">${i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}</span><span class="kz-av sm">${esc(p.avatar || '🙂')}</span><span class="nm">${teamDot(p)}${esc(p.nickname)}${p.streak > 1 ? ` <span class="kz-streak">🔥${p.streak}</span>` : ''}${p.redeemed ? ` <span class="pill" title="Soal berhasil ditebus">🔁${p.redeemed}</span>` : ''}</span>
             <div class="prog">${Array.from({ length: total }, (_, k) => `<i class="${ans[k] ? (ans[k].ok ? 'ok' : 'no') : ''}"></i>`).join('')}</div><span class="sc">${p.score.toLocaleString('id-ID')}</span><span class="acc">${acc(p)}%</span></div>`; }).join('') || '<p class="muted">Belum ada pemain.</p>'}</div>`;
       return;
     }
@@ -2606,10 +2628,11 @@ B. VII B</pre></div></div></div>
     const podium = [1, 0, 2].filter(k => ps[k]).map(k => `<div class="kz-pod p${k + 1}"><div class="kz-av lg">${esc(ps[k].avatar || '🙂')}</div><div class="kz-pod-name">${esc(ps[k].nickname)}</div><div class="kz-pod-box"><b>${k + 1}</b><small>${ps[k].score.toLocaleString('id-ID')}</small></div></div>`).join('');
     const linked = ps.filter(p => p.student_id).length;
     box.innerHTML = top + `<div class="card" style="text-align:center"><h2>🏆 Juara Kuis</h2><div class="kz-podium">${podium || '<p class="muted">Tidak ada pemain.</p>'}</div></div>
+      ${teamBoardHTML(g, ps, true)}
       <div class="grid" style="grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);align-items:start" id="res-grid">
         <div class="card"><div class="card-head"><h3>Hasil Pemain</h3><div class="btns">${g.classId ? `<button class="btn ok sm" data-act="save" ${linked ? '' : 'disabled'}>💾 Simpan sebagai Nilai</button>` : ''}<button class="btn soft sm" data-act="xls">⬇ Excel</button><button class="btn ghost sm" data-act="again">↻ Main Lagi</button></div></div>
           <div class="table-wrap"><table id="res-table"><thead><tr><th class="num">Rank</th><th>Nama</th><th class="num">Poin</th><th class="num">Benar</th><th class="num">Nilai (0–100)</th><th class="num">Beruntun</th></tr></thead><tbody>
-          ${ps.map((p, i) => `<tr><td class="num">${i + 1}</td><td>${esc(p.avatar || '')} ${esc(p.nickname)}</td><td class="num"><b>${p.score.toLocaleString('id-ID')}</b></td><td class="num">${p.correct}/${total}</td><td class="num">${Math.round(p.correct / total * 100)}</td><td class="num">🔥${p.best_streak}</td></tr>`).join('')}
+          ${ps.map((p, i) => `<tr><td class="num">${i + 1}</td><td>${teamDot(p)}${esc(p.avatar || '')} ${esc(p.nickname)}</td><td class="num"><b>${p.score.toLocaleString('id-ID')}</b></td><td class="num">${p.correct}/${total}</td><td class="num">${Math.round(p.correct / total * 100)}</td><td class="num">🔥${p.best_streak}</td></tr>`).join('')}
           </tbody></table></div>
           ${g.classId ? '<p class="small muted">Nilai = jumlah benar ÷ jumlah soal × 100 (poin permainan tidak dipakai sebagai nilai).</p>' : '<p class="small muted">Kuis ini memakai nama bebas, jadi hasilnya tidak bisa disimpan ke daftar nilai. Pilih kelas saat membuat kuis agar bisa disimpan.</p>'}</div>
         <div class="card"><h3>Ketercapaian per Soal</h3>${d.questions.map(q => { const pc = q.n ? Math.round(q.ok / q.n * 100) : 0; return `<div class="q-acc" title="${esc(q.text)}"><b>No.${q.no}</b><div><div class="small ellipsis">${esc(q.text)}</div><div class="bar"><i style="width:${pc}%"></i></div></div><span class="pill ${pc >= 70 ? 'ok' : pc >= 40 ? 'warn' : 'bad'}">${pc}%</span></div>`; }).join('')}

@@ -1,6 +1,6 @@
 {
   "name": "asesmen-merdeka",
-  "version": "5.17.0",
+  "version": "5.18.0",
   "description": "Aplikasi asesmen Kurikulum Merdeka: nilai rapor otomatis, unggah soal PDF, ujian online (Node.js + MySQL)",
   "main": "server.js",
   "private": true,
