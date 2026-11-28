@@ -128,6 +128,12 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Kartu Ujian & Foto Murid (v5.16)
+
+- Menu **🪪 Kartu Ujian**: pilih kelas (boleh beberapa), lalu cetak kartu peserta berisi **nama, kelas, NIS, NISN, foto 3×4, nomor peserta, ruang/sesi**, kode QR masuk ujian (membuka `/gabung` dengan nama terisi), serta tanda tangan kepala sekolah. Logo sekolah bisa dipasang. 8 kartu per lembar A4; untuk PDF pilih "Simpan sebagai PDF" saat mencetak.
+- Data diambil dari murid yang sudah terdaftar. Tabel kelas kini punya kolom **Foto** dan **NISN** terpisah; impor Excel otomatis menyimpan NISN (dan melengkapi NISN murid yang sudah ada).
+- **Pasang foto otomatis**: unggah banyak foto sekaligus, dicocokkan otomatis dari nama file (NISN, NIS, atau nama murid, mis. `0098765432.jpg` / `Eka Saputra.jpg`). Foto yang tidak cocok bisa dipilihkan manual. Foto dipotong 3×4 dan diperkecil (±30 KB) lalu disimpan di server; bisa juga dipasang/diganti satu per satu dengan klik kotak foto.
+
 ## Satu pintu masuk murid: /gabung (v5.15)
 
 - Murid cukup membuka **`domain/asesmen/gabung`**, menulis **nama**, lalu **kode atau token** — berlaku untuk semua jenis ujian: kode Kuis Seru (6 angka, permainan maupun Mode Ujian) dan token ujian asesmen (6 huruf/angka). Aplikasi mengenali jenisnya sendiri dan mengarahkan ke ujian yang tepat.

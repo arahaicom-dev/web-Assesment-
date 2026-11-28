@@ -274,6 +274,7 @@ B. VII B</pre></div></div></div>
     { group: 'Utama' },
     { href: 'beranda', ic: '🏠', label: 'Beranda' },
     { href: 'data', ic: '🗂️', label: 'Kelas, Murid & Mapel' },
+    { href: 'kartu', ic: '🪪', label: 'Kartu Ujian', tag: 'Baru' },
     { group: 'Asesmen' },
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
@@ -428,6 +429,7 @@ B. VII B</pre></div></div></div>
       else if (r === 'langganan' && S.saas) out = viewBilling();
       else if (r === 'kuis') out = parts[1] ? viewGameHost(parts[1]) : viewGames();
       else if (r === 'pantau' && S.mode === 'server') out = viewMonitor();
+      else if (r === 'kartu') out = viewCards();
       else if (r === 'perpustakaan') out = viewLibrary(parts[1]);
       else if (r === 'hasil' || /^hasil\?/.test(r)) out = viewReports(parts[1], parts[2]);
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
@@ -622,7 +624,7 @@ B. VII B</pre></div></div></div>
         else if (opt.target === 'new') cname = opt.newName.trim() || 'Kelas Baru';
         else if (opt.target === 'column') cname = x.kelas || (defaultCls ? defaultCls.name : opt.newName);
         else cname = sh.name;
-        out.push({ name: opt.title ? SiswaImport.titleCase(x.name) : x.name, nis: idOf(x), cname, jk: x.jk });
+        out.push({ name: opt.title ? SiswaImport.titleCase(x.name) : x.name, nis: idOf(x), nisn: x.nisn || '', cname, jk: x.jk });
       }));
       const byKey = {}; s.classes.forEach(c => { byKey[clsKey(c.name)] = c; });
       out.forEach(x => {
@@ -687,10 +689,10 @@ B. VII B</pre></div></div></div>
         const p2 = plan(); let n = 0, filled = 0; const made = {};
         p2.forEach(x => {
           if (opt.skipDup && x.dupFile) return;
-          if (opt.skipDup && x.dup) { if (x.dupRef && !x.dupRef.nis && x.nis) { x.dupRef.nis = x.nis; filled++; } return; }
+          if (opt.skipDup && x.dup) { if (x.dupRef && !x.dupRef.nis && x.nis) { x.dupRef.nis = x.nis; filled++; } if (x.dupRef && !x.dupRef.nisn && x.nisn) { x.dupRef.nisn = x.nisn; filled++; } return; }
           let c = x.cls || made[clsKey(x.cname)];
           if (!c) { c = { id: S.uid('c'), name: x.cname, fase: SiswaImport.faseOf(x.cname) || (defaultCls && defaultCls.fase) || 'D', students: [] }; s.classes.push(c); made[clsKey(x.cname)] = c; }
-          c.students.push({ id: S.uid('s'), nis: x.nis || '', name: x.name }); n++;
+          c.students.push({ id: S.uid('s'), nis: x.nis || '', nisn: x.nisn || '', name: x.name }); n++;
         });
         const first = Object.values(made)[0] || (opt.target === 'cur' ? defaultCls : (p2.find(x => x.cls) || {}).cls);
         if (first) s.ui.classId = first.id;
@@ -720,11 +722,11 @@ B. VII B</pre></div></div></div>
         </div>
         <div class="card">${cls ? `
           <div class="card-head"><h3>Murid ${esc(cls.name)} <span class="pill">Fase ${esc(cls.fase || '-')}</span></h3>
-            <div class="btns"><button class="btn sm" data-act="add-student">+ Murid</button><button class="btn ok sm" data-act="xls-student">📥 Unggah Excel</button><button class="btn soft sm" data-act="bulk-student">📋 Tempel Daftar</button>
+            <div class="btns"><button class="btn sm" data-act="add-student">+ Murid</button><button class="btn ok sm" data-act="xls-student">📥 Unggah Excel</button><button class="btn soft sm" data-act="bulk-student">📋 Tempel Daftar</button><button class="btn soft sm" data-act="photo-bulk">🖼 Foto</button><a class="btn soft sm" href="#/kartu">🪪 Kartu Ujian</a>
             <button class="btn ghost sm" data-act="edit-class">✏️ Kelas</button>${isAdminUser() ? '<button class="btn danger sm" data-act="del-class">Hapus Kelas</button>' : ''}</div></div>
-          <div class="table-wrap"><table><thead><tr><th class="num">No</th><th>NIS/NISN</th><th>Nama Murid</th><th></th></tr></thead><tbody>
-          ${cls.students.map((m, i) => `<tr><td class="num">${i + 1}</td><td><input value="${esc(m.nis)}" data-f="nis" data-id="${m.id}" style="width:120px"></td><td><input value="${esc(m.name)}" data-f="name" data-id="${m.id}" style="width:100%"></td>
-            <td><button class="btn ghost sm" data-act="del-student" data-id="${m.id}">🗑</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty"><div style="padding:10px 0"><div style="font-size:34px">📥</div><b>Belum ada murid.</b><br>Klik <b>Unggah Excel</b> (format apa pun: Dapodik, daftar hadir, rekap nilai…) atau seret file Excel ke sini.<br><button class="btn ok" style="margin-top:10px" data-act="xls-student">📥 Unggah File Excel</button></div></td></tr>`}
+          <div class="table-wrap"><table><thead><tr><th class="num">No</th><th>Foto</th><th>NIS</th><th>NISN</th><th>Nama Murid</th><th></th></tr></thead><tbody>
+          ${cls.students.map((m, i) => `<tr><td class="num">${i + 1}</td><td><button class="ph-btn" data-act="photo-one" data-id="${m.id}" title="Pasang/ganti foto" ${m.photo ? `data-ph="${esc(m.photo)}"` : ''}>📷</button></td><td><input value="${esc(m.nis)}" data-f="nis" data-id="${m.id}" style="width:110px"></td><td><input value="${esc(m.nisn || '')}" data-f="nisn" data-id="${m.id}" style="width:120px" placeholder="–"></td><td><input value="${esc(m.name)}" data-f="name" data-id="${m.id}" style="width:100%"></td>
+            <td><button class="btn ghost sm" data-act="del-student" data-id="${m.id}">🗑</button></td></tr>`).join('') || `<tr><td colspan="6" class="empty"><div style="padding:10px 0"><div style="font-size:34px">📥</div><b>Belum ada murid.</b><br>Klik <b>Unggah Excel</b> (format apa pun: Dapodik, daftar hadir, rekap nilai…) atau seret file Excel ke sini.<br><button class="btn ok" style="margin-top:10px" data-act="xls-student">📥 Unggah File Excel</button></div></td></tr>`}
           </tbody></table></div>` : '<div class="empty">Pilih atau buat kelas.</div>'}
         </div></div>`;
     } else {
@@ -777,6 +779,7 @@ B. VII B</pre></div></div></div>
           const tp = subj.tps.find(x => x.id === inp.dataset.id); tp[inp.dataset.tf] = inp.value.trim(); S.save();
         }));
         if (window.innerWidth < 860) { const g = $('#data-grid', v); if (g) g.style.gridTemplateColumns = '1fr'; }
+        fillPhotos(v);
       },
       actions: {
         tab: el => { location.hash = '#/data/' + el.dataset.t; },
@@ -791,8 +794,10 @@ B. VII B</pre></div></div></div>
           s.assessments.filter(a => a.classId === cls.id).forEach(a => S.deleteAssessment(a.id));
           s.classes = s.classes.filter(c => c !== cls); S.save(); route();
         },
-        'add-student': () => nameModal('Murid Baru', [{ k: 'nis', label: 'NIS/NISN' }, { k: 'name', label: 'Nama lengkap' }], v => { if (!v.name) return false; cls.students.push({ id: S.uid('s'), nis: v.nis, name: v.name }); }),
+        'add-student': () => nameModal('Murid Baru', [{ k: 'nis', label: 'NIS (dipakai murid saat masuk ujian)' }, { k: 'nisn', label: 'NISN' }, { k: 'name', label: 'Nama lengkap' }], v => { if (!v.name) return false; cls.students.push({ id: S.uid('s'), nis: v.nis || v.nisn || '', nisn: v.nisn || '', name: v.name }); }),
         'bulk-student': () => pasteRoster(cls),
+        'photo-bulk': () => photoBulk([cls], () => route()),
+        'photo-one': el => photoOne(el, cls.students.find(x => x.id === el.dataset.id), () => route()),
         'xls-student': () => pickRosterFile(cls),
         'xls-new': () => pickRosterFile(null),
         'del-student': async el => { if (!await confirmBox('Hapus murid ini?', 'Hapus')) return; cls.students = cls.students.filter(x => x.id !== el.dataset.id); S.save(); route(); },
@@ -3042,6 +3047,165 @@ B. VII B</pre></div></div></div>
     modal(`<h2>${esc(r.name)}</h2><p class="small muted" style="margin-top:0">${R.scoreLabel}: ${C.isNum(r.score) ? fmt(r.score, 1) + (R.mode === 'game' ? '%' : '') : '–'}${r.points !== null && r.points !== undefined ? ' · ' + fmt(r.points) + ' poin' : ''}</p>
       ${R.questions.map((q, k) => { const d = r.det[q.id]; return `<div class="q-card"><div class="q-head"><span class="qn">${k + 1}</span><span class="pill">${TYPE_LABEL[q.type] || q.type}</span><span class="pill ${d && d.status === 'benar' ? 'ok' : d && d.status === 'sebagian' ? 'warn' : 'bad'}">${esc(d ? d.status : 'kosong')}</span></div><div class="q-text small">${QT.rich(q.text)}</div><div class="small" style="margin-top:6px">${QT.answerHTML(q, r.ans[q.id])}</div><div class="small muted">Kunci: ${esc(QT.keyText(q))}</div></div>`; }).join('')}
       <div class="foot"><button class="btn" data-close>Tutup</button></div>`, { wide: true, noFocus: true });
+  }
+
+  /* ================= Foto murid ================= */
+  const photoCache = {};
+  /** Ambil data foto (server: tabel media) → fungsi ref → dataURL. */
+  async function photoResolver(refs) {
+    const need = [...new Set(refs.filter(r => r && /^media:/.test(r) && !photoCache[r]))];
+    if (need.length && S.mode === 'server') {
+      for (let k = 0; k < need.length; k += 200) {
+        try { const r = await S.api('media-batch', { body: { ids: need.slice(k, k + 200) } }); Object.keys(r.map || {}).forEach(id => { photoCache['media:' + id] = r.map[id]; }); } catch (e) { /* lewati */ }
+      }
+    }
+    return ref => !ref ? null : /^data:/.test(ref) ? ref : (photoCache[ref] || null);
+  }
+  /** Potong foto 3×4 (wajah biasanya di sepertiga atas), 300×400 px. */
+  function cropPhoto(file) {
+    return new Promise((res, rej) => {
+      const img = new Image(), url = URL.createObjectURL(file);
+      img.onload = () => {
+        const W = 300, H = 400, r = W / H; let sw = img.width, sh = img.height, sx = 0, sy = 0;
+        if (sw / sh > r) { sw = sh * r; sx = (img.width - sw) / 2; } else { sh = sw / r; sy = Math.max(0, (img.height - sh) * 0.25); }
+        const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+        g.fillStyle = '#fff'; g.fillRect(0, 0, W, H); g.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+        URL.revokeObjectURL(url); res(c.toDataURL('image/jpeg', 0.84));
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('Berkas bukan gambar: ' + file.name)); };
+      img.src = url;
+    });
+  }
+  async function savePhoto(m, dataUrl) {
+    if (S.mode === 'server') { const r = await S.api('photos', { body: { data: dataUrl, replace: m.photo && /^media:/.test(m.photo) ? m.photo : '' } }); m.photo = r.ref; photoCache[r.ref] = dataUrl; }
+    else m.photo = dataUrl;
+  }
+  function pickFiles(accept) {
+    return new Promise(res => { const inp = document.createElement('input'); inp.type = 'file'; inp.multiple = true; inp.accept = accept; inp.onchange = () => res(Array.from(inp.files || [])); inp.click(); });
+  }
+  const normKey = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]/g, '');
+  /** Unggah banyak foto sekaligus; dicocokkan otomatis dari nama file (NIS, NISN, atau nama murid). */
+  async function photoBulk(classes, done) {
+    const files = (await pickFiles('image/*')).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
+    if (!files.length) return;
+    const studs = [].concat(...classes.map(c => c.students.map(m => ({ m, c, keys: [m.nis, m.nisn].filter(x => x && String(x).replace(/\D/g, '').length >= 4).map(x => String(x).replace(/\D/g, '')), nk: normKey(m.name) }))));
+    const match = f => {
+      const fk = normKey(f.name), digits = (f.name.match(/\d{4,}/g) || []);
+      let hit = studs.find(x => x.keys.some(k => digits.indexOf(k) >= 0));
+      if (!hit) hit = studs.find(x => x.nk && x.nk === fk);
+      if (!hit) { const cand = studs.filter(x => x.nk && x.nk.length >= 4 && (fk.indexOf(x.nk) >= 0 || x.nk.indexOf(fk) >= 0 && fk.length >= 5)); if (cand.length === 1) hit = cand[0]; }
+      return hit || null;
+    };
+    const rows = files.map(f => ({ f, hit: match(f), url: URL.createObjectURL(f) }));
+    const opts = sel => `<option value="">— lewati —</option>${studs.map((x, k) => `<option value="${k}" ${sel === x ? 'selected' : ''}>${esc(x.m.name)}${classes.length > 1 ? ' · ' + esc(x.c.name) : ''}</option>`).join('')}`;
+    const m = modal(`<h2>🖼 Pasang Foto Murid</h2>
+      <p class="small muted" style="margin-top:0">${rows.filter(r => r.hit).length} dari ${rows.length} foto <b>otomatis cocok</b> dari nama file. Periksa, ubah bila perlu, lalu simpan. Foto dipotong otomatis ukuran 3×4.</p>
+      <div class="ph-bulk">${rows.map((r, k) => `<div class="ph-item ${r.hit ? 'ok' : ''}"><img src="${r.url}" alt=""><div class="small ellipsis" title="${esc(r.f.name)}">${esc(r.f.name)}</div><select data-k="${k}">${opts(r.hit)}</select></div>`).join('')}</div>
+      <div class="foot"><span class="small muted" style="margin-right:auto">Tips: beri nama file sesuai NIS/NISN atau nama murid, mis. <span class="kbd">0123456789.jpg</span> / <span class="kbd">Adinda Putri.jpg</span></span><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="ph-ok">💾 Pasang Foto</button></div>`, { wide: true, noFocus: true });
+    $$('select[data-k]', m).forEach(sel => sel.onchange = () => { const r = rows[+sel.dataset.k]; r.hit = sel.value === '' ? null : studs[+sel.value]; sel.closest('.ph-item').classList.toggle('ok', !!r.hit); });
+    $('#ph-ok', m).onclick = async () => {
+      const todo = rows.filter(r => r.hit); if (!todo.length) return toast('Belum ada foto yang dipasangkan ke murid.', 'bad');
+      const btn = $('#ph-ok', m); btn.disabled = true; let n = 0, fail = 0;
+      for (const r of todo) { btn.textContent = `Menyimpan ${n + 1}/${todo.length}…`; try { await savePhoto(r.hit.m, await cropPhoto(r.f)); n++; } catch (e) { fail++; } }
+      rows.forEach(r => URL.revokeObjectURL(r.url));
+      S.save(); closeModal(); toast(`${n} foto terpasang${fail ? ', ' + fail + ' gagal' : ''}.`, fail ? 'bad' : 'ok'); done && done();
+    };
+  }
+  /** Foto satu murid: ganti / hapus. */
+  function photoOne(anchor, m, done) {
+    popMenu(anchor, [
+      { ic: '📷', label: m.photo ? 'Ganti foto' : 'Pasang foto', sub: 'dipotong otomatis 3×4', run: async () => { const f = (await pickFiles('image/*'))[0]; if (!f) return; try { await savePhoto(m, await cropPhoto(f)); S.save(); toast('Foto ' + m.name + ' terpasang.'); done(); } catch (e) { toast(e.message, 'bad'); } } },
+      m.photo && { ic: '🗑', label: 'Hapus foto', danger: true, run: () => { delete m.photo; S.save(); done(); } }
+    ]);
+  }
+  async function fillPhotos(root) {
+    const els = $$('[data-ph]', root); if (!els.length) return;
+    const get = await photoResolver(els.map(e => e.dataset.ph));
+    els.forEach(e => { const u = get(e.dataset.ph); if (u) e.innerHTML = `<img src="${u}" alt="">`; });
+  }
+
+  /* ================= Kartu ujian ================= */
+  let qrLoading = null;
+  const loadQR = () => window.qrcode ? Promise.resolve(window.qrcode) : (qrLoading = qrLoading || new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'lib/qrcode/qrcode.js'; sc.onload = () => res(window.qrcode); sc.onerror = () => { qrLoading = null; rej(new Error('Gagal memuat pembuat QR.')); }; document.head.appendChild(sc); }));
+  const qrSVG = text => { const q = window.qrcode(0, 'M'); q.addData(text); q.make(); return q.createSvgTag({ cellSize: 2, margin: 0, scalable: true }); };
+  const kartuDefaults = s => ({ judul: 'KARTU PESERTA UJIAN', ujian: 'Sumatif Akhir Semester ' + (s.settings.semester === 'genap' ? 'Genap' : 'Ganjil'), prefix: 'UJ', kota: '', tanggal: new Date().toISOString().slice(0, 10), kepala: '', nip: '', logo: '', show: { photo: true, qr: true, nis: true, nisn: true, ttd: true, ruang: true }, ruang: {}, classIds: [] });
+  function viewCards() {
+    setTitle('🪪 Kartu Ujian', 'Cetak kartu peserta ujian: nama, kelas, NIS/NISN, foto, nomor peserta, dan QR untuk masuk ujian');
+    renderCtx(false);
+    const s = st();
+    const K = s.settings.kartu = Object.assign(kartuDefaults(s), s.settings.kartu || {});
+    K.show = Object.assign(kartuDefaults(s).show, K.show || {}); K.ruang = K.ruang || {};
+    if (!K.classIds.length && s.ui.classId) K.classIds = [s.ui.classId];
+    K.classIds = K.classIds.filter(id => S.cls(id));
+    const save = (() => { let t; return () => { clearTimeout(t); t = setTimeout(() => S.save(), 600); }; })();
+    const base = location.origin + location.pathname.replace(/[^/]*$/, '');
+    const html = `<div class="card no-print kartu-form">
+        <div class="field"><span>Kelas yang dicetak</span><div class="pz-nums">${s.classes.map(c => `<label class="pz-num"><input type="checkbox" value="${c.id}" ${K.classIds.indexOf(c.id) >= 0 ? 'checked' : ''} data-kc><span style="padding:0 12px">${esc(c.name)} <small>(${c.students.length})</small></span></label>`).join('') || '<span class="muted">Belum ada kelas.</span>'}</div></div>
+        <div class="row"><label class="field"><span>Judul kartu</span><input data-k="judul" value="${esc(K.judul)}"></label><label class="field" style="flex:2"><span>Nama ujian</span><input data-k="ujian" value="${esc(K.ujian)}"></label>
+          <label class="field" style="max-width:150px"><span>Awalan No. Peserta</span><input data-k="prefix" value="${esc(K.prefix)}"></label></div>
+        <div class="row"><label class="field"><span>Kepala Sekolah</span><input data-k="kepala" value="${esc(K.kepala)}" placeholder="Nama & gelar"></label><label class="field"><span>NIP</span><input data-k="nip" value="${esc(K.nip)}"></label>
+          <label class="field"><span>Kota</span><input data-k="kota" value="${esc(K.kota)}" placeholder="mis. Makassar"></label><label class="field" style="max-width:170px"><span>Tanggal</span><input type="date" data-k="tanggal" value="${esc(K.tanggal)}"></label></div>
+        <div id="k-ruang"></div>
+        <div class="btns" style="align-items:center">${[['photo', 'Foto'], ['nis', 'NIS'], ['nisn', 'NISN'], ['ruang', 'Ruang/Sesi'], ['qr', 'Kode QR masuk ujian'], ['ttd', 'Tanda tangan']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-show="${k}" ${K.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div>
+        <div class="btns" style="margin-top:10px"><button class="btn soft" data-act="k-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} Logo Sekolah</button>${K.logo ? '<button class="btn ghost sm" data-act="k-nologo">Hapus logo</button>' : ''}<button class="btn soft" data-act="k-photos">🖼 Pasang Foto Murid (banyak sekaligus)</button><span style="margin-left:auto" class="btns"><button class="btn lg" data-act="k-print">🖨 Cetak Kartu</button></span></div>
+        <p class="small muted" style="margin:8px 0 0">8 kartu per lembar A4. Untuk PDF: Cetak → pilih "Simpan sebagai PDF". Foto murid juga bisa dipasang satu per satu di menu <a href="#/data/kelas">Kelas & Murid</a> (klik kotak foto).</p>
+      </div>
+      <div id="k-sum" class="small muted no-print" style="margin:6px 0 10px"></div>
+      <div id="kartu-print"></div>`;
+    const drawRuang = () => {
+      const box = $('#k-ruang'); if (!box) return;
+      box.innerHTML = K.show.ruang && K.classIds.length ? `<div class="field"><span>Ruang & sesi per kelas</span><div class="k-ruang">${K.classIds.map(id => { const c = S.cls(id), r = K.ruang[id] || {}; return `<label><b>${esc(c.name)}</b><input data-rid="${id}" data-rk="ruang" value="${esc(r.ruang || '')}" placeholder="Ruang"><input data-rid="${id}" data-rk="sesi" value="${esc(r.sesi || '')}" placeholder="Sesi"></label>`; }).join('')}</div></div>` : '';
+      $$('[data-rid]', box).forEach(inp => inp.oninput = () => { const r = K.ruang[inp.dataset.rid] = K.ruang[inp.dataset.rid] || {}; r[inp.dataset.rk] = inp.value; save(); drawCards(); });
+    };
+    const drawCards = async () => {
+      const box = $('#kartu-print'); if (!box) return;
+      const list = [].concat(...K.classIds.map(id => { const c = S.cls(id); return c.students.map((m, i) => ({ m, c, i })); }));
+      $('#k-sum').textContent = list.length ? `${list.length} kartu · ${Math.ceil(list.length / 8)} lembar A4 · foto terpasang ${list.filter(x => x.m.photo).length}/${list.length}` : '';
+      if (!list.length) { box.innerHTML = '<div class="card empty no-print">Pilih kelas yang akan dicetak kartunya.</div>'; return; }
+      if (K.show.qr) { try { await loadQR(); } catch (e) { toast(e.message, 'bad'); } }
+      const get = K.show.photo ? await photoResolver(list.map(x => x.m.photo)) : () => null;
+      const tgl2 = K.tanggal ? new Date(K.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      const short = c => String(c.name).toUpperCase().replace(/^KELAS\s*/, '').replace(/[^A-Z0-9]/g, '');
+      const card = x => {
+        const m = x.m, nisn = m.nisn || (/^\d{10}$/.test(String(m.nis || '')) ? m.nis : ''), r = K.ruang[x.c.id] || {}, foto = get(m.photo), no = `${K.prefix ? K.prefix + '-' : ''}${short(x.c)}-${String(x.i + 1).padStart(3, '0')}`;
+        const rowsK = [['Nama', m.name], ['Kelas', x.c.name], K.show.nis && m.nis && m.nis !== nisn ? ['NIS', m.nis] : null, K.show.nisn ? ['NISN', nisn || '–'] : null, ['No. Peserta', no], K.show.ruang && (r.ruang || r.sesi) ? ['Ruang/Sesi', [r.ruang, r.sesi].filter(Boolean).join(' / ')] : null].filter(Boolean);
+        return `<div class="kp-card">
+          <div class="kp-head">${K.logo ? `<img src="${K.logo}" class="kp-logo" alt="">` : '<div class="kp-logo kp-logo-ph">🏫</div>'}<div class="kp-ht"><b>${esc(K.judul)}</b><span>${esc(K.ujian)}</span><small>${esc(s.settings.schoolName || '')}${s.settings.tahunAjaran ? ' · TP ' + esc(s.settings.tahunAjaran) : ''}</small></div></div>
+          <div class="kp-body">${K.show.photo || K.show.qr ? `<div class="kp-left">${K.show.photo ? `<div class="kp-photo">${foto ? `<img src="${foto}" alt="">` : '<span>Foto<br>3×4</span>'}</div>` : ''}
+              ${K.show.qr && window.qrcode ? `<div class="kp-qr">${qrSVG(base + 'gabung?nama=' + encodeURIComponent(m.name))}<small>Pindai untuk<br>masuk ujian</small></div>` : ''}</div>` : ''}
+            <div class="kp-right"><table class="kp-tab">${rowsK.map(([a, b]) => `<tr><td>${a}</td><td>:</td><td><b>${esc(b)}</b></td></tr>`).join('')}</table>
+              ${K.show.ttd ? `<div class="kp-ttd">${esc(K.kota ? K.kota + ', ' : '')}${esc(tgl2)}<br>Kepala Sekolah<div class="kp-sign"></div><b>${esc(K.kepala || '..............................')}</b>${K.nip ? `<br>NIP. ${esc(K.nip)}` : ''}</div>` : ''}</div></div>
+        </div>`;
+      };
+      const pages = []; for (let k = 0; k < list.length; k += 8) pages.push(list.slice(k, k + 8));
+      box.innerHTML = pages.map(pg => `<div class="kp-page">${pg.map(card).join('')}</div>`).join('');
+    };
+    return {
+      html,
+      mount(v) {
+        $$('[data-kc]', v).forEach(c => c.onchange = () => { K.classIds = $$('[data-kc]:checked', v).map(x => x.value); save(); drawRuang(); drawCards(); });
+        $$('[data-k]', v).forEach(inp => inp.oninput = () => { K[inp.dataset.k] = inp.value; save(); drawCards(); });
+        $$('[data-show]', v).forEach(inp => inp.onchange = () => { K.show[inp.dataset.show] = inp.checked; save(); drawRuang(); drawCards(); });
+        drawRuang(); drawCards();
+        // lembar cetak diletakkan langsung di <body> agar hanya kartu yang tercetak
+        const sheet = () => { let el = document.getElementById('print-sheet'); if (!el) { el = document.createElement('div'); el.id = 'print-sheet'; document.body.appendChild(el); } const src = $('#kartu-print'); el.innerHTML = src ? src.innerHTML : ''; document.body.classList.add('print-cards'); };
+        const unsheet = () => { const el = document.getElementById('print-sheet'); if (el) el.remove(); document.body.classList.remove('print-cards'); };
+        window.__kartuSheet = sheet;
+        window.addEventListener('beforeprint', sheet); window.addEventListener('afterprint', unsheet);
+        window.addEventListener('hashchange', () => { unsheet(); window.removeEventListener('beforeprint', sheet); window.removeEventListener('afterprint', unsheet); }, { once: true });
+      },
+      actions: {
+        'k-print': () => { if (window.__kartuSheet) window.__kartuSheet(); window.print(); },
+        'k-photos': () => { const cl = K.classIds.map(id => S.cls(id)); if (!cl.length) return toast('Pilih kelasnya dulu.', 'bad'); photoBulk(cl, () => route()); },
+        'k-logo': async () => {
+          const f = (await pickFiles('image/*'))[0]; if (!f) return;
+          const img = new Image(), url = URL.createObjectURL(f);
+          img.onload = () => { const k = Math.min(1, 160 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); K.logo = c.toDataURL('image/png'); S.save(); route(); };
+          img.src = url;
+        },
+        'k-nologo': () => { K.logo = ''; S.save(); route(); }
+      }
+    };
   }
 
   /* ================= Ujian berjalan & riwayat ================= */

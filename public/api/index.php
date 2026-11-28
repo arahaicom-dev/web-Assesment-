@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.15.0');
+define('APP_VERSION', '5.16.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -549,6 +549,26 @@ try {
       q('DELETE FROM sessions WHERE user_id = ?', array((int)$seg[2]));
       out(array('ok' => true));
     }
+  }
+
+  /* ---------- foto murid (untuk kartu ujian) ---------- */
+  if ($route === 'photos' && $method === 'POST') {
+    $u = auth(); require_active($u); $tid = tenant_of($u);
+    $data = (string)prop($body, 'data', '');
+    if (!preg_match('#^data:image/(jpeg|png|webp);base64,#', $data)) bad(400, 'Format foto tidak didukung.');
+    if (strlen($data) > 600000) bad(413, 'Foto terlalu besar.');
+    $old = preg_replace('/[^a-f0-9]/', '', preg_replace('/^media:/', '', (string)prop($body, 'replace', '')));
+    if ($old !== '') q('DELETE FROM media WHERE id = ? AND tenant_id = ?', array($old, $tid));
+    out(array('ref' => store_media($tid, $data)));
+  }
+  if ($route === 'media-batch' && $method === 'POST') {
+    $u = auth(); $tid = tenant_of($u); $map = array();
+    $ids = array_slice(array_values(array_unique(array_filter(array_map(function ($x) { return preg_replace('/[^a-f0-9]/', '', preg_replace('/^media:/', '', (string)$x)); }, (array)prop($body, 'ids', array()))))), 0, 500);
+    foreach (array_chunk($ids, 100) as $ch) {
+      $ph = implode(',', array_fill(0, count($ch), '?'));
+      foreach (rows("SELECT id, data FROM media WHERE tenant_id = ? AND id IN ($ph)", array_merge(array($tid), $ch)) as $r) $map[$r['id']] = $r['data'];
+    }
+    out(array('map' => (object)$map));
   }
 
   /* ---------- berkas jawaban (gambar/rekaman) untuk koreksi guru ---------- */

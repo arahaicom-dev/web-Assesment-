@@ -1019,3 +1019,45 @@ button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: 
 .rep-filters label input[type=checkbox], .lib-tools input[type=checkbox] { width: auto; flex: none; min-width: 0; }
 .rep-filters label { white-space: nowrap; }
 @media (max-width: 560px) { .lib-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } .lib-em { font-size: 38px; } .lib-body { padding: 9px 10px 10px; } .lib-title { font-size: .9rem; } .lib-sub { font-size: .7rem; } .lib-act .btn { padding: 6px 8px; font-size: .8rem; } .lib-act [data-prev] { display: none; } .rep-row { padding: 10px; gap: 10px; } .rep-ring { width: 46px; height: 46px; } .rep-ring span { width: 36px; height: 36px; font-size: .8rem; } .rep-cnt { min-width: 54px; } .rep-go { display: none; } .rep-qs { grid-template-columns: 1fr; } }
+
+/* ---------- Foto murid & kartu ujian ---------- */
+.ph-btn { width: 36px; height: 48px; border-radius: 6px; border: 1px dashed var(--border); background: var(--surface-2); cursor: pointer; padding: 0; overflow: hidden; font-size: 16px; display: inline-flex; align-items: center; justify-content: center; }
+.ph-btn img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ph-btn[data-ph] { border-style: solid; }
+.ph-bulk { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; max-height: 58vh; overflow: auto; padding: 2px; }
+.ph-item { border: 2px solid var(--border); border-radius: 12px; padding: 8px; display: flex; flex-direction: column; gap: 6px; background: var(--surface-2); }
+.ph-item.ok { border-color: #22a06b; }
+.ph-item img { width: 100%; aspect-ratio: 3/4; object-fit: cover; border-radius: 8px; background: #fff; }
+.ph-item select { font-size: 12px; padding: 4px; }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.k-ruang { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 8px; }
+.k-ruang label { display: flex; gap: 6px; align-items: center; }
+.k-ruang label b { min-width: 60px; } .k-ruang input { width: 80px; flex: 1; }
+#kartu-print { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+.kp-page { width: 210mm; min-height: 297mm; padding: 10mm 12mm; box-sizing: border-box; background: #fff; color: #000; display: grid; grid-template-columns: 1fr 1fr; grid-auto-rows: 66mm; gap: 4mm; box-shadow: 0 4px 24px rgba(0,0,0,.15); }
+.kp-card { border: 1.2px solid #333; border-radius: 3mm; padding: 2.5mm 3mm; display: flex; flex-direction: column; font-family: Arial, Helvetica, sans-serif; font-size: 8.4pt; overflow: hidden; break-inside: avoid; }
+.kp-head { display: flex; gap: 2.5mm; align-items: center; border-bottom: 1.6px double #333; padding-bottom: 1.5mm; margin-bottom: 2mm; }
+.kp-logo { width: 11mm; height: 11mm; object-fit: contain; flex: none; }
+.kp-logo-ph { display: flex; align-items: center; justify-content: center; font-size: 18pt; }
+.kp-ht { display: flex; flex-direction: column; line-height: 1.2; text-align: center; flex: 1; }
+.kp-ht b { font-size: 10pt; letter-spacing: .3px; } .kp-ht span { font-size: 8pt; font-weight: 600; } .kp-ht small { font-size: 7.2pt; }
+.kp-body { display: flex; gap: 3mm; flex: 1; min-height: 0; }
+.kp-left { display: flex; flex-direction: column; gap: 1.5mm; flex: none; width: 21mm; }
+.kp-right { flex: 1; display: flex; flex-direction: column; justify-content: space-between; min-width: 0; }
+.kp-photo { width: 21mm; height: 28mm; border: 1px solid #555; flex: none; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 7pt; color: #777; overflow: hidden; }
+.kp-photo img { width: 100%; height: 100%; object-fit: cover; }
+.kp-tab { border-collapse: collapse; font-size: 8.2pt; align-self: flex-start; }
+.kp-tab td { padding: .25mm .8mm; line-height: 1.25; border: none; vertical-align: top; background: none; color: #000; }
+.kp-tab td:first-child { white-space: nowrap; }
+.kp-qr { display: flex; gap: 1.2mm; align-items: flex-end; } .kp-qr svg { width: 13mm; height: 13mm; flex: none; } .kp-qr small { font-size: 5.6pt; line-height: 1.15; color: #333; }
+.kp-ttd { font-size: 7.2pt; text-align: center; line-height: 1.2; align-self: flex-end; padding-right: 1mm; } .kp-sign { height: 7mm; }
+@media print {
+  @page { size: A4; margin: 0; }
+  html:has(body.print-cards), body.print-cards { background: #fff !important; margin: 0; padding: 0; }
+  body.print-cards > *:not(#print-sheet) { display: none !important; }
+  body.print-cards #print-sheet { display: block !important; }
+  body.print-cards .kp-page { box-shadow: none; height: 297mm; min-height: 0; overflow: hidden; page-break-after: always; break-after: page; }
+  body.print-cards .kp-page:last-child { page-break-after: auto; break-after: auto; }
+  .kp-card, .kp-card * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+#print-sheet { display: none; }
