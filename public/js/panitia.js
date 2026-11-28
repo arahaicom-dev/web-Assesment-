@@ -142,13 +142,19 @@
     }
     // ---- foto ----
     const nameBarH = fsName * 1.65;
-    const bottomReserve = (d.footer ? fsSmall * 1.9 : pad * 0.6) + (nip ? fsSmall * 1.7 : 0) + nameBarH * 0.75;
+    // jabatan di antara foto & nama: pilihan 'antara', atau otomatis untuk foto bundar
+    const rp = o.rolePos || 'auto';
+    const roleBetween = !land && role && (rp === 'antara' || (rp === 'auto' && th.photo === 'circle'));
+    const gapRole = roleBetween ? fsTag * 2.3 : 0;
+    const psc = Math.max(0.5, Math.min(1.4, +o.photoScale || 1));
+    const bottomReserve = (d.footer ? fsSmall * 2.3 : pad * 0.6) + (nip ? fsSmall * 1.7 + (o.theme === 'navy' ? fsSmall * 0.75 : o.theme === 'ceria' ? fsName * 0.5 : 0) : 0) + nameBarH * 0.85 + gapRole;
     let px, py, pw, ph;
-    if (land) { ph = H - 2 * pad; pw = ph * 0.78; px = pad; py = pad; }
+    if (land) { ph = (H - 2 * pad) * Math.min(1, psc); pw = ph * 0.78; px = th.photo === 'circle' ? pad * 1.5 : pad; py = (H - ph) / 2; }
     else {
       const avail = H - y - bottomReserve - pad * 0.4;
-      pw = Math.min(W * 0.66, avail * 0.8); ph = pw * 1.25; if (th.photo === 'circle') { ph = pw; }
-      px = (W - pw) / 2; py = y + Math.max(0, (avail - ph) / 2) * 0.35;
+      if (th.photo === 'circle') { pw = Math.min(W * 0.6, avail * 0.92) * psc; ph = pw; }
+      else { pw = Math.min(W * 0.66, avail * 0.8) * psc; ph = pw * 1.25; }
+      px = (W - pw) / 2; py = y + Math.max(0, avail - ph) * 0.45;
     }
     const pb = photoBox(d, px, py, pw, ph, th.photo, 'c' + uid, o.theme === 'navy' ? '#2a3a6b' : o.theme === 'ceria' ? '#f5d0fe' : '#cfd8e3');
     defs += pb.defs;
@@ -167,7 +173,7 @@
     let ny;
     const landRoleY = y + fsTag * 0.5;
     if (land) ny = (role ? landRoleY + fsTag * 0.9 : y) + nameBarH * 0.75;
-    else ny = py + ph + nameBarH * 0.15;
+    else ny = py + ph + nameBarH * 0.15 + gapRole + (th.photo === 'circle' ? fsName * 0.3 : 0);
     const nb = land ? 0.36 : null; // pada kartu mendatar teks nama selalu di tengah pita
     const nx = land ? col.x + nameW / 2 : W / 2;
     if (role && o.rolePos !== 'none') {
@@ -175,6 +181,7 @@
       // tag jabatan selalu utuh di dalam kartu (tidak terpotong di tepi)
       let ry = land ? landRoleY : py + ph * 0.1, rx = land ? col.x + tw0 / 2 : Math.min(W - pad * 0.6 - tw0 / 2, Math.max(pad * 0.6 + tw0 / 2, px + pw * 0.08));
       if (!land && o.rolePos === 'atas') { ry = py + fsTag * 0.25; rx = W / 2; }
+      if (roleBetween) { ry = py + ph + fsTag * 1.35; rx = W / 2; }
       if (!land && o.rolePos === 'bawah') { ry = py + ph * (th.photo === 'circle' ? 0.84 : 0.88); rx = W / 2; }
       const rStyle = o.theme === 'retro' ? [A, '#fdf1dc', -4] : o.theme === 'navy' ? [A, '#111d42', 0] : o.theme === 'ceria' ? ['#fde047', '#3b0764', -3] : o.theme === 'resmi' ? [A, '#ffffff', 0] : [B, '#111827', 0];
       fore += drag('role', tag(role, rx, ry, fsTag, rStyle[0], rStyle[1], rStyle[2], land ? col.w : W - pad * 2, { rx: o.theme === 'retro' ? 0 : fsTag * 0.88 }), rx, ry);
@@ -188,7 +195,9 @@
     else if (o.theme === 'ceria') { const off = land ? 0 : fsName * 0.5; nameSvg += `<rect x="${nx - nameW / 2}" y="${ny - nameBarH / 2 + off}" width="${nameW}" height="${nameBarH}" rx="${nameBarH / 2}" fill="#ffffff"/>${txt(name, nx, ny + off + fsName * 0.36, fsName, nameW - fsName, { fill: '#3b0764', w: 800 })}`; }
     else nameSvg += txt(name, nx, ny + fsName * (nb || 0.9), fsName, nameW, { fill: o.theme === 'resmi' ? B : '#111827', w: 800 });
     fore += drag('name', nameSvg, nx, ny + fsName * 0.4);
-    if (nip) fore += drag('nip', txt(nip, nx, ny + nameBarH * 0.5 + fsSmall * 1.75, fsSmall * 0.95, nameW, { fill: onDark ? '#e5e7eb' : '#374151', w: 600, k: 'text' }), nx, ny + nameBarH * 0.5 + fsSmall * 1.45);
+    // jarak NIP dari nama (garis bawah nama di Navy & kotak nama di Ceria butuh ruang lebih)
+    const nipY = ny + nameBarH * 0.5 + fsSmall * 1.75 + (o.theme === 'navy' ? fsSmall * 0.75 : o.theme === 'ceria' && !land ? fsName * 0.5 : 0);
+    if (nip) fore += drag('nip', txt(nip, nx, nipY, fsSmall * 0.95, nameW, { fill: onDark ? '#e5e7eb' : '#374151', w: 600, k: 'text' }), nx, nipY - fsSmall * 0.3);
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W} ${H}" width="${o.w}mm" height="${o.h}mm"><defs>${defs}${o.fontCss ? `<style>${o.fontCss}</style>` : ''}</defs>${back}${mid}${fore}</svg>`;
   }
 

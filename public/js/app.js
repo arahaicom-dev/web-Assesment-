@@ -3494,9 +3494,10 @@ B. VII B</pre></div></div></div>
         <div class="field"><span>🎨 Pilih desain</span><div class="pn-themes" id="pn-themes"></div></div>
         <div class="row"><label class="field"><span>📐 Ukuran kartu</span><select id="pn-size">${PC.SIZES.map(z => `<option value="${z.id}" ${P.size === z.id ? 'selected' : ''}>${z.label}</option>`).join('')}</select></label>
           <label class="field pn-custom" style="max-width:110px"><span>Lebar (mm)</span><input type="number" min="30" max="190" id="pn-w" value="${+P.w || 54}"></label><label class="field pn-custom" style="max-width:110px"><span>Tinggi (mm)</span><input type="number" min="30" max="277" id="pn-h" value="${+P.h || 86}"></label></div>
-        <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🏷 Label jabatan <select id="pn-rpos">${[['auto', 'Otomatis (pojok foto)'], ['atas', 'Di atas foto'], ['bawah', 'Di bawah wajah (dada)'], ['none', 'Sembunyikan']].map(([v, l]) => `<option value="${v}" ${(P.rolePos || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+        <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🏷 Label jabatan <select id="pn-rpos">${[['auto', 'Otomatis'], ['antara', 'Di antara foto & nama'], ['pojok', 'Pojok kiri atas foto'], ['atas', 'Di atas foto'], ['bawah', 'Di bawah wajah (dada)'], ['none', 'Sembunyikan']].map(([v, l]) => `<option value="${v}" ${(P.rolePos || 'auto') === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
           <button class="btn ghost sm" data-act="pn-offreset" title="Kembalikan semua elemen yang sudah digeser/diubah ukurannya">↺ Semua posisi</button></div>
         <div class="row" style="align-items:center"><label class="small" style="display:flex;gap:8px;align-items:center">🔠 Ukuran teks <input type="range" min="0.75" max="1.3" step="0.05" id="pn-scale" value="${+P.scale || 1}"></label>
+          <label class="small" style="display:flex;gap:8px;align-items:center">🖼 Ukuran foto <input type="range" min="0.6" max="1.3" step="0.05" id="pn-pscale" value="${+P.photoScale || 1}"></label>
           <label class="small" style="display:flex;gap:8px;align-items:center">🎨 Warna utama <input type="color" id="pn-accent" value="${P.accent || (PC.THEMES[P.theme] || PC.THEMES.retro).accent}"></label><button class="btn ghost sm" data-act="pn-accent0">Warna bawaan</button></div>
         <details class="field" open><summary><b>✏️ Teks kartu</b></summary>
           <div class="row" style="margin-top:8px"><label class="field"><span>Nama sekolah</span><input data-pt="school" value="${esc(T.school)}"></label><label class="field"><span>Judul besar <small class="muted">(| = baris baru)</small></span><input data-pt="title" value="${esc(T.title)}"></label></div>
@@ -3515,7 +3516,7 @@ B. VII B</pre></div></div></div>
       </div></div>
       <div id="pn-print" class="hidden"></div>`;
     let photoGet = r => (r && /^data:/.test(r) ? r : null);
-    const card = (m, extra) => PC.svg(Object.assign({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: m.name, role: m.role, nip: m.nip, photo: photoGet(m.photo), logo: K.logo, showNip: P.showNip }), Object.assign({ theme: P.theme, accent: P.accent, scale: +P.scale || 1, id: m.id, rolePos: P.rolePos || 'auto', off: P.off || {} }, dims(), extra || {}));
+    const card = (m, extra) => PC.svg(Object.assign({ school: T.school, title: T.title, event: T.event, greet: T.greet, footer: T.footer, name: m.name, role: m.role, nip: m.nip, photo: photoGet(m.photo), logo: K.logo, showNip: P.showNip }), Object.assign({ theme: P.theme, accent: P.accent, scale: +P.scale || 1, photoScale: +P.photoScale || 1, id: m.id, rolePos: P.rolePos || 'auto', off: P.off || {} }, dims(), extra || {}));
     const chosen = () => P.members.filter(m => m.on !== false);
     const drawThemes = () => {
       const box = $('#pn-themes'); if (!box) return;
@@ -3601,6 +3602,7 @@ B. VII B</pre></div></div></div>
         $('#pn-w', v).oninput = e => { P.w = +e.target.value; save(); drawPreview(); };
         $('#pn-h', v).oninput = e => { P.h = +e.target.value; save(); drawPreview(); };
         $('#pn-scale', v).oninput = e => { P.scale = +e.target.value; save(); drawPreview(); };
+        $('#pn-pscale', v).oninput = e => { P.photoScale = +e.target.value; save(); drawPreview(); };
         $('#pn-accent', v).oninput = e => { P.accent = e.target.value; save(); drawPreview(); };
         $('#pn-nip', v).onchange = e => { P.showNip = e.target.checked; save(); drawPreview(); };
         $('#pn-cut', v).onchange = e => { P.cut = e.target.checked; save(); };
