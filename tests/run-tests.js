@@ -373,5 +373,24 @@ t('banyak sheet = banyak kelas; kolom nama ayah/ibu tidak tertukar', () => {
   assert.strictEqual(w.total, 2); assert.strictEqual(w.suggest, 'sheets'); assert.strictEqual(w.sheets[0].rows[0].nisn, '0011223344'); assert.strictEqual(w.sheets[1].rows[0].name, 'Budi');
 });
 
+/* ---------- Kunci jawaban di bagian bawah soal: berbagai format ---------- */
+const SOAL6 = 'A. PILIHAN GANDA\n1. Ibu kota Indonesia adalah ...\nA. Bandung B. Jakarta C. Surabaya D. Medan\n2. 5 + 3 = ...\nA. 7 B. 8 C. 9 D. 10\n3. Bilangan prima adalah ...\nA. 2 B. 4 C. 5 D. 9\nB. BENAR ATAU SALAH\n4. Matahari terbit dari timur. (B/S)\n5. Es itu panas. (B/S)\nC. MENJODOHKAN\nPasangkanlah!\n6. Ibu kota Jawa Barat     A. Semarang\n7. Ibu kota Jawa Tengah    B. Bandung\nD. ISIAN\nIsilah titik-titik berikut!\n8. Planet terdekat matahari adalah ....\nE. URAIAN\n9. Jelaskan proses hujan!\n';
+const cekKunci = (nama, kunci) => t('kunci di bawah soal: ' + nama, () => {
+  const r = P.parse(SOAL6 + kunci), q = n => r.questions.find(x => x.num === n);
+  assert.strictEqual(q(1).answer, 'B'); assert.strictEqual(q(2).answer, 'B');
+  assert.strictEqual(q(3).type, 'pgk'); assert.strictEqual(q(3).answer, 'A,C');
+  assert.strictEqual(q(4).answer, 'B'); assert.strictEqual(q(5).answer, 'S');
+  assert.deepStrictEqual(q(6).pairs.map(p => p.r), ['Bandung', 'Semarang']);
+  assert.strictEqual(q(8).answer, 'Merkurius'); assert.ok(/menguap/.test(q(9).answer));
+});
+cekKunci('per nomor sebaris', 'KUNCI JAWABAN\n1. B 2. B\n3. A, C\n4. Benar 5. Salah\n6. B 7. A\n8. Merkurius\n9. Air menguap lalu mengembun.');
+cekKunci('tabel mendatar No/Kunci', 'KUNCI JAWABAN\nNo 1 2 3 4 5 6 7\nKunci B B A,C B S B A\n8. Merkurius\n9. Air menguap lalu mengembun.');
+cekKunci('tabel tegak terpisah per baris', 'Kunci Jawaban\n1\nB\n2\nB\n3\nA dan C\n4\nB\n5\nS\n6\nB\n7\nA\n8\nMerkurius\n9\nAir menguap lalu mengembun.');
+cekKunci('tabel No|Kunci dua kolom + judul pedoman', 'PEDOMAN PENSKORAN DAN KUNCI JAWABAN\nNo Kunci No Kunci\n1 B 5 S\n2 B 6 B\n3 AC 7 A\n4 B 8 Merkurius\n9. Air menguap lalu mengembun.');
+t('kunci uraian berisi angka tidak terpecah', () => {
+  const r = P.parse('1. Berapa provinsi di Jawa?\n2. Hitunglah 12 + 13!\nKUNCI JAWABAN\n1. Ada 6 provinsi di Pulau Jawa.\n2. 12 + 13 = 25');
+  assert.strictEqual(r.questions[0].answer, 'Ada 6 provinsi di Pulau Jawa.'); assert.strictEqual(r.questions[1].answer, '12 + 13 = 25');
+});
+
 console.log(`\n${pass} lulus, ${fail} gagal`);
 process.exit(fail ? 1 : 0);

@@ -1415,6 +1415,12 @@ B. VII B</pre></div></div></div>
       <div class="grid g2">
         <div class="card"><h3>Unggah File Soal</h3>
           <div class="drop" id="drop"><div class="pdf3d">PDF</div><b>Klik atau seret file PDF ke sini</b><div class="small muted">Juga menerima .txt. Pilihan ganda (biasa &amp; kompleks), benar/salah, isian, menjodohkan, dan uraian dikenali otomatis.</div></div>
+          <details class="small" style="margin-top:10px"><summary><b>🔑 Kunci jawaban otomatis tercentang</b> — tulis bagian <b>KUNCI JAWABAN</b> di bawah soal pada PDF</summary>
+            <div class="muted" style="margin-top:6px;line-height:1.7">Semua format ini dikenali (judul boleh <i>Kunci Jawaban</i> / <i>Pedoman Penskoran</i>):<br>
+            • Per nomor: <span class="kbd">1. B  2. C  3. A, D</span> (PG kompleks: <span class="kbd">A, D</span> / <span class="kbd">A dan D</span> / <span class="kbd">AD</span>)<br>
+            • Tabel mendatar: baris <span class="kbd">No 1 2 3</span> lalu <span class="kbd">Kunci B C A</span> · tabel <span class="kbd">No | Kunci</span><br>
+            • Benar/Salah: <span class="kbd">4. Benar</span> / <span class="kbd">4. B</span> · Menjodohkan: <span class="kbd">6. B  7. A</span><br>
+            • Isian & uraian: <span class="kbd">8. Merkurius</span>, <span class="kbd">9. Air menguap lalu …</span> (boleh beberapa baris)</div></details>
           <div id="import-status" class="small" style="margin-top:10px"></div>
           <div class="note small" style="margin-top:10px">📖 <b>Ada teks bacaan untuk beberapa soal?</b> Tulis baris seperti <span class="kbd">Bacalah teks berikut untuk menjawab soal nomor 6–10!</span> sebelum teksnya. <a href="#/panduan-soal/teks">Lihat aturannya →</a></div>
         </div>
@@ -1658,7 +1664,7 @@ B. VII B</pre></div></div></div>
   }
 
   function startDraft(res, title, source, rawLines, thumbs) {
-    importDraft = { id: S.uid('qs'), title, source, instructions: res.instructions || '', questions: res.questions, warnings: res.warnings, stats: res.stats, raw: rawLines, thumbs: thumbs || [], created: Date.now(), isNew: true };
+    importDraft = { id: S.uid('qs'), title, source, instructions: res.instructions || '', questions: res.questions, warnings: res.warnings, stats: res.stats, keyLine: res.keyLine, raw: rawLines, thumbs: thumbs || [], created: Date.now(), isNew: true };
     if (!res.questions.length) toast('Tidak ada soal bernomor yang dikenali. Periksa teks mentah atau tambah soal manual.', 'bad');
     location.hash = '#/bank-soal/draft';
   }
@@ -1677,13 +1683,20 @@ B. VII B</pre></div></div></div>
     setTitle(isDraft && src.isNew ? '✏️ Buat Paket Soal Baru' : isDraft ? '✨ Periksa Hasil Konversi' : '✏️ Edit Paket Soal', isDraft && src.isNew ? 'Isi soal, tambah jenis soal lain di bawah, lalu simpan ke Bank Soal' : isDraft ? 'Soal sudah disesuaikan ke format web — periksa, perbaiki bila perlu, lalu simpan' : esc(src.title));
     const total = w.questions.reduce((n, q) => n + (+q.points || 0), 0);
     const noKey = w.questions.filter(q => !QT.hasKey(q)).length;
+    const keyBadge = q => {
+      if (q.type === 'slide' || q.type === 'polling') return '';
+      const manual = ['uraian', 'gambar', 'suara'].indexOf(q.type) >= 0;
+      if (manual) return q.answer && String(q.answer).trim() ? `<span class="pill ok key-pill" title="${esc(String(q.answer))}">✅ Kunci uraian ada</span>` : '<span class="pill key-pill" title="Opsional: isi jawaban acuan di kotak Kunci/Pedoman">📝 Kunci uraian (opsional)</span>';
+      if (!QT.hasKey(q)) return '<span class="pill bad key-pill">⚠️ Kunci belum ada</span>';
+      const kt = String(QT.keyText(q)); return `<span class="pill ok key-pill" title="${esc(kt)}">✅ Kunci: ${esc(kt.length > 28 ? kt.slice(0, 26) + '…' : kt)}</span>`;
+    };
     const qHtml = (q, i) => `
       <div class="q-card" data-qi="${i}">
         <div class="q-head"><span class="qn">${i + 1}</span>
           <select data-qt="type">${QT.ORDER.map(k => `<option value="${k}" ${q.type === k ? 'selected' : ''}>${QT.TYPES[k].icon} ${TYPE_LABEL[k]}</option>`).join('')}</select>
           ${q.type === 'slide' || q.type === 'polling' ? '<span class="pill">tidak dinilai</span>' : `<label class="small">Poin <input type="number" min="0" step="0.5" data-qt="points" value="${+q.points || 0}" style="width:70px"></label>`}
           <button class="btn ghost sm" data-act="guide" data-t="${q.type}" title="Cara membuat soal jenis ini">❓ Panduan</button>
-          ${QT.hasKey(q) ? '' : '<span class="pill bad">Kunci belum lengkap</span>'}
+          ${keyBadge(q)}
           <span style="margin-left:auto" class="btns">${pdfDoc ? `<button class="btn soft sm" data-act="crop" data-i="${i}" title="Potong gambar dari halaman PDF">✂️ Dari PDF</button>` : ''}${q.passage ? '' : `<button class="btn ghost sm" data-act="pass-add" data-i="${i}" title="Tambahkan teks bacaan untuk soal ini (dan soal lain)">📖</button>`}<button class="btn ghost sm" data-act="ins-table" data-i="${i}" title="Sisipkan tabel">▦</button><button class="btn ghost sm" data-act="img" data-i="${i}" title="Unggah gambar dari perangkat">🖼</button><button class="btn ghost sm" data-act="up" data-i="${i}" title="Naik">↑</button><button class="btn ghost sm" data-act="down" data-i="${i}" title="Turun">↓</button><button class="btn ghost sm" data-act="delq" data-i="${i}" title="Hapus">🗑</button></span></div>
         <textarea data-qt="text" placeholder="${q.type === 'slide' ? 'Isi materi / penjelasan' : q.type === 'seret' ? 'Kalimat dengan [[jawaban]] pada bagian kosong' : q.type === 'dropdown' ? 'Kalimat dengan [[benar|salah|salah]]' : 'Teks pertanyaan'}">${esc(q.text)}</textarea>
         ${q.image ? `<div class="q-img-row">${q.type === 'titik' || q.type === 'label' ? '' : `<img src="${q.image}" class="zoomable" alt="gambar soal">`}<button class="btn ghost sm" data-act="rmimg" data-i="${i}">Hapus gambar</button></div>` : ''}
@@ -1704,8 +1717,8 @@ B. VII B</pre></div></div></div>
           <div class="small muted">Satu petunjuk per baris. Tabel (<span class="kbd">| a | b |</span>) dan pecahan (<span class="kbd">1/2</span>) juga bisa. Cara menjawab tiap jenis soal ditambahkan otomatis.</div></details>
         ${!pdfDoc && window.pdfjsLib ? '<button class="btn ghost" data-act="openpdf" style="margin-bottom:12px" title="Buka PDF soal untuk memotong gambarnya">📄 Buka PDF (ambil gambar)</button>' : ''}
         <div class="btns" style="margin-bottom:12px"><a class="btn ghost" href="#/bank-soal" data-act="cancel">Batal</a><button class="btn soft" data-act="preview">👁 Pratinjau Murid</button><button class="btn ok" data-act="save">💾 Simpan${isDraft ? ' ke Bank Soal' : ''}</button></div></div>
-        <div class="btns"><span class="pill pri">${w.questions.length} soal</span>${QT.ORDER.filter(t => w.questions.some(x => x.type === t)).map(t => `<span class="pill">${QT.TYPES[t].icon} ${TYPE_LABEL[t]} ${w.questions.filter(x => x.type === t).length}</span>`).join('')}<span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<span class="pill bad">${noKey} soal kuncinya belum lengkap</span>` : '<span class="pill ok">Semua kunci lengkap</span>'}
-          ${isDraft && src.stats ? `<span class="pill ok">${src.stats.keysApplied} kunci dari bagian Kunci Jawaban</span>` : ''}${isDraft && src.imgCount ? `<span class="pill ok">🖼 ${src.imgCount} gambar diambil otomatis dari PDF</span>` : ''}${w.questions.some(q => q.image) ? `<span class="pill">🖼 ${w.questions.filter(q => q.image).length} soal bergambar</span>` : ''}</div>
+        <div class="btns"><span class="pill pri">${w.questions.length} soal</span>${QT.ORDER.filter(t => w.questions.some(x => x.type === t)).map(t => `<span class="pill">${QT.TYPES[t].icon} ${TYPE_LABEL[t]} ${w.questions.filter(x => x.type === t).length}</span>`).join('')}<span class="pill">Total ${fmt(total)} poin</span>${noKey ? `<button class="pill bad" data-act="go-nokey" title="Lompat ke soal yang belum ada kuncinya">⚠️ ${noKey} soal belum ada kunci → lihat</button>` : '<span class="pill ok">✅ Semua kunci lengkap</span>'}
+          ${isDraft && src.stats ? (src.stats.keysApplied ? `<span class="pill ok">🔑 ${src.stats.keysApplied} kunci otomatis dari bagian Kunci Jawaban PDF</span>` : (src.keyLine === -1 && noKey ? '<span class="pill warn" title="Tulis bagian KUNCI JAWABAN di bawah soal pada PDF agar kunci tercentang otomatis">🔑 Bagian Kunci Jawaban tidak ditemukan di PDF</span>' : '')) : ''}${isDraft && src.imgCount ? `<span class="pill ok">🖼 ${src.imgCount} gambar diambil otomatis dari PDF</span>` : ''}${w.questions.some(q => q.image) ? `<span class="pill">🖼 ${w.questions.filter(q => q.image).length} soal bergambar</span>` : ''}</div>
         ${pdfDoc ? '<p class="small muted" style="margin:8px 0 0">Gambar yang belum terambil (mis. grafik/tabel berupa garis) bisa dipotong manual dengan tombol <b>✂️ Dari PDF</b> pada soalnya.</p>' : ''}
         ${isDraft && src.warnings && src.warnings.length ? `<div class="note warn" style="margin-top:10px"><b>Perlu diperiksa:</b><ul class="list-warn">${src.warnings.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>
@@ -1739,6 +1752,7 @@ B. VII B</pre></div></div></div>
       actions: {
         side: el => { $$('.tabs button', el.parentNode).forEach(b => b.classList.toggle('on', b === el)); $('#side-pdf').classList.toggle('hidden', el.dataset.t !== 'pdf'); $('#side-raw').classList.toggle('hidden', el.dataset.t !== 'raw'); },
         cancel: () => { delete src._work; location.hash = '#/bank-soal'; },
+        'go-nokey': () => { const i = w.questions.findIndex(q => !QT.hasKey(q)); const c = $(`.q-card[data-qi="${i}"]`); if (c) { c.scrollIntoView({ behavior: 'smooth', block: 'center' }); c.classList.add('flash'); setTimeout(() => c.classList.remove('flash'), 1600); } },
         delq: el => { w.questions.splice(+el.dataset.i, 1); keepScroll(); },
         up: el => { const i = +el.dataset.i; if (i > 0) { const t = w.questions[i]; w.questions[i] = w.questions[i - 1]; w.questions[i - 1] = t; keepScroll(); } },
         down: el => { const i = +el.dataset.i; if (i < w.questions.length - 1) { const t = w.questions[i]; w.questions[i] = w.questions[i + 1]; w.questions[i + 1] = t; keepScroll(); } },

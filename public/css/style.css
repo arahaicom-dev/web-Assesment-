@@ -1072,3 +1072,7 @@ button:disabled.btn, .btn[disabled] { opacity: .5; cursor: not-allowed; filter: 
 .cred-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 14px; padding: 6px 14px; }
 .cred-box > div { display: flex; justify-content: space-between; gap: 12px; padding: 8px 0; border-bottom: 1px dashed var(--border); }
 .cred-box > div:last-child { border-bottom: none; } .cred-box span { color: var(--muted); } .cred-box b { font-family: ui-monospace, Menlo, Consolas, monospace; word-break: break-all; text-align: right; }
+button.pill { cursor: pointer; border: none; font: inherit; }
+.q-card.flash { animation: qflash 1.6s ease; }
+@keyframes qflash { 0%, 60% { box-shadow: 0 0 0 4px rgba(255, 176, 46, .85); } 100% { box-shadow: none; } }
+.key-pill { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

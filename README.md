@@ -136,6 +136,12 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Kode sumber di folder `android/`. Membangun ulang: siapkan Android SDK, salin kunci ke `android/keystore/` (`asesmen-release.jks` + `keystore.properties`, **tidak** disimpan di GitHub), naikkan `appVersionCode` di `android/gradle.properties`, lalu `cd android && ./gradlew assembleRelease`. Alamat website bisa diubah di `appUrl`.
 - **Simpan baik-baik file kunci (keystore)**: pembaruan APK harus ditandatangani kunci yang sama, kalau tidak HP menolak memperbarui aplikasi.
 
+## Kunci jawaban otomatis dari PDF (v5.17)
+
+- Tulis bagian **KUNCI JAWABAN** (atau *Pedoman Penskoran dan Kunci Jawaban*) di bawah soal pada PDF. Saat diunggah, kunci **semua jenis soal** otomatis terpasang dan tercentang: pilihan ganda, pilihan ganda kompleks, benar/salah, menjodohkan, isian, dan uraian (jawaban acuan).
+- Format yang dikenali: per nomor (`1. B  2. C`), tabel mendatar (`No 1 2 3` / `Kunci B C A`), tabel `No | Kunci` dua kolom, nomor dan jawaban di baris terpisah, PG kompleks `A, C` / `A dan C` / `AC`, B/S `Benar`/`Salah`/`B`/`S`.
+- Editor menampilkan **✅ Kunci** di tiap soal; ringkasan "⚠️ N soal belum ada kunci → lihat" langsung melompat ke soal yang perlu dilengkapi.
+
 ## Kartu Ujian & Foto Murid (v5.16)
 
 - Menu **🪪 Kartu Ujian**: pilih kelas (boleh beberapa), lalu cetak kartu peserta berisi **nama, kelas, NIS, NISN, foto 3×4, nomor peserta, ruang/sesi**, kode QR masuk ujian (membuka `/gabung` dengan nama terisi), serta tanda tangan kepala sekolah. Logo sekolah bisa dipasang. 8 kartu per lembar A4; untuk PDF pilih "Simpan sebagai PDF" saat mencetak.

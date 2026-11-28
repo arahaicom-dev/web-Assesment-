@@ -29,7 +29,7 @@
     { type: 'uraian', re: /\buraian\b|\besa[iy]\b|\bessay\b|jawablah\s+(pertanyaan|soal)|jawablah\s+dengan\s+(benar|tepat|jelas|singkat)/i }
   ];
 
-  const KEY_HEADING = /^\s*(?:[IVX]{1,4}\s*[.)]\s*)?(?:kunci\s*(?:jawaban)?|answer\s*key|pembahasan\s+dan\s+kunci)\b.{0,40}$/i;
+  const KEY_HEADING = /^\s*(?:[IVX]{1,4}\s*[.)]\s*|[A-H]\s*[.)]\s*)?(?:kunci\s*(?:jawaban)?|answer\s*key|(?:pembahasan|pedoman\s+(?:penskoran|penilaian)|rubrik(?:\s+penilaian)?)\s+(?:dan\s+)?kunci|pedoman\s+penskoran|lembar\s+kunci|jawaban\s+soal|jawaban\s*$)\b.{0,60}$/i;
   const INLINE_ANSWER = /^\s*(?:kunci(?:\s*jawaban)?|jawaban(?:nya)?|jawab|answer|ans|key)\s*[:=]\s*(.*)$/i;
   const POINTS_RE = /[([]\s*(?:skor|bobot|poin|point|nilai)\s*[:=]?\s*(\d{1,3})\s*(?:poin|point|pts)?\s*[)\]]|[([]\s*(\d{1,3})\s*(?:poin|point|pts)\s*[)\]]/i;
   const BLANK_RE = /(\.{3,}|…{1,}|_{3,}|-{4,})/;
@@ -270,12 +270,15 @@
     for (let i = 0; i < r.length; i++) { const a = v[r[i]], b = v[r[i + 1]] || 0; n += a < b ? -a : a; }
     return n;
   }
-  function parseKeyLines(lines, sectionOrder) {
+  function parseKeyLines(lines, sectionOrder, qnums) {
     const keys = []; // {num, value, section}
-    let sec = null;
+    const has = n => !qnums || qnums.has(n);
+    let sec = null, pendNum = null, hdrNums = null;
+    const TABLE_HEAD = /^(?:no\.?|nomor)(?:\s+soal)?(?:\s+(?:kunci(?:\s+jawaban)?|jawaban|jwb|skor))*(?:\s+(?:no\.?|nomor)(?:\s+soal)?(?:\s+(?:kunci(?:\s+jawaban)?|jawaban|jwb|skor))*)*$/i;
     for (const raw of lines) {
-      let line = raw.trim();
+      let line = raw.trim().replace(/\s*\|\s*/g, ' ').trim();
       if (!line) continue;
+      if (TABLE_HEAD.test(line)) continue; // kepala tabel "No | Kunci | No | Kunci"
       const rm = line.match(/^([IVX]{1,4})\s*[.)]\s*(.*)$/);
       if (rm && sectionOrder && sectionOrder.length && !sectionTypeOf(line)) {
         const idx = romanToInt(rm[1]) - 1;
@@ -283,30 +286,57 @@
         line = rm[2].trim();
         if (!line) continue;
       }
-      const st = sectionTypeOf(line) || (/^(pilihan\s*ganda|pg)\b/i.test(line) ? 'pg' : /^(isian)\b/i.test(line) ? 'isian' : /^(uraian|esai|essay)\b/i.test(line) ? 'uraian' : /^benar/i.test(line) ? 'bs' : null);
-      if (st && !/^\d/.test(line)) { sec = st; continue; }
-      // Banyak kunci berupa teks dalam satu baris: "6. Rp13.500 7. Rp4.000 8. Rp17.500"
-      const bounds = []; const reB = /(^|\s)\(?(\d{1,3})\s*[.)\-:=]\s+/g; let bm;
-      while ((bm = reB.exec(line))) bounds.push({ num: +bm[2], at: bm.index + bm[1].length, end: reB.lastIndex });
-      if (bounds.length >= 2 && bounds[0].at === 0 && bounds.every((b, k) => !k || b.num > bounds[k - 1].num)) {
-        const vals = bounds.map((b, k) => line.slice(b.end, k + 1 < bounds.length ? bounds[k + 1].at : line.length).trim().replace(/[,;|]+$/, '').trim());
-        if (vals.every(Boolean) && vals.some(v => !/^\(?[A-Ha-h]\)?\.?$/.test(v) && !/^(benar|salah|B|S)$/i.test(v))) {
-          bounds.forEach((b, k) => keys.push({ num: b.num, value: vals[k], section: sec }));
+      const st = sectionTypeOf(line) || (/^(pilihan\s*ganda|pg)\b/i.test(line) ? 'pg' : /^(isian)\b/i.test(line) ? 'isian' : /^(uraian|esai|essay)\b/i.test(line) ? 'uraian' : /^benar/i.test(line) ? 'bs' : /^(menjodohkan|jodohkan)\b/i.test(line) ? 'jodoh' : null);
+      if (st && !/^\d/.test(line)) { sec = st; pendNum = null; continue; }
+      // Tabel mendatar: "No 1 2 3 4 5" lalu "Kunci B A C D A"
+      const numRow = line.replace(/^(?:no\.?|nomor)(?:\s+soal)?\s*[:.]?\s*/i, '');
+      if (/^\d{1,3}(?:\s+\d{1,3}){2,}$/.test(numRow)) {
+        const ns = numRow.split(/\s+/).map(Number);
+        if (ns.every((n, k) => !k || n > ns[k - 1]) && ns.filter(has).length >= ns.length - 1) { hdrNums = ns; pendNum = null; continue; }
+      }
+      if (hdrNums) {
+        const body = line.replace(/^(?:kunci(?:\s+jawaban)?|jawaban|jwb)\s*[:.]?\s*/i, '').replace(/\s*([,/&+;])\s*/g, '$1').replace(/\s+dan\s+/gi, ',');
+        const toks = body.split(/\s+/);
+        const ns = hdrNums; hdrNums = null;
+        if (toks.length === ns.length) { ns.forEach((n, k) => keys.push({ num: n, value: toks[k].replace(/[/&+;]/g, ','), section: sec })); continue; }
+      }
+      // Tabel tegak terpisah: nomor sendirian di satu baris, jawabannya di baris berikutnya
+      const lone = line.match(/^\(?(\d{1,3})\s*[.)\-:=]?\s*$/);
+      if (lone && has(+lone[1]) && (pendNum === null || +lone[1] !== pendNum)) {
+        if (pendNum === null || !qnums) { pendNum = +lone[1]; continue; }
+      }
+      if (pendNum !== null) {
+        const v = lone ? lone[1] : line;
+        keys.push({ num: pendNum, value: v, section: sec }); pendNum = null; continue;
+      }
+      // Beberapa kunci dalam satu baris: "1. B 2. C", "6. Rp13.500 7. Rp4.000", "1 B 6 S", "5. Benar 6. Salah", "4. A, C 5. B"
+      const bounds = []; const reB = /(^|\s)\(?(\d{1,3})(\s*[.)\-:=])?\s+/g; let bm;
+      while ((bm = reB.exec(line))) bounds.push({ num: +bm[2], at: bm.index + bm[1].length, end: reB.lastIndex, delim: !!bm[3] });
+      const okB = bs => bs.length >= 2 && bs[0].at === 0 && bs.every((b, k) => !k || b.num > bs[k - 1].num) && bs.every(b => has(b.num)) && bs.every(b => b.delim === bs[0].delim);
+      // buang batas palsu (angka di dalam jawaban) sampai sisanya konsisten
+      let bb = bounds;
+      if (!okB(bb) && bb.length > 2 && bb[0].at === 0) {
+        bb = bounds.filter((b, k) => !k || (has(b.num) && b.delim === bounds[0].delim));
+        bb = bb.filter((b, k) => !k || b.num > bb[0].num).reduce((acc, b) => (!acc.length || b.num > acc[acc.length - 1].num ? acc.concat([b]) : acc), []);
+      }
+      if (okB(bb)) {
+        const vals = bb.map((b, k) => line.slice(b.end, k + 1 < bb.length ? bb[k + 1].at : line.length).trim().replace(/[,;|]+$/, '').trim());
+        if (vals.every(Boolean) && (bb[0].delim || vals.every(v => v.length <= 40))) {
+          bb.forEach((b, k) => keys.push({ num: b.num, value: vals[k], section: sec }));
           continue;
         }
       }
-      // Banyak pasangan dalam satu baris: "1. A  2. C  3. D" atau "1-A, 2-B"
+      // Pasangan rapat: "1-A, 2-B" / "1A 2C 3D"
       const multi = [];
-      const reMulti = /(\d{1,3})\s*[.)\-:=]?\s*\(?([A-Ha-h]|benar|salah|B|S)\)?(?=[\s,;|]|$)/g;
+      const reMulti = /(\d{1,3})\s*[.)\-:=]?\s*\(?([A-Ha-h]|benar|salah|B|S)\)?(?=[\s,;|]|$)/gi;
       let m;
       while ((m = reMulti.exec(line))) multi.push({ num: +m[1], value: m[2] });
-      const covered = multi.reduce((n, x) => n + 1, 0);
-      if (covered >= 2 || (covered === 1 && /^\s*\d{1,3}\s*[.)\-:=]?\s*\(?[A-Ha-h]\)?\s*[.]?\s*$/i.test(line))) {
+      if (multi.length >= 2 || (multi.length === 1 && /^\s*\d{1,3}\s*[.)\-:=]?\s*\(?[A-Ha-h]\)?\s*[.]?\s*$/i.test(line))) {
         multi.forEach(x => keys.push({ num: x.num, value: x.value, section: sec }));
         continue;
       }
-      const single = line.match(/^\(?(\d{1,3})\s*[.)\]:\-]\s*(.+)$/);
-      if (single) { keys.push({ num: +single[1], value: single[2].trim(), section: sec }); continue; }
+      const single = line.match(/^\(?(\d{1,3})\s*[.)\]:\-=]\s*(.+)$/) || line.match(/^(\d{1,3})\s+(\S.*)$/);
+      if (single && (has(+single[1]) || /[.)\]:\-=]/.test(line.charAt(String(single[1]).length)))) { keys.push({ num: +single[1], value: single[2].trim(), section: sec }); continue; }
       // Lanjutan jawaban uraian
       if (keys.length && !/^\d/.test(line)) keys[keys.length - 1].value += ' ' + line;
     }
@@ -333,7 +363,7 @@
           && !target.options.some(o => v.toLowerCase().indexOf(o.text.toLowerCase()) >= 0 && o.text.length > 2)) {
         toSubParts(target); target.points = DEFAULT_POINTS.uraian; target.answer = v; applied++;
       }
-      else if ((target.type === 'pg' || target.type === 'pgk') && multiKey(v)) { target.type = 'pgk'; target.answer = multiKey(v); applied++; }
+      else if ((target.type === 'pg' || target.type === 'pgk') && multiKey(v)) { if (target.type === 'pg' && (!target.points || target.points === DEFAULT_POINTS.pg)) target.points = DEFAULT_POINTS.pgk; target.type = 'pgk'; target.answer = multiKey(v); applied++; }
       else if (target.type === 'pg' || target.type === 'pgk') {
         const lm = v.match(/^\(?([A-Ha-h])\)?(?:[.)\s]|$)/);
         if (lm) { target.answer = lm[1].toUpperCase(); applied++; }
@@ -634,7 +664,7 @@
 
     let keysApplied = 0;
     if (keyStart >= 0) {
-      const keys = parseKeyLines((keyFirst ? [keyFirst] : []).concat(lines.slice(keyStart)), sectionOrder);
+      const keys = parseKeyLines((keyFirst ? [keyFirst] : []).concat(lines.slice(keyStart)), sectionOrder, new Set(questions.map(q => q.num)));
       keysApplied = applyKeys(questions, keys, warnings);
     }
 
