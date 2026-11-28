@@ -152,6 +152,22 @@
       <details><summary>Kalau masa langganan habis?</summary><p>Data sekolah tetap tersimpan aman. Aplikasi terkunci sampai langganan diperpanjang.</p></details>
     </section>
 
+    <!-- Aplikasi HP -->
+    <section class="lp-sec" id="aplikasi">
+      <div class="app-dl">
+        <div class="app-dl-copy">
+          <h2 class="display">Pasang di HP sebagai aplikasi</h2>
+          <p>Guru dan murid bisa memakai Asesmen Merdeka langsung dari ikon di layar HP, layar penuh tanpa membuka browser. Foto jawaban, rekaman suara, unduh Excel, dan cetak kartu tetap bisa.</p>
+          <div class="hero-cta">
+            <a class="pill-btn white lg" href="unduh/asesmen-merdeka.apk" download>🤖 Unduh Aplikasi Android</a>
+            <button class="pill-btn dark lg" type="button" id="btn-ios">🍎 iPhone / iPad</button>
+          </div>
+          <p class="hint">APK ±200 KB. Saat memasang, izinkan "Instal aplikasi tidak dikenal" bila diminta. Untuk iPhone: buka situs ini di Safari → Bagikan → Tambah ke Layar Utama.</p>
+        </div>
+        <div class="app-dl-qr"><div id="apk-qr"></div><small>Pindai dengan HP<br>untuk mengunduh</small></div>
+      </div>
+    </section>
+
     <!-- CTA -->
     <section class="lp-sec">
       <div class="cta-big">
@@ -171,5 +187,14 @@
   <script src="js/art.js?v=5.16.0"></script>
   <script src="js/landing.js?v=5.16.0"></script>
   <script src="js/pwa.js?v=5.16.0"></script>
+  <script src="lib/qrcode/qrcode.js?v=5.16.0"></script>
+  <script>
+    (function () {
+      var box = document.getElementById('apk-qr'); if (!box || !window.qrcode) return;
+      var q = qrcode(0, 'M'); q.addData(location.origin + location.pathname.replace(/[^/]*$/, '') + 'unduh/asesmen-merdeka.apk'); q.make();
+      box.innerHTML = q.createSvgTag({ cellSize: 4, margin: 2, scalable: true });
+      var ib = document.getElementById('btn-ios'); if (ib) ib.onclick = function () { if (window.PWA) PWA.iosHelp(); };
+    })();
+  </script>
 </body>
 </html>

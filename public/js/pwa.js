@@ -5,8 +5,13 @@
     window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
   }
   const mq = q => window.matchMedia && window.matchMedia(q).matches;
-  const standalone = mq('(display-mode: standalone)') || mq('(display-mode: minimal-ui)') || window.navigator.standalone === true;
+  const inApp = /AsesmenMerdekaApp\//.test(navigator.userAgent);
+  const standalone = inApp || mq('(display-mode: standalone)') || mq('(display-mode: minimal-ui)') || window.navigator.standalone === true;
+  const isAndroid = /android/i.test(navigator.userAgent);
+  const base = location.pathname.replace(/[^/]*$/, '');
+  const APK = base + 'unduh/asesmen-merdeka.apk';
   document.documentElement.classList.toggle('standalone', !!standalone);
+  if (inApp) document.documentElement.classList.add('in-app');
   const isIOS = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   const isMobile = () => mq('(max-width: 860px)') || /android|iphone|ipad|ipod/i.test(navigator.userAgent);
   const KEY = 'pwa-later';
@@ -31,16 +36,16 @@
   function show() {
     if (standalone || document.getElementById('pwa-bar') || !isMobile()) return;
     if (+localStorage.getItem(KEY) > Date.now()) return;
-    if (!deferred && !isIOS) return;
+    if (!deferred && !isIOS && !isAndroid) return;
     const kuis = document.body.classList.contains('kuis-body');
     const bar = document.createElement('div'); bar.id = 'pwa-bar'; bar.className = 'pwa-bar';
-    bar.innerHTML = `<img src="icons/${kuis ? 'kuis' : 'icon'}-192.png" alt=""><div><b>Pasang ${kuis ? 'Kuis Seru' : 'aplikasi'} di HP</b><small>Buka lebih cepat, layar penuh seperti aplikasi</small></div><button class="pwa-btn">Pasang</button><button class="pwa-x" aria-label="Nanti">✕</button>`;
-    bar.querySelector('.pwa-btn').onclick = install;
+    bar.innerHTML = `<img src="icons/${kuis ? 'kuis' : 'icon'}-192.png" alt=""><div><b>Pasang ${kuis ? 'Kuis Seru' : 'aplikasi'} di HP</b><small>Buka lebih cepat, layar penuh seperti aplikasi</small></div>${!deferred && isAndroid ? `<a class="pwa-btn" href="${APK}" download>Unduh</a>` : '<button class="pwa-btn">Pasang</button>'}<button class="pwa-x" aria-label="Nanti">✕</button>`;
+    const pb = bar.querySelector('button.pwa-btn'); if (pb) pb.onclick = install;
     bar.querySelector('.pwa-x').onclick = () => { localStorage.setItem(KEY, Date.now() + 7 * 864e5); hide(); };
     document.body.appendChild(bar);
   }
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; setTimeout(show, 1500); });
   window.addEventListener('appinstalled', hide);
-  if (isIOS && !standalone) setTimeout(show, 2500);
-  window.PWA = { install, standalone, canInstall: () => !standalone && (!!deferred || isIOS), isIOS };
+  if ((isIOS || isAndroid) && !standalone) setTimeout(show, 2500);
+  window.PWA = { install, standalone, inApp, isAndroid, apk: APK, iosHelp: iosSheet, canInstall: () => !standalone && (!!deferred || isIOS), isIOS };
 })();

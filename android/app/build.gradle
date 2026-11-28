@@ -1,0 +1,40 @@
+plugins { id 'com.android.application' }
+
+def ks = rootProject.file('keystore/asesmen-release.jks')
+def ksProps = new Properties()
+def ksPropsFile = rootProject.file('keystore/keystore.properties')
+if (ksPropsFile.exists()) ksPropsFile.withInputStream { ksProps.load(it) }
+
+android {
+    namespace 'com.arahai.asesmen'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.arahai.asesmen'
+        minSdk 24
+        targetSdk 35
+        versionCode Integer.parseInt(project.property('appVersionCode').toString())
+        versionName project.property('appVersionName').toString()
+        buildConfigField 'String', 'APP_URL', "\"${project.property('appUrl')}\""
+    }
+    buildFeatures { buildConfig true }
+    signingConfigs {
+        release {
+            if (ks.exists() && ksProps.getProperty('storePassword')) {
+                storeFile ks
+                storePassword ksProps.getProperty('storePassword')
+                keyAlias ksProps.getProperty('keyAlias', 'asesmen')
+                keyPassword ksProps.getProperty('keyPassword', ksProps.getProperty('storePassword'))
+            }
+        }
+    }
+    buildTypes {
+        release {
+            minifyEnabled false
+            if (ks.exists() && ksProps.getProperty('storePassword')) signingConfig signingConfigs.release
+        }
+    }
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

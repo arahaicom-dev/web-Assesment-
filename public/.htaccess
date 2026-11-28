@@ -3,6 +3,7 @@ Options -Indexes
 DirectoryIndex index.html index.php
 AddType application/manifest+json .webmanifest
 AddType application/javascript .js
+AddType application/vnd.android.package-archive .apk
 
 <IfModule mod_rewrite.c>
   RewriteEngine On

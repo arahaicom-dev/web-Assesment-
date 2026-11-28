@@ -206,3 +206,10 @@ html[data-mode="light"] .hint { color: #4a4f78; }
 .monitor, .phone, .tiles-demo, .exam-demo, .app-mini { color: #f4f3ff; }
 html[data-mode="light"] .sky .cloud { opacity: .7; }
 html[data-mode="light"] .sky .cloud.c1 { top: 8%; }
+
+/* Unduh aplikasi Android */
+.app-dl { display: flex; gap: 32px; align-items: center; justify-content: space-between; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); border-radius: 28px; padding: 34px; flex-wrap: wrap; }
+.app-dl-copy { flex: 1 1 380px; } .app-dl-copy p { opacity: .9; }
+.app-dl-qr { background: #fff; color: #1b1663; border-radius: 20px; padding: 16px; text-align: center; font-weight: 700; }
+.app-dl-qr svg { width: 150px; height: 150px; display: block; margin: 0 auto 6px; }
+html.in-app #aplikasi { display: none; }

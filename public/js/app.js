@@ -345,6 +345,7 @@ B. VII B</pre></div></div></div>
       ${which === 'more' ? user : `<h3 class="sheet-title">${esc(which === 'Asesmen' ? 'Jenis Asesmen' : which === 'Kuis Interaktif' ? 'Kuis & Hasil' : which === 'Soal' ? 'Soal' : which)}</h3>`}
       ${list.map(g => `${which === 'more' ? `<div class="sheet-group">${esc(g.name)}</div>` : ''}<div class="sheet-list">${g.items.map(row).join('')}</div>`).join('')}
       ${which === 'more' && window.PWA && PWA.canInstall() ? '<button class="btn soft" style="width:100%;margin-top:12px" id="sheet-install">📲 Pasang aplikasi di HP</button>' : ''}
+      ${which === 'more' && window.PWA && !PWA.inApp && PWA.isAndroid ? `<a class="btn soft" style="width:100%;margin-top:8px" href="${PWA.apk}" download>🤖 Unduh Aplikasi Android (APK)</a>` : ''}
     </div>`;
     bg.addEventListener('click', e => { if (e.target === bg || e.target.closest('.sheet-item')) closeMenuSheet(); });
     const lo = $('#sheet-logout', bg); if (lo) lo.onclick = () => S.logout();

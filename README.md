@@ -128,6 +128,14 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Penilaian dihitung **di server** (PHP & Node) dengan aturan yang sama seperti di browser, kunci tidak pernah dikirim ke HP murid, dan urutan pilihan/pasangan diacak per murid.
 - Gambar & rekaman jawaban murid disimpan di tabel `media` (dibuat otomatis) dan hanya bisa dibuka guru sekolah tersebut di halaman Koreksi.
 
+## Aplikasi Android (APK) (v5.16)
+
+- File siap pasang: **`unduh/asesmen-merdeka.apk`** (ikut di zip). Di website ada bagian **"Pasang di HP sebagai aplikasi"** (tombol unduh + QR), dan di HP Android muncul ajakan **Unduh**. iPhone/iPad memakai "Tambah ke Layar Utama" (PWA).
+- Aplikasi membuka `https://arahai.com/asesmen/` layar penuh. Unggah berkas/foto, kamera & mikrofon, unduh Excel/CSV/PDF (tersimpan di folder Download), cetak (kartu ujian, rapor), dan tombol Kembali berfungsi. Link WhatsApp/telepon dibuka di aplikasinya; link `arahai.com/asesmen/...` bisa dibuka langsung di aplikasi.
+- Isi website tetap dari server, jadi **pembaruan website langsung terlihat di aplikasi tanpa perlu memasang ulang APK**.
+- Kode sumber di folder `android/`. Membangun ulang: siapkan Android SDK, salin kunci ke `android/keystore/` (`asesmen-release.jks` + `keystore.properties`, **tidak** disimpan di GitHub), naikkan `appVersionCode` di `android/gradle.properties`, lalu `cd android && ./gradlew assembleRelease`. Alamat website bisa diubah di `appUrl`.
+- **Simpan baik-baik file kunci (keystore)**: pembaruan APK harus ditandatangani kunci yang sama, kalau tidak HP menolak memperbarui aplikasi.
+
 ## Kartu Ujian & Foto Murid (v5.16)
 
 - Menu **🪪 Kartu Ujian**: pilih kelas (boleh beberapa), lalu cetak kartu peserta berisi **nama, kelas, NIS, NISN, foto 3×4, nomor peserta, ruang/sesi**, kode QR masuk ujian (membuka `/gabung` dengan nama terisi), serta tanda tangan kepala sekolah. Logo sekolah bisa dipasang. 8 kartu per lembar A4; untuk PDF pilih "Simpan sebagai PDF" saat mencetak.
