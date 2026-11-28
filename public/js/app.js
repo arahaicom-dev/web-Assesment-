@@ -274,7 +274,8 @@ B. VII B</pre></div></div></div>
     { group: 'Utama' },
     { href: 'beranda', ic: '🏠', label: 'Beranda' },
     { href: 'data', ic: '🗂️', label: 'Kelas, Murid & Mapel' },
-    { href: 'kartu', ic: '🪪', label: 'Kartu Ujian', tag: 'Baru' },
+    { href: 'kartu', ic: '🪪', label: 'Kartu Ujian' },
+    { href: 'absen', ic: '📋', label: 'Absensi Ujian', tag: 'Baru' },
     { group: 'Asesmen' },
     ...C.TYPE_ORDER.map(k => ({ href: 'asesmen/' + k, ic: T[k].icon, label: T[k].name, tag: T[k].short })),
     { group: 'Kuis Interaktif' },
@@ -431,6 +432,7 @@ B. VII B</pre></div></div></div>
       else if (r === 'kuis') out = parts[1] ? viewGameHost(parts[1]) : viewGames();
       else if (r === 'pantau' && S.mode === 'server') out = viewMonitor();
       else if (r === 'kartu') out = viewCards();
+      else if (r === 'absen') out = viewAbsen();
       else if (r === 'perpustakaan') out = viewLibrary(parts[1]);
       else if (r === 'hasil' || /^hasil\?/.test(r)) out = viewReports(parts[1], parts[2]);
       else if (r === 'pemilik' && S.saas && S.user && S.user.super) out = viewOwner(parts[1]);
@@ -3213,7 +3215,7 @@ B. VII B</pre></div></div></div>
           <label class="field"><span>Kota</span><input data-k="kota" value="${esc(K.kota)}" placeholder="mis. Makassar"></label><label class="field" style="max-width:170px"><span>Tanggal</span><input type="date" data-k="tanggal" value="${esc(K.tanggal)}"></label></div>
         <div id="k-ruang"></div>
         <div class="btns" style="align-items:center">${[['photo', 'Foto'], ['nis', 'NIS'], ['nisn', 'NISN'], ['ruang', 'Ruang/Sesi'], ['qr', 'Kode QR masuk ujian'], ['ttd', 'Tanda tangan']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-show="${k}" ${K.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}</div>
-        <div class="btns" style="margin-top:10px"><button class="btn soft" data-act="k-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} Logo Sekolah</button>${K.logo ? '<button class="btn ghost sm" data-act="k-nologo">Hapus logo</button>' : ''}<button class="btn soft" data-act="k-photos">🖼 Pasang Foto Murid (banyak sekaligus)</button><span style="margin-left:auto" class="btns"><button class="btn lg" data-act="k-print">🖨 Cetak Kartu</button></span></div>
+        <div class="btns" style="margin-top:10px"><button class="btn soft" data-act="k-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} Logo Sekolah</button>${K.logo ? '<button class="btn ghost sm" data-act="k-nologo">Hapus logo</button>' : ''}<button class="btn soft" data-act="k-photos">🖼 Pasang Foto Murid (banyak sekaligus)</button><a class="btn ghost" href="#/absen">📋 Absensi Ujian</a><span style="margin-left:auto" class="btns"><button class="btn lg" data-act="k-print">🖨 Cetak Kartu</button></span></div>
         <p class="small muted" style="margin:8px 0 0">8 kartu per lembar A4. Untuk PDF: Cetak → pilih "Simpan sebagai PDF". Foto murid juga bisa dipasang satu per satu di menu <a href="#/data/kelas">Kelas & Murid</a> (klik kotak foto).</p>
       </div>
       <div id="k-sum" class="small muted no-print" style="margin:6px 0 10px"></div>
@@ -3270,6 +3272,127 @@ B. VII B</pre></div></div></div>
           img.src = url;
         },
         'k-nologo': () => { K.logo = ''; S.save(); route(); }
+      }
+    };
+  }
+
+  /* ================= Absensi (daftar hadir) ujian ================= */
+  function viewAbsen() {
+    setTitle('📋 Absensi Ujian', 'Daftar hadir peserta ujian lengkap dengan kop sekolah, nama mapel, dan tanda tangan Kepala Sekolah');
+    renderCtx(false);
+    const s = st();
+    // kop & penanda tangan dipakai bersama dengan Kartu Ujian (cukup diisi sekali)
+    const K = s.settings.kartu = Object.assign(kartuDefaults(s), s.settings.kartu || {});
+    const A = s.settings.absen = Object.assign({ classIds: [], subjectId: '', judul: 'DAFTAR HADIR PESERTA UJIAN', ujian: K.ujian, tanggal: new Date().toISOString().slice(0, 10), jam: '', ruang: '', pengawas: '', nipPengawas: '', perPage: 20, show: { nisn: true, ttd: true, pengawas: true, ket: true }, exam: '' }, s.settings.absen || {});
+    A.show = Object.assign({ nisn: true, ttd: true, pengawas: true, ket: true }, A.show || {});
+    if (!A.classIds.length && s.ui.classId) A.classIds = [s.ui.classId];
+    A.classIds = A.classIds.filter(id => S.cls(id));
+    if (!A.subjectId && s.ui.subjectId && S.subj(s.ui.subjectId)) A.subjectId = s.ui.subjectId;
+    const save = (() => { let t; return () => { clearTimeout(t); t = setTimeout(() => S.save(), 600); }; })();
+    let present = null, examLabel = '', exams = [];
+    const html = `<div class="card no-print kartu-form">
+        <div class="field"><span>Kelas</span><div class="pz-nums">${s.classes.map(c => `<label class="pz-num"><input type="checkbox" value="${c.id}" ${A.classIds.indexOf(c.id) >= 0 ? 'checked' : ''} data-ac><span style="padding:0 12px">${esc(c.name)} <small>(${c.students.length})</small></span></label>`).join('') || '<span class="muted">Belum ada kelas.</span>'}</div></div>
+        <div class="row"><label class="field"><span>Mata pelajaran (tampil di bawah kop)</span><select data-a="subjectId"><option value="">— pilih mapel —</option>${s.subjects.map(x => `<option value="${x.id}" ${A.subjectId === x.id ? 'selected' : ''}>${esc(x.name)}</option>`).join('')}</select></label>
+          <label class="field" style="flex:2"><span>Nama ujian</span><input data-a="ujian" value="${esc(A.ujian)}"></label></div>
+        <div class="row"><label class="field" style="max-width:170px"><span>Hari/Tanggal</span><input type="date" data-a="tanggal" value="${esc(A.tanggal)}"></label><label class="field" style="max-width:170px"><span>Waktu</span><input data-a="jam" value="${esc(A.jam)}" placeholder="07.30 – 09.00"></label>
+          <label class="field" style="max-width:150px"><span>Ruang</span><input data-a="ruang" value="${esc(A.ruang)}" placeholder="R-01"></label><label class="field"><span>Nama Pengawas</span><input data-a="pengawas" value="${esc(A.pengawas)}"></label><label class="field"><span>NIP Pengawas</span><input data-a="nipPengawas" value="${esc(A.nipPengawas)}"></label></div>
+        <details class="field" ${K.kepala ? '' : 'open'}><summary><b>🏫 Kop sekolah & Kepala Sekolah</b> <span class="small muted">— dipakai juga di Kartu Ujian</span></summary>
+          <div class="row" style="margin-top:8px"><label class="field" style="flex:2"><span>Baris atas kop (opsional)</span><input data-k="instansi" value="${esc(K.instansi || '')}" placeholder="PEMERINTAH KABUPATEN … / DINAS PENDIDIKAN"></label><label class="field" style="flex:2"><span>Alamat sekolah (opsional)</span><input data-k="alamat" value="${esc(K.alamat || '')}" placeholder="Jl. … No. …, Telp …"></label></div>
+          <div class="row"><label class="field"><span>Kepala Sekolah</span><input data-k="kepala" value="${esc(K.kepala)}" placeholder="Nama & gelar"></label><label class="field"><span>NIP Kepala Sekolah</span><input data-k="nip" value="${esc(K.nip)}"></label><label class="field"><span>Kota</span><input data-k="kota" value="${esc(K.kota)}" placeholder="mis. Makassar"></label></div>
+          <div class="btns"><button class="btn soft sm" data-act="a-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} Logo Sekolah</button>${K.logo ? `<img src="${K.logo}" alt="" style="height:38px;border-radius:6px;background:#fff;padding:2px"><button class="btn ghost sm" data-act="a-nologo">Hapus logo</button>` : ''}
+          <button class="btn soft sm" data-act="a-logo2">🏛 ${K.logo2 ? 'Ganti' : 'Pasang'} Logo Kanan (opsional, mis. Tut Wuri / Pemda)</button>${K.logo2 ? `<img src="${K.logo2}" alt="" style="height:38px;border-radius:6px;background:#fff;padding:2px"><button class="btn ghost sm" data-act="a-nologo2">Hapus</button>` : ''}</div>
+          <p class="small muted" style="margin:6px 0 0">Nama sekolah & tahun pelajaran diambil dari <a href="#/pengaturan">Pengaturan</a>.</p></details>
+        ${S.mode === 'server' ? '<div class="row" style="align-items:flex-end"><label class="field" style="flex:3"><span>✅ Isi kehadiran otomatis dari ujian (opsional)</span><select id="a-exam"><option value="">— tidak, isi manual saat ujian —</option></select></label></div>' : ''}
+        <div class="btns" style="align-items:center">${[['nisn', 'Kolom NISN'], ['ttd', 'Kolom tanda tangan'], ['ket', 'Kolom keterangan'], ['pengawas', 'Tanda tangan pengawas']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-ash="${k}" ${A.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}
+          <span style="margin-left:auto" class="btns"><a class="btn ghost" href="#/kartu">🪪 Kartu Ujian</a><button class="btn lg" data-act="a-print">🖨 Cetak Absensi</button></span></div>
+        <p class="small muted" style="margin:8px 0 0">Satu kelas dimulai di halaman baru (A4, ${A.perPage} murid per halaman). Untuk PDF: Cetak → "Simpan sebagai PDF".</p>
+      </div>
+      <div id="a-sum" class="small muted no-print" style="margin:6px 0 10px"></div>
+      <div id="absen-print"></div>`;
+    const draw = () => {
+      const box = $('#absen-print'); if (!box) return;
+      const cls = A.classIds.map(id => S.cls(id)).filter(Boolean);
+      if (!cls.length) { box.innerHTML = '<div class="card empty no-print">Pilih kelas yang akan dibuatkan daftar hadirnya.</div>'; $('#a-sum').textContent = ''; return; }
+      const subj = S.subj(A.subjectId);
+      const hari = A.tanggal ? new Date(A.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      const ttdTgl = A.tanggal ? new Date(A.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      const kop = `<div class="ab-kop">${K.logo ? `<img src="${K.logo}" alt="" class="ab-logo">` : '<div class="ab-logo"></div>'}
+        <div class="ab-kop-t">${K.instansi ? `<div class="ab-ins">${esc(K.instansi)}</div>` : ''}<div class="ab-sch">${esc(s.settings.schoolName || 'NAMA SEKOLAH')}</div>${K.alamat ? `<div class="ab-addr">${esc(K.alamat)}</div>` : ''}</div>
+        ${K.logo2 ? `<img src="${K.logo2}" alt="" class="ab-logo">` : '<div class="ab-logo"></div>'}</div>`;
+      let tot = 0, hadir = 0;
+      const pages = [];
+      cls.forEach(c => {
+        const list = c.students;
+        const chunks = []; for (let k = 0; k < Math.max(1, list.length); k += A.perPage) chunks.push(list.slice(k, k + A.perPage));
+        const nH = present ? list.filter(m => present[m.id]).length : null;
+        tot += list.length; if (nH !== null) hadir += nH;
+        chunks.forEach((ch, pi) => {
+          const last = pi === chunks.length - 1, base = pi * A.perPage;
+          pages.push(`<div class="ab-page">${kop}
+            <div class="ab-title"><b>${esc(A.judul)}</b><div>${esc(A.ujian || '')}${s.settings.tahunAjaran ? ' · Tahun Pelajaran ' + esc(s.settings.tahunAjaran) : ''}</div></div>
+            <div class="ab-mapel">Mata Pelajaran: <b>${esc(subj ? subj.name : '..............................')}</b></div>
+            <table class="ab-info"><tr><td>Kelas</td><td>: <b>${esc(c.name)}</b></td><td>Hari/Tanggal</td><td>: ${esc(hari || '..............................')}</td></tr>
+              <tr><td>Ruang</td><td>: ${esc(A.ruang || '..........')}</td><td>Waktu</td><td>: ${esc(A.jam || '..............................')}</td></tr></table>
+            <table class="ab-tab"><thead><tr><th style="width:9mm">No</th><th style="width:22mm">NIS</th>${A.show.nisn ? '<th style="width:26mm">NISN</th>' : ''}<th>Nama Peserta</th>${A.show.ttd ? '<th style="width:44mm" colspan="2">Tanda Tangan</th>' : ''}${A.show.ket ? '<th style="width:24mm">Ket.</th>' : ''}</tr></thead><tbody>
+            ${ch.map((m, i) => { const n = base + i + 1, pr = present ? present[m.id] : undefined; return `<tr><td class="c">${n}</td><td class="c">${esc(m.nis || '')}</td>${A.show.nisn ? `<td class="c">${esc(m.nisn || '')}</td>` : ''}<td>${esc(m.name)}</td>${A.show.ttd ? (n % 2 ? `<td class="sig">${n}.</td><td class="sig"></td>` : `<td class="sig"></td><td class="sig">${n}.</td>`) : ''}${A.show.ket ? `<td class="c">${present ? (pr ? (pr.done ? 'Hadir' : 'Hadir*') : '<b>Tidak hadir</b>') : ''}</td>` : ''}</tr>`; }).join('')}
+            </tbody></table>
+            ${last ? `<div class="ab-rekap">Jumlah peserta: <b>${list.length}</b> · Hadir: <b>${nH !== null ? nH : '.....'}</b> · Tidak hadir: <b>${nH !== null ? list.length - nH : '.....'}</b>${present && list.some(m => present[m.id] && !present[m.id].done) ? ' <span>(* hadir, belum mengumpulkan)</span>' : ''}</div>
+            <div class="ab-sign">${A.show.pengawas ? `<div>&nbsp;<br>Pengawas,<div class="ab-sp"></div><b>${esc(A.pengawas || '..............................')}</b>${A.nipPengawas ? `<br>NIP. ${esc(A.nipPengawas)}` : '<br>NIP. ..............................'}</div>` : '<div></div>'}
+              <div>${esc(K.kota ? K.kota + ', ' : '')}${esc(ttdTgl)}<br>Kepala Sekolah,<div class="ab-sp"></div><b>${esc(K.kepala || '..............................')}</b>${K.nip ? `<br>NIP. ${esc(K.nip)}` : '<br>NIP. ..............................'}</div></div>` : '<div class="ab-cont small">bersambung ke halaman berikutnya…</div>'}
+          </div>`);
+        });
+      });
+      box.innerHTML = pages.join('');
+      $('#a-sum').textContent = `${cls.length} kelas · ${tot} peserta · ${pages.length} halaman A4${present ? ` · ✅ kehadiran dari "${examLabel}": ${hadir} hadir, ${tot - hadir} tidak hadir` : ''}`;
+    };
+    const loadExams = async () => {
+      const sel = $('#a-exam'); if (!sel) return;
+      try {
+        const d = await S.api('monitor');
+        exams = [].concat(d.tokens.map(x => ({ v: 'token:' + x.id, label: `📝 ${x.title} · ${x.classes.filter(Boolean).join(', ')}${x.date ? ' · ' + tgl(x.date) : ''}`, cls: [x.classId], subj: x.subjectId })),
+          d.games.filter(x => x.classIds.length).map(x => ({ v: 'game:' + x.id, label: `${x.mode === 'exam' ? '📝' : '🎮'} ${x.title} · ${x.classes.join(', ')} · ${tgl(x.createdAt)}`, cls: x.classIds, subj: x.subjectId })));
+        const paint = () => {
+          const rel = exams.filter(e => !A.classIds.length || e.cls.some(c => A.classIds.indexOf(c) >= 0));
+          sel.innerHTML = '<option value="">— tidak, isi manual saat ujian —</option>' + rel.map(e => `<option value="${e.v}" ${A.exam === e.v ? 'selected' : ''}>${esc(e.label)}</option>`).join('');
+        };
+        paint(); sel._paint = paint;
+        if (A.exam && exams.some(e => e.v === A.exam)) await pickExam(A.exam);
+      } catch (e) { sel.innerHTML = '<option value="">Daftar ujian tidak bisa dimuat</option>'; }
+    };
+    const pickExam = async v => {
+      A.exam = v; save(); present = null; examLabel = '';
+      if (v) {
+        const [kind, id] = [v.slice(0, v.indexOf(':')), v.slice(v.indexOf(':') + 1)];
+        try { present = (await S.api('attendance?kind=' + kind + '&id=' + encodeURIComponent(id))).present || {}; const e = exams.find(x => x.v === v); examLabel = e ? e.label.replace(/^\S+\s/, '').split(' · ')[0] : ''; if (e && e.subj && !A.subjectId) { A.subjectId = e.subj; const ss = $('[data-a=subjectId]'); if (ss) ss.value = e.subj; } }
+        catch (e) { toast(e.message, 'bad'); }
+      }
+      draw();
+    };
+    const setLogo = key => async () => {
+      const f = (await pickFiles('image/*'))[0]; if (!f) return;
+      const img = new Image(), url = URL.createObjectURL(f);
+      img.onload = () => { const k = Math.min(1, 220 / Math.max(img.width, img.height)), c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k); c.getContext('2d').drawImage(img, 0, 0, c.width, c.height); URL.revokeObjectURL(url); K[key] = c.toDataURL('image/png'); S.save(); route(); };
+      img.src = url;
+    };
+    return {
+      html,
+      mount(v) {
+        $$('[data-ac]', v).forEach(c => c.onchange = () => { A.classIds = $$('[data-ac]:checked', v).map(x => x.value); save(); const sel = $('#a-exam'); if (sel && sel._paint) sel._paint(); draw(); });
+        $$('[data-a]', v).forEach(inp => inp.addEventListener(inp.tagName === 'SELECT' ? 'change' : 'input', () => { A[inp.dataset.a] = inp.value; save(); draw(); }));
+        $$('[data-k]', v).forEach(inp => inp.oninput = () => { K[inp.dataset.k] = inp.value; save(); draw(); });
+        $$('[data-ash]', v).forEach(inp => inp.onchange = () => { A.show[inp.dataset.ash] = inp.checked; save(); draw(); });
+        const sel = $('#a-exam', v); if (sel) sel.onchange = () => pickExam(sel.value);
+        draw(); loadExams();
+        const sheet = () => { let el = document.getElementById('print-sheet'); if (!el) { el = document.createElement('div'); el.id = 'print-sheet'; document.body.appendChild(el); } const src = $('#absen-print'); el.innerHTML = src ? src.innerHTML : ''; document.body.classList.add('print-cards'); };
+        const unsheet = () => { const el = document.getElementById('print-sheet'); if (el) el.remove(); document.body.classList.remove('print-cards'); };
+        window.__absenSheet = sheet;
+        window.addEventListener('beforeprint', sheet); window.addEventListener('afterprint', unsheet);
+        window.addEventListener('hashchange', () => { unsheet(); window.removeEventListener('beforeprint', sheet); window.removeEventListener('afterprint', unsheet); }, { once: true });
+      },
+      actions: {
+        'a-print': () => { if (window.__absenSheet) window.__absenSheet(); window.print(); },
+        'a-logo': setLogo('logo'), 'a-logo2': setLogo('logo2'),
+        'a-nologo': () => { K.logo = ''; S.save(); route(); }, 'a-nologo2': () => { K.logo2 = ''; S.save(); route(); }
       }
     };
   }

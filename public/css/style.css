@@ -1084,3 +1084,27 @@ button.pill { cursor: pointer; border: none; font: inherit; }
 .team-board .tb-bar { flex: 1; height: 14px; border-radius: 99px; background: rgba(127, 127, 127, .18); overflow: hidden; }
 .team-board .tb-bar i { display: block; height: 100%; background: var(--tc); border-radius: 99px; transition: width .6s; }
 .team-board .tb-sc { font-size: 1.2rem; min-width: 70px; text-align: right; }
+/* ---------- Absensi (daftar hadir) ujian ---------- */
+#absen-print { display: flex; flex-direction: column; gap: 18px; align-items: center; }
+.ab-page { width: 210mm; min-height: 297mm; padding: 12mm 14mm 10mm; box-sizing: border-box; background: #fff; color: #000; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; box-shadow: 0 4px 24px rgba(0,0,0,.15); display: flex; flex-direction: column; }
+.ab-kop { display: flex; align-items: center; gap: 4mm; border-bottom: 3px double #000; padding-bottom: 2.5mm; }
+.ab-logo { width: 22mm; height: 22mm; object-fit: contain; flex: none; }
+.ab-kop-t { flex: 1; text-align: center; line-height: 1.25; }
+.ab-ins { font-size: 11pt; font-weight: 700; text-transform: uppercase; } .ab-sch { font-size: 15pt; font-weight: 900; text-transform: uppercase; letter-spacing: .3px; } .ab-addr { font-size: 8.5pt; }
+.ab-title { text-align: center; margin: 4mm 0 1.5mm; line-height: 1.35; } .ab-title b { font-size: 12.5pt; letter-spacing: .4px; }
+.ab-mapel { text-align: center; font-size: 11.5pt; margin-bottom: 3mm; padding: 1.5mm 0; border-top: 1px solid #000; border-bottom: 1px solid #000; }
+.ab-info { border-collapse: collapse; margin-bottom: 3mm; font-size: 10pt; } .ab-info td { padding: .6mm 2mm .6mm 0; border: none; background: none; color: #000; } .ab-info td:nth-child(1), .ab-info td:nth-child(3) { width: 26mm; } .ab-info td:nth-child(2) { width: 62mm; }
+.ab-tab { width: 100%; border-collapse: collapse; font-size: 9.6pt; }
+.ab-tab th, .ab-tab td { border: 1px solid #000 !important; padding: 0 1.8mm; height: 7mm; color: #000 !important; background: #fff !important; position: static !important; }
+.ab-tab th { background: #e8e8e8 !important; font-weight: 700; text-align: center; height: 8mm; }
+.ab-tab td.c { text-align: center; } .ab-tab td.sig { width: 22mm; font-size: 8pt; vertical-align: top; padding-top: .6mm; }
+.ab-tab tr { break-inside: avoid; }
+.ab-rekap { margin-top: 2.5mm; font-size: 9.5pt; } .ab-rekap span { font-size: 8.5pt; }
+.ab-sign { display: flex; justify-content: space-between; margin-top: 5mm; font-size: 10pt; line-height: 1.35; }
+.ab-sign > div { width: 70mm; } .ab-sign > div:last-child { text-align: left; } .ab-sp { height: 18mm; }
+.ab-cont { margin-top: auto; text-align: right; font-style: italic; }
+@media print {
+  body.print-cards .ab-page { box-shadow: none; width: 210mm; height: 297mm; min-height: 0; overflow: hidden; page-break-after: always; break-after: page; }
+  body.print-cards .ab-page:last-child { page-break-after: auto; break-after: auto; }
+  .ab-page, .ab-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

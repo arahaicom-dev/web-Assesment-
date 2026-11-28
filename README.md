@@ -136,6 +136,14 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - Kode sumber di folder `android/`. Membangun ulang: siapkan Android SDK, salin kunci ke `android/keystore/` (`asesmen-release.jks` + `keystore.properties`, **tidak** disimpan di GitHub), naikkan `appVersionCode` di `android/gradle.properties`, lalu `cd android && ./gradlew assembleRelease`. Alamat website bisa diubah di `appUrl`.
 - **Simpan baik-baik file kunci (keystore)**: pembaruan APK harus ditandatangani kunci yang sama, kalau tidak HP menolak memperbarui aplikasi.
 
+## Absensi Ujian (v5.19)
+
+- Menu **📋 Absensi Ujian**: daftar hadir peserta per kelas, siap cetak A4 (20 murid per halaman; tiap kelas mulai di halaman baru).
+- **Kop sekolah**: logo kiri (dan logo kanan opsional), baris instansi, nama sekolah, alamat, garis ganda. **Nama mata pelajaran** tampil di bawah kop, diikuti kelas, hari/tanggal, ruang, dan waktu.
+- Tabel: No, NIS, NISN, Nama, kolom tanda tangan zig-zag, keterangan. Di bawah: rekap jumlah hadir, tanda tangan **Pengawas** dan **Kepala Sekolah** (nama + NIP).
+- **Kehadiran otomatis** (mode server): pilih ujian (token asesmen atau Kuis/Mode Ujian berkelas), kolom Ket. terisi Hadir/Tidak hadir dari data ujian.
+- Logo, Kepala Sekolah, NIP, dan kota dipakai bersama dengan Kartu Ujian (cukup diisi sekali).
+
 ## Kuis Seru: power-up, soal penebusan, mode tim (v5.18)
 
 Terinspirasi sistem permainan kuis populer, dengan nama dan tampilan milik sendiri:

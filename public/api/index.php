@@ -11,7 +11,7 @@ header('Content-Type: application/json; charset=utf-8');
 header('X-Content-Type-Options: nosniff');
 header('Cache-Control: no-store');
 
-define('APP_VERSION', '5.18.0');
+define('APP_VERSION', '5.19.0');
 define('CONFIG_FILE', __DIR__ . '/config.php');
 define('SESSION_DAYS', 30);
 require __DIR__ . '/lib.php';
@@ -608,6 +608,24 @@ try {
   }
 
   /* ---------- Pantau ujian berjalan & riwayat ---------- */
+  /* ---------- daftar hadir ujian: siapa yang ikut ujian tertentu ---------- */
+  if ($route === 'attendance' && $method === 'GET') {
+    $u = auth(); $tid = tenant_of($u);
+    $kind = isset($_GET['kind']) ? (string)$_GET['kind'] : ''; $id = isset($_GET['id']) ? (string)$_GET['id'] : '';
+    $present = array();
+    if ($kind === 'game') {
+      $g = one('SELECT id FROM games WHERE id = ? AND tenant_id = ?', array((int)$id, $tid)); if (!$g) bad(404, 'Ujian tidak ditemukan.');
+      foreach (rows('SELECT student_id, joined_at, finished_at FROM game_players WHERE game_id = ? AND student_id IS NOT NULL', array($g['id'])) as $r)
+        $present[$r['student_id']] = array('in' => $r['joined_at'], 'done' => $r['finished_at']);
+    } elseif ($kind === 'token') {
+      $aid = clean_id($id);
+      foreach (rows('SELECT student_id, updated_at FROM exam_drafts WHERE tenant_id = ? AND assessment_id = ?', array($tid, $aid)) as $r) $present[$r['student_id']] = array('in' => $r['updated_at'], 'done' => null);
+      foreach (rows('SELECT student_id, submitted_at FROM submissions WHERE tenant_id = ? AND assessment_id = ?', array($tid, $aid)) as $r)
+        $present[$r['student_id']] = array('in' => isset($present[$r['student_id']]) ? $present[$r['student_id']]['in'] : $r['submitted_at'], 'done' => $r['submitted_at']);
+    } else bad(400, 'Jenis ujian tidak dikenal.');
+    out(array('present' => (object)$present));
+  }
+
   if ($route === 'monitor' && $method === 'GET') {
     $u = auth(); $tid = tenant_of($u);
     $names = array(); foreach (rows('SELECT id, name FROM users WHERE tenant_id = ?', array($tid)) as $x) $names[(int)$x['id']] = $x['name'];
