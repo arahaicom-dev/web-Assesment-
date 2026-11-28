@@ -1108,3 +1108,9 @@ button.pill { cursor: pointer; border: none; font: inherit; }
   body.print-cards .ab-page:last-child { page-break-after: auto; break-after: auto; }
   .ab-page, .ab-page * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.ab-kop.g-tebal { border-bottom: 3px solid #000; box-shadow: 0 2px 0 #fff, 0 3.2px 0 #000; }
+.ab-kop.g-tipis { border-bottom: 1.2px solid #000; } .ab-kop.g-none { border-bottom: none; }
+.ab-kop-t > div { line-height: 1.22; }
+.kop-row { display: flex; gap: 6px; align-items: center; margin-bottom: 6px; }
+.kop-row input[data-kl] { flex: 1; min-width: 0; } .kop-row select { width: 130px; }
+.kop-b { display: flex; align-items: center; gap: 3px; padding: 0 6px; cursor: pointer; }

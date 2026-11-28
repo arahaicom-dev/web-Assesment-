@@ -3285,6 +3285,10 @@ B. VII B</pre></div></div></div>
     const K = s.settings.kartu = Object.assign(kartuDefaults(s), s.settings.kartu || {});
     const A = s.settings.absen = Object.assign({ classIds: [], subjectId: '', judul: 'DAFTAR HADIR PESERTA UJIAN', ujian: K.ujian, tanggal: new Date().toISOString().slice(0, 10), jam: '', ruang: '', pengawas: '', nipPengawas: '', perPage: 20, show: { nisn: true, ttd: true, pengawas: true, ket: true }, exam: '' }, s.settings.absen || {});
     A.show = Object.assign({ nisn: true, ttd: true, pengawas: true, ket: true }, A.show || {});
+    // kop bebas diedit: baris-baris teks (ukuran & tebal), ukuran logo, garis bawah
+    if (!K.kop || !Array.isArray(K.kop.lines)) K.kop = { lines: [K.instansi ? { t: K.instansi, s: 'm', b: true } : null, { t: s.settings.schoolName || 'NAMA SEKOLAH', s: 'xl', b: true }, K.alamat ? { t: K.alamat, s: 's', b: false } : null].filter(Boolean), logo: 24, garis: 'double' };
+    const KOP = K.kop;
+    const KSZ = { s: ['Kecil', 8.5], m: ['Sedang', 11], l: ['Besar', 13.5], xl: ['Sangat besar', 16], xxl: ['Judul', 19] };
     if (!A.classIds.length && s.ui.classId) A.classIds = [s.ui.classId];
     A.classIds = A.classIds.filter(id => S.cls(id));
     if (!A.subjectId && s.ui.subjectId && S.subj(s.ui.subjectId)) A.subjectId = s.ui.subjectId;
@@ -3296,12 +3300,16 @@ B. VII B</pre></div></div></div>
           <label class="field" style="flex:2"><span>Nama ujian</span><input data-a="ujian" value="${esc(A.ujian)}"></label></div>
         <div class="row"><label class="field" style="max-width:170px"><span>Hari/Tanggal</span><input type="date" data-a="tanggal" value="${esc(A.tanggal)}"></label><label class="field" style="max-width:170px"><span>Waktu</span><input data-a="jam" value="${esc(A.jam)}" placeholder="07.30 – 09.00"></label>
           <label class="field" style="max-width:150px"><span>Ruang</span><input data-a="ruang" value="${esc(A.ruang)}" placeholder="R-01"></label><label class="field"><span>Nama Pengawas</span><input data-a="pengawas" value="${esc(A.pengawas)}"></label><label class="field"><span>NIP Pengawas</span><input data-a="nipPengawas" value="${esc(A.nipPengawas)}"></label></div>
-        <details class="field" ${K.kepala ? '' : 'open'}><summary><b>🏫 Kop sekolah & Kepala Sekolah</b> <span class="small muted">— dipakai juga di Kartu Ujian</span></summary>
-          <div class="row" style="margin-top:8px"><label class="field" style="flex:2"><span>Baris atas kop (opsional)</span><input data-k="instansi" value="${esc(K.instansi || '')}" placeholder="PEMERINTAH KABUPATEN … / DINAS PENDIDIKAN"></label><label class="field" style="flex:2"><span>Alamat sekolah (opsional)</span><input data-k="alamat" value="${esc(K.alamat || '')}" placeholder="Jl. … No. …, Telp …"></label></div>
+        <details class="field" open><summary><b>🏫 Edit kop sekolah, logo & Kepala Sekolah</b> <span class="small muted">— logo & Kepala Sekolah dipakai juga di Kartu Ujian</span></summary>
+          <div class="kop-ed-wrap"><div class="small muted" style="margin:8px 0 4px">Baris kop (atas → bawah). Ubah teks, ukuran, dan tebal; perubahan langsung terlihat di pratinjau.</div><div id="kop-ed"></div>
+            <div class="btns" style="margin-top:6px;align-items:center"><button class="btn soft sm" data-act="kop-add">＋ Tambah baris</button>
+              <label class="small" style="display:flex;gap:6px;align-items:center">Ukuran logo <input type="range" min="14" max="36" step="1" id="kop-logo" value="${+KOP.logo || 24}"></label>
+              <label class="small" style="display:flex;gap:6px;align-items:center">Garis bawah <select id="kop-garis">${[['double', 'Ganda'], ['tebal', 'Tebal + tipis'], ['tipis', 'Tipis'], ['none', 'Tanpa garis']].map(([v, l]) => `<option value="${v}" ${KOP.garis === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+              <button class="btn ghost sm" data-act="kop-reset" title="Susun ulang dari nama sekolah di Pengaturan">↺ Kop bawaan</button></div></div>
           <div class="row"><label class="field"><span>Kepala Sekolah</span><input data-k="kepala" value="${esc(K.kepala)}" placeholder="Nama & gelar"></label><label class="field"><span>NIP Kepala Sekolah</span><input data-k="nip" value="${esc(K.nip)}"></label><label class="field"><span>Kota</span><input data-k="kota" value="${esc(K.kota)}" placeholder="mis. Makassar"></label></div>
           <div class="btns"><button class="btn soft sm" data-act="a-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} Logo Sekolah</button>${K.logo ? `<img src="${K.logo}" alt="" style="height:38px;border-radius:6px;background:#fff;padding:2px"><button class="btn ghost sm" data-act="a-nologo">Hapus logo</button>` : ''}
           <button class="btn soft sm" data-act="a-logo2">🏛 ${K.logo2 ? 'Ganti' : 'Pasang'} Logo Kanan (opsional, mis. Tut Wuri / Pemda)</button>${K.logo2 ? `<img src="${K.logo2}" alt="" style="height:38px;border-radius:6px;background:#fff;padding:2px"><button class="btn ghost sm" data-act="a-nologo2">Hapus</button>` : ''}</div>
-          <p class="small muted" style="margin:6px 0 0">Nama sekolah & tahun pelajaran diambil dari <a href="#/pengaturan">Pengaturan</a>.</p></details>
+          <p class="small muted" style="margin:6px 0 0">Nama sekolah ditulis langsung di baris kop di atas. Tahun pelajaran diambil dari <a href="#/pengaturan">Pengaturan</a>.</p></details>
         ${S.mode === 'server' ? '<div class="row" style="align-items:flex-end"><label class="field" style="flex:3"><span>✅ Isi kehadiran otomatis dari ujian (opsional)</span><select id="a-exam"><option value="">— tidak, isi manual saat ujian —</option></select></label></div>' : ''}
         <div class="btns" style="align-items:center">${[['nisn', 'Kolom NISN'], ['ttd', 'Kolom tanda tangan'], ['ket', 'Kolom keterangan'], ['pengawas', 'Tanda tangan pengawas']].map(([k, l]) => `<label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" data-ash="${k}" ${A.show[k] ? 'checked' : ''}> ${l}</label>`).join('')}
           <span style="margin-left:auto" class="btns"><a class="btn ghost" href="#/kartu">🪪 Kartu Ujian</a><button class="btn lg" data-act="a-print">🖨 Cetak Absensi</button></span></div>
@@ -3316,9 +3324,10 @@ B. VII B</pre></div></div></div>
       const subj = S.subj(A.subjectId);
       const hari = A.tanggal ? new Date(A.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }) : '';
       const ttdTgl = A.tanggal ? new Date(A.tanggal + 'T00:00:00').toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-      const kop = `<div class="ab-kop">${K.logo ? `<img src="${K.logo}" alt="" class="ab-logo">` : '<div class="ab-logo"></div>'}
-        <div class="ab-kop-t">${K.instansi ? `<div class="ab-ins">${esc(K.instansi)}</div>` : ''}<div class="ab-sch">${esc(s.settings.schoolName || 'NAMA SEKOLAH')}</div>${K.alamat ? `<div class="ab-addr">${esc(K.alamat)}</div>` : ''}</div>
-        ${K.logo2 ? `<img src="${K.logo2}" alt="" class="ab-logo">` : '<div class="ab-logo"></div>'}</div>`;
+      const lg = (+KOP.logo || 24) + 'mm';
+      const kop = `<div class="ab-kop g-${esc(KOP.garis || 'double')}">${K.logo ? `<img src="${K.logo}" alt="" class="ab-logo" style="width:${lg};height:${lg}">` : `<div class="ab-logo" style="width:${lg};height:${lg}"></div>`}
+        <div class="ab-kop-t">${KOP.lines.filter(l => l.t && l.t.trim()).map(l => `<div style="font-size:${(KSZ[l.s] || KSZ.m)[1]}pt;font-weight:${l.b ? 800 : 400}">${esc(l.t)}</div>`).join('')}</div>
+        ${K.logo2 ? `<img src="${K.logo2}" alt="" class="ab-logo" style="width:${lg};height:${lg}">` : `<div class="ab-logo" style="width:${lg};height:${lg}"></div>`}</div>`;
       let tot = 0, hadir = 0;
       const pages = [];
       cls.forEach(c => {
@@ -3344,6 +3353,18 @@ B. VII B</pre></div></div></div>
       });
       box.innerHTML = pages.join('');
       $('#a-sum').textContent = `${cls.length} kelas · ${tot} peserta · ${pages.length} halaman A4${present ? ` · ✅ kehadiran dari "${examLabel}": ${hadir} hadir, ${tot - hadir} tidak hadir` : ''}`;
+    };
+    const drawKopEd = () => {
+      const box = $('#kop-ed'); if (!box) return;
+      box.innerHTML = KOP.lines.map((l, i) => `<div class="kop-row"><input data-kl="${i}" value="${esc(l.t)}" placeholder="Teks baris kop, mis. SMP NEGERI …">
+        <select data-ks="${i}">${Object.keys(KSZ).map(k => `<option value="${k}" ${l.s === k ? 'selected' : ''}>${KSZ[k][0]}</option>`).join('')}</select>
+        <label class="kop-b" title="Huruf tebal"><input type="checkbox" data-kb="${i}" ${l.b ? 'checked' : ''}><b>B</b></label>
+        <button class="btn ghost sm" data-kmv="${i}" data-d="-1" title="Naik" ${i ? '' : 'disabled'}>↑</button><button class="btn ghost sm" data-kmv="${i}" data-d="1" title="Turun" ${i < KOP.lines.length - 1 ? '' : 'disabled'}>↓</button><button class="btn ghost sm" data-kdel="${i}" title="Hapus baris">🗑</button></div>`).join('') || '<div class="small muted">Belum ada baris. Klik ＋ Tambah baris.</div>';
+      $$('[data-kl]', box).forEach(x => x.oninput = () => { KOP.lines[+x.dataset.kl].t = x.value; save(); draw(); });
+      $$('[data-ks]', box).forEach(x => x.onchange = () => { KOP.lines[+x.dataset.ks].s = x.value; save(); draw(); });
+      $$('[data-kb]', box).forEach(x => x.onchange = () => { KOP.lines[+x.dataset.kb].b = x.checked; save(); draw(); });
+      $$('[data-kmv]', box).forEach(x => x.onclick = () => { const i = +x.dataset.kmv, j = i + +x.dataset.d; if (j < 0 || j >= KOP.lines.length) return; const t = KOP.lines[i]; KOP.lines[i] = KOP.lines[j]; KOP.lines[j] = t; save(); drawKopEd(); draw(); });
+      $$('[data-kdel]', box).forEach(x => x.onclick = () => { KOP.lines.splice(+x.dataset.kdel, 1); save(); drawKopEd(); draw(); });
     };
     const loadExams = async () => {
       const sel = $('#a-exam'); if (!sel) return;
@@ -3382,7 +3403,9 @@ B. VII B</pre></div></div></div>
         $$('[data-k]', v).forEach(inp => inp.oninput = () => { K[inp.dataset.k] = inp.value; save(); draw(); });
         $$('[data-ash]', v).forEach(inp => inp.onchange = () => { A.show[inp.dataset.ash] = inp.checked; save(); draw(); });
         const sel = $('#a-exam', v); if (sel) sel.onchange = () => pickExam(sel.value);
-        draw(); loadExams();
+        $('#kop-logo', v).oninput = e => { KOP.logo = +e.target.value; save(); draw(); };
+        $('#kop-garis', v).onchange = e => { KOP.garis = e.target.value; save(); draw(); };
+        drawKopEd(); draw(); loadExams();
         const sheet = () => { let el = document.getElementById('print-sheet'); if (!el) { el = document.createElement('div'); el.id = 'print-sheet'; document.body.appendChild(el); } const src = $('#absen-print'); el.innerHTML = src ? src.innerHTML : ''; document.body.classList.add('print-cards'); };
         const unsheet = () => { const el = document.getElementById('print-sheet'); if (el) el.remove(); document.body.classList.remove('print-cards'); };
         window.__absenSheet = sheet;
@@ -3391,6 +3414,8 @@ B. VII B</pre></div></div></div>
       },
       actions: {
         'a-print': () => { if (window.__absenSheet) window.__absenSheet(); window.print(); },
+        'kop-add': () => { KOP.lines.push({ t: '', s: 'm', b: false }); save(); drawKopEd(); draw(); const ins = $$('[data-kl]'); if (ins.length) ins[ins.length - 1].focus(); },
+        'kop-reset': () => { KOP.lines = [{ t: s.settings.schoolName || 'NAMA SEKOLAH', s: 'xl', b: true }]; KOP.logo = 24; KOP.garis = 'double'; S.save(); route(); },
         'a-logo': setLogo('logo'), 'a-logo2': setLogo('logo2'),
         'a-nologo': () => { K.logo = ''; S.save(); route(); }, 'a-nologo2': () => { K.logo2 = ''; S.save(); route(); }
       }
