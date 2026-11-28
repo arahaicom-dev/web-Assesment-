@@ -142,7 +142,7 @@ Soal bisa diunggah dari PDF **atau dibuat langsung** di Bank Soal → **＋ Tamb
 - **5 desain**: Retro Pop, Elegan Navy, Ceria Gradasi, Resmi Sekolah, Minimalis — warna utama bisa diganti, ukuran teks bisa diatur.
 - **Ukuran**: ID card tegak/mendatar (5,4 × 8,6 cm), name tag 7 × 10 cm dan 9 × 13 cm, A6, atau ukuran sendiri (mm). Kartu mendatar memakai tata letak foto di kiri.
 - **Teks bisa diganti**: nama sekolah, judul besar (`|` = baris baru), nama kegiatan, sapaan, teks bawah. Logo sekolah dipakai bersama Kartu Ujian & Absensi.
-- **Anggota**: tambah manual, ambil dari akun guru, atau tempel daftar `Nama | Jabatan | NIP` (bisa dari Excel); foto dipotong otomatis.
+- **Anggota**: tambah manual, ambil dari akun guru, atau tempel daftar `Nama | Jabatan | NIP` (bisa dari Excel). **Unggah banyak foto sekaligus**: dicocokkan otomatis ke anggota dari nama file (nama atau NIP), sisanya dipilih manual; foto dipotong otomatis.
 - **Cetak langsung** (lembar A4 dengan garis potong) dan **unduh JPG** (per kartu atau per lembar A4) serta **PDF** (lembar A4 atau satu kartu per halaman). Font ikut tertanam sehingga hasil sama dengan pratinjau. Tanpa pustaka luar (`public/js/panitia.js`).
 
 ## Absensi Ujian (v5.19)

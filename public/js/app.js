@@ -3158,10 +3158,11 @@ B. VII B</pre></div></div></div>
   }
   const normKey = s => String(s || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/\.[a-z0-9]{2,5}$/, '').replace(/[^a-z0-9]/g, '');
   /** Unggah banyak foto sekaligus; dicocokkan otomatis dari nama file (NIS, NISN, atau nama murid). */
-  async function photoBulk(classes, done) {
+  async function photoBulk(classes, done, opt) {
+    opt = opt || {};
     const files = (await pickFiles('image/*')).filter(f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|heic)$/i.test(f.name));
     if (!files.length) return;
-    const studs = [].concat(...classes.map(c => c.students.map(m => ({ m, c, keys: [m.nis, m.nisn].filter(x => x && String(x).replace(/\D/g, '').length >= 4).map(x => String(x).replace(/\D/g, '')), nk: normKey(m.name) }))));
+    const studs = [].concat(...classes.map(c => c.students.map(m => ({ m, c, keys: [m.nis, m.nisn, m.nip].filter(x => x && String(x).replace(/\D/g, '').length >= 4).map(x => String(x).replace(/\D/g, '')), nk: normKey(m.name) }))));
     const match = f => {
       const fk = normKey(f.name), digits = (f.name.match(/\d{4,}/g) || []);
       let hit = studs.find(x => x.keys.some(k => digits.indexOf(k) >= 0));
@@ -3171,10 +3172,10 @@ B. VII B</pre></div></div></div>
     };
     const rows = files.map(f => ({ f, hit: match(f), url: URL.createObjectURL(f) }));
     const opts = sel => `<option value="">— lewati —</option>${studs.map((x, k) => `<option value="${k}" ${sel === x ? 'selected' : ''}>${esc(x.m.name)}${classes.length > 1 ? ' · ' + esc(x.c.name) : ''}</option>`).join('')}`;
-    const m = modal(`<h2>🖼 Pasang Foto Murid</h2>
+    const m = modal(`<h2>🖼 ${esc(opt.title || 'Pasang Foto Murid')}</h2>
       <p class="small muted" style="margin-top:0">${rows.filter(r => r.hit).length} dari ${rows.length} foto <b>otomatis cocok</b> dari nama file. Periksa, ubah bila perlu, lalu simpan. Foto dipotong otomatis ukuran 3×4.</p>
       <div class="ph-bulk">${rows.map((r, k) => `<div class="ph-item ${r.hit ? 'ok' : ''}"><img src="${r.url}" alt=""><div class="small ellipsis" title="${esc(r.f.name)}">${esc(r.f.name)}</div><select data-k="${k}">${opts(r.hit)}</select></div>`).join('')}</div>
-      <div class="foot"><span class="small muted" style="margin-right:auto">Tips: beri nama file sesuai NIS/NISN atau nama murid, mis. <span class="kbd">0123456789.jpg</span> / <span class="kbd">Adinda Putri.jpg</span></span><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="ph-ok">💾 Pasang Foto</button></div>`, { wide: true, noFocus: true });
+      <div class="foot"><span class="small muted" style="margin-right:auto">${opt.tip || `Tips: beri nama file sesuai NIS/NISN atau nama murid, mis. <span class="kbd">0123456789.jpg</span> / <span class="kbd">Adinda Putri.jpg</span>`}</span><button class="btn ghost" data-close>Batal</button><button class="btn ok" id="ph-ok">💾 Pasang Foto</button></div>`, { wide: true, noFocus: true });
     $$('select[data-k]', m).forEach(sel => sel.onchange = () => { const r = rows[+sel.dataset.k]; r.hit = sel.value === '' ? null : studs[+sel.value]; sel.closest('.ph-item').classList.toggle('ok', !!r.hit); });
     $('#ph-ok', m).onclick = async () => {
       const todo = rows.filter(r => r.hit); if (!todo.length) return toast('Belum ada foto yang dipasangkan ke murid.', 'bad');
@@ -3502,7 +3503,7 @@ B. VII B</pre></div></div></div>
             <button class="btn soft sm" data-act="pn-logo">🏫 ${K.logo ? 'Ganti' : 'Pasang'} logo</button>${K.logo ? `<img src="${K.logo}" alt="" style="height:30px;background:#fff;border-radius:6px;padding:2px">` : ''}</div></details>
         <div class="field"><span>👥 Anggota panitia <small class="muted">(centang yang dicetak)</small></span><div id="pn-members"></div>
           <datalist id="pn-roles">${PANITIA_ROLES.map(r => `<option value="${r}">`).join('')}</datalist>
-          <div class="btns" style="margin-top:8px"><button class="btn soft sm" data-act="pn-add">＋ Tambah</button>${S.mode === 'server' ? '<button class="btn soft sm" data-act="pn-teachers">👩‍🏫 Ambil dari akun guru</button>' : ''}<button class="btn soft sm" data-act="pn-paste">📋 Tempel daftar</button></div></div>
+          <div class="btns" style="margin-top:8px"><button class="btn soft sm" data-act="pn-add">＋ Tambah</button>${S.mode === 'server' ? '<button class="btn soft sm" data-act="pn-teachers">👩‍🏫 Ambil dari akun guru</button>' : ''}<button class="btn soft sm" data-act="pn-paste">📋 Tempel daftar</button><button class="btn soft sm" data-act="pn-photos">🖼 Unggah banyak foto</button></div></div>
       </div>
       <div>
         <div class="card no-print"><div class="btns" style="align-items:center"><button class="btn lg" data-act="pn-print">🖨 Cetak</button><button class="btn soft" data-act="pn-pdf">⬇ PDF lembar A4</button><button class="btn soft" data-act="pn-pdf1">⬇ PDF per kartu</button><button class="btn soft" data-act="pn-jpg">⬇ JPG per kartu</button><button class="btn ghost" data-act="pn-jpga4">⬇ JPG lembar A4</button></div>
@@ -3590,6 +3591,11 @@ B. VII B</pre></div></div></div>
             add.forEach(u => P.members.push({ id: S.uid('pn'), name: u.name, role: 'Pengawas Ruang', nip: '', on: true }));
             S.save(); toast(add.length ? add.length + ' guru ditambahkan. Atur jabatannya masing-masing.' : 'Semua akun guru sudah ada di daftar.'); drawMembers(); drawPreview(); drawThemes();
           } catch (e) { toast(e.message, 'bad'); }
+        },
+        'pn-photos': () => {
+          if (!P.members.length) return toast('Tambahkan anggota panitia dulu, baru pasang fotonya.', 'bad');
+          photoBulk([{ name: 'Panitia', students: P.members }], async () => { await refreshPhotos(); drawMembers(); drawPreview(); drawThemes(); },
+            { title: 'Pasang Foto Panitia', tip: 'Tips: beri nama file sesuai nama atau NIP, mis. <span class="kbd">Aco Yaqub.jpg</span> / <span class="kbd">199411012024211007.jpg</span>. Yang belum cocok bisa dipilih manual.' });
         },
         'pn-photo': el => {
           const m = P.members[+el.dataset.i]; if (!m) return;
